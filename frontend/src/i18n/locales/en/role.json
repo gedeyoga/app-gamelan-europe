@@ -1,0 +1,60 @@
+{
+  "title": "Roles",
+  "subtitle": "Manage application user roles",
+  "add": "Add Role",
+  "search": {
+    "placeholder": "Search name or description...",
+    "ariaLabel": "Search roles"
+  },
+  "errors": {
+    "loadPermissions": "Failed to load permission list.",
+    "loadRolePermissions": "Failed to load role permissions.",
+    "loadData": "Failed to load role data. Please try again.",
+    "forbidden": "You don't have access to view role data.",
+    "permissionsForbidden": "You don't have access to view the permission list.",
+    "permissionAssignCreated": "Role was created, but failed to set permissions.",
+    "permissionAssignUpdated": "Role was updated, but failed to set permissions."
+  },
+  "table": {
+    "name": "Name",
+    "code": "Code",
+    "description": "Description",
+    "created": "Created",
+    "empty": "No roles yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "form": {
+    "createTitle": "Add Role",
+    "editTitle": "Edit Role",
+    "createDescription": "Create a new role.",
+    "editDescription": "Update role data.",
+    "name": "Name",
+    "code": "Code",
+    "description": "Description",
+    "permissions": "Permissions",
+    "permissionsHint": "Select permissions for this role.",
+    "permissionsNoPermission": "Missing permission:update permission — the list is read-only and will not be saved.",
+    "searchPermissions": "Search permissions...",
+    "searchPermissionsAria": "Search permissions",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "noPermissions": "No permissions yet",
+    "noMatch": "No matching permissions"
+  },
+  "delete": {
+    "title": "Delete Role",
+    "description": "Are you sure you want to delete role {{name}}? This action cannot be undone. Roles still assigned to users cannot be deleted.",
+    "conflict": "Role is still assigned to users and cannot be deleted"
+  },
+  "toast": {
+    "created": "Role created successfully",
+    "updated": "Role updated successfully",
+    "deleted": "Role deleted successfully",
+    "createFailed": "Failed to create role",
+    "updateFailed": "Failed to update role",
+    "deleteFailed": "Failed to delete role"
+  }
+}

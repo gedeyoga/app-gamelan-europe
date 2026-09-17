@@ -1,0 +1,1 @@
+Empty placeholder. Business modules live in libs/src/modules per RULES.md.

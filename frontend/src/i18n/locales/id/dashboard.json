@@ -1,0 +1,17 @@
+{
+  "title": "Dashboard",
+  "empty": "Belum ada data",
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "roles": "Roles"
+  },
+  "group": {
+    "dataManagement": "Manajemen Data"
+  },
+  "userMenu": {
+    "settings": "Pengaturan",
+    "logout": "Keluar",
+    "profile": "Profil"
+  }
+}

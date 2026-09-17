@@ -1,0 +1,30 @@
+{
+  "title": "User Profile",
+  "subtitle": "Update your account information.",
+  "card": {
+    "title": "Account",
+    "fullName": "Full name",
+    "email": "Email"
+  },
+  "editProfile": {
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "changePassword": {
+    "title": "Change Password",
+    "checkboxLabel": "Change password",
+    "checkboxHint": "Check this to set a new password.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password"
+  },
+  "errors": {
+    "loadProfile": "Failed to load profile. Please try again."
+  },
+  "toast": {
+    "profileUpdated": "Profile updated successfully.",
+    "updateProfileFailed": "Failed to update profile.",
+    "passwordChanged": "Password changed. Please log in again.",
+    "changePasswordFailed": "Failed to change password."
+  }
+}

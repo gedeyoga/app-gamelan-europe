@@ -1,0 +1,54 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "search": "Search",
+    "retry": "Try again",
+    "close": "Close",
+    "loading": "Loading...",
+    "edit": "Edit",
+    "previous": "Previous",
+    "next": "Next",
+    "saving": "Saving...",
+    "deleting": "Deleting..."
+  },
+  "pagination": {
+    "total_one": "Total {{count}} {{entity}} · page {{page}}",
+    "total_other": "Total {{count}} {{entity}} · page {{page}}"
+  },
+  "search": {
+    "defaultPlaceholder": "Search...",
+    "defaultAriaLabel": "Search data",
+    "clear": "Clear search"
+  },
+  "table": {
+    "actions": "Actions",
+    "actionsFor": "Actions for {{name}}"
+  },
+  "empty": {
+    "notFound": "No results for \"{{term}}\".",
+    "noData": "No data yet"
+  },
+  "language": {
+    "label": "Language",
+    "english": "English",
+    "indonesian": "Bahasa Indonesia",
+    "switcherAria": "Change language"
+  },
+  "sort": {
+    "by": "Sort by {{column}}"
+  },
+  "forbidden": {
+    "code": "403",
+    "title": "No access",
+    "description": "Your account does not have permission to open this page. Contact an admin if you think this is a mistake.",
+    "backToDashboard": "Back to dashboard",
+    "logout": "Log out"
+  },
+  "toast": {
+    "dismiss": "Dismiss",
+    "errorDefault": "Something went wrong"
+  }
+}

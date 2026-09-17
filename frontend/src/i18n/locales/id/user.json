@@ -1,0 +1,60 @@
+{
+  "title": "Users",
+  "subtitle": "Kelola akun pengguna aplikasi",
+  "add": "Tambah User",
+  "search": {
+    "placeholder": "Cari nama atau email...",
+    "ariaLabel": "Cari user"
+  },
+  "errors": {
+    "loadRoles": "Gagal memuat daftar role.",
+    "loadData": "Gagal memuat data user. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data user.",
+    "roleAssignCreated": "User berhasil dibuat, tetapi gagal mengubah role.",
+    "roleAssignUpdated": "User berhasil diperbarui, tetapi gagal mengubah role."
+  },
+  "table": {
+    "name": "Nama",
+    "email": "Email",
+    "status": "Status",
+    "role": "Role",
+    "created": "Dibuat",
+    "empty": "Belum ada user",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "statusOptions": {
+    "ACTIVE": "Aktif",
+    "INACTIVE": "Nonaktif",
+    "BLOCKED": "Diblokir"
+  },
+  "form": {
+    "createTitle": "Tambah User",
+    "editTitle": "Edit User",
+    "createDescription": "Buat akun pengguna baru.",
+    "editDescription": "Perbarui data akun pengguna.",
+    "fullName": "Nama lengkap",
+    "email": "Email",
+    "password": "Password",
+    "passwordEditPlaceholder": "Kosongkan jika tidak diubah",
+    "role": "Role",
+    "noRole": "Tanpa role",
+    "selectRole": "Pilih role",
+    "roleNoPermission": "Tidak punya izin user:update — pilihan role dinonaktifkan dan tidak akan disimpan.",
+    "status": "Status"
+  },
+  "delete": {
+    "title": "Hapus User",
+    "description": "Yakin ingin menghapus user {{name}}? Tindakan ini tidak dapat dibatalkan."
+  },
+  "toast": {
+    "created": "Pengguna berhasil dibuat",
+    "updated": "Pengguna berhasil diperbarui",
+    "deleted": "Pengguna berhasil dihapus",
+    "createFailed": "Gagal membuat pengguna",
+    "updateFailed": "Gagal memperbarui pengguna",
+    "deleteFailed": "Gagal menghapus pengguna"
+  }
+}

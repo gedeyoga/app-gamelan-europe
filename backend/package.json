@@ -1,0 +1,62 @@
+{
+  "name": "trade-app-backend",
+  "version": "0.0.1",
+  "description": "NestJS monorepo backend (API + worker)",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "nest build app && nest build worker",
+    "dev": "concurrently -n api,worker -c blue,green \"pnpm dev:app\" \"pnpm dev:worker\"",
+    "dev:app": "nest start --watch app",
+    "dev:worker": "nest start --watch worker",
+    "build:app": "nest build app",
+    "build:worker": "nest build worker",
+    "start:app": "nest start app",
+    "start:worker": "nest start worker",
+    "prisma:generate": "prisma generate --schema libs/prisma/schema.prisma",
+    "prisma:migrate:dev": "prisma migrate dev --schema libs/prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema libs/prisma/schema.prisma",
+    "prisma:migrate:reset": "prisma migrate reset --force --schema libs/prisma/schema.prisma",
+    "prisma:seed": "ts-node libs/prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "ts-node libs/prisma/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/jwt": "^12.0.1",
+    "@nestjs/mapped-types": "^12.0.0",
+    "@nestjs/passport": "^12.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@node-rs/argon2": "^2.2.0",
+    "@prisma/client": "^6.2.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "compression": "^1.8.1",
+    "ioredis": "^5.4.0",
+    "joi": "^18.2.5",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.0",
+    "@types/passport-jwt": "^4.0.1",
+    "concurrently": "^9.1.0",
+    "dotenv": "^17.4.2",
+    "jest": "^29.7.0",
+    "prisma": "^6.2.0",
+    "ts-jest": "^29.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}

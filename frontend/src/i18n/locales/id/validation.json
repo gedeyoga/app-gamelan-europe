@@ -1,0 +1,17 @@
+{
+  "emailRequired": "Email wajib diisi",
+  "emailInvalid": "Email tidak valid",
+  "emailMax": "Email maksimal {{count}} karakter",
+  "passwordRequired": "Password wajib diisi",
+  "currentPasswordRequired": "Password saat ini wajib diisi",
+  "passwordMin": "Password minimal {{count}} karakter",
+  "passwordMax": "Password maksimal {{count}} karakter",
+  "passwordConfirm": "Password tidak cocok",
+  "fullNameRequired": "Nama lengkap wajib diisi",
+  "fullNameMax": "Nama lengkap maksimal {{count}} karakter",
+  "nameRequired": "Nama wajib diisi",
+  "nameMax": "Nama maksimal {{count}} karakter",
+  "descriptionMax": "Deskripsi maksimal {{count}} karakter",
+  "roleInvalid": "Role yang dipilih tidak valid",
+  "passwordMismatch": "Password tidak cocok"
+}

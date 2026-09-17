@@ -1,0 +1,30 @@
+{
+  "title": "Profil User",
+  "subtitle": "Perbarui informasi akun Anda.",
+  "card": {
+    "title": "Akun",
+    "fullName": "Nama lengkap",
+    "email": "Email"
+  },
+  "editProfile": {
+    "cancel": "Batal",
+    "save": "Simpan"
+  },
+  "changePassword": {
+    "title": "Ganti Password",
+    "checkboxLabel": "Ganti password",
+    "checkboxHint": "Centang untuk mengatur password baru.",
+    "currentPassword": "Password saat ini",
+    "newPassword": "Password baru",
+    "confirmPassword": "Konfirmasi password baru"
+  },
+  "errors": {
+    "loadProfile": "Gagal memuat profil. Silakan coba lagi."
+  },
+  "toast": {
+    "profileUpdated": "Profil berhasil diperbarui.",
+    "updateProfileFailed": "Gagal memperbarui profil.",
+    "passwordChanged": "Password berhasil diubah. Silakan login ulang.",
+    "changePasswordFailed": "Gagal mengubah password."
+  }
+}

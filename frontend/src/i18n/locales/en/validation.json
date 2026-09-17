@@ -1,0 +1,17 @@
+{
+  "emailRequired": "Email is required",
+  "emailInvalid": "Email is invalid",
+  "emailMax": "Email must be at most {{count}} characters",
+  "passwordRequired": "Password is required",
+  "currentPasswordRequired": "Current password is required",
+  "passwordMin": "Password must be at least {{count}} characters",
+  "passwordMax": "Password must be at most {{count}} characters",
+  "passwordConfirm": "Passwords do not match",
+  "fullNameRequired": "Full name is required",
+  "fullNameMax": "Full name must be at most {{count}} characters",
+  "nameRequired": "Name is required",
+  "nameMax": "Name must be at most {{count}} characters",
+  "descriptionMax": "Description must be at most {{count}} characters",
+  "roleInvalid": "Selected role is invalid",
+  "passwordMismatch": "Passwords do not match"
+}

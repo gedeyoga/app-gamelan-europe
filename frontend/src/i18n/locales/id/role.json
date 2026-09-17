@@ -1,0 +1,60 @@
+{
+  "title": "Roles",
+  "subtitle": "Kelola peran pengguna aplikasi",
+  "add": "Tambah Role",
+  "search": {
+    "placeholder": "Cari nama atau deskripsi...",
+    "ariaLabel": "Cari role"
+  },
+  "errors": {
+    "loadPermissions": "Gagal memuat daftar permission.",
+    "loadRolePermissions": "Gagal memuat permission role.",
+    "loadData": "Gagal memuat data role. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data role.",
+    "permissionsForbidden": "Tidak punya akses untuk melihat daftar permission.",
+    "permissionAssignCreated": "Role berhasil dibuat, tetapi gagal mengatur permissions.",
+    "permissionAssignUpdated": "Role berhasil diperbarui, tetapi gagal mengatur permissions."
+  },
+  "table": {
+    "name": "Nama",
+    "code": "Kode",
+    "description": "Deskripsi",
+    "created": "Dibuat",
+    "empty": "Belum ada role",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "form": {
+    "createTitle": "Tambah Role",
+    "editTitle": "Edit Role",
+    "createDescription": "Buat role baru.",
+    "editDescription": "Perbarui data role.",
+    "name": "Nama",
+    "code": "Kode",
+    "description": "Deskripsi",
+    "permissions": "Permissions",
+    "permissionsHint": "Pilih permission untuk role ini.",
+    "permissionsNoPermission": "Tidak punya izin permission:update — daftar permission hanya baca dan tidak akan disimpan.",
+    "searchPermissions": "Cari permission...",
+    "searchPermissionsAria": "Cari permission",
+    "selectAll": "Pilih semua",
+    "clearAll": "Hapus semua",
+    "noPermissions": "Belum ada permission",
+    "noMatch": "Tidak ada permission yang cocok"
+  },
+  "delete": {
+    "title": "Hapus Role",
+    "description": "Yakin ingin menghapus role {{name}}? Tindakan ini tidak dapat dibatalkan. Role yang masih dipakai oleh user tidak dapat dihapus.",
+    "conflict": "Role masih dipakai user, tidak bisa dihapus"
+  },
+  "toast": {
+    "created": "Peran berhasil dibuat",
+    "updated": "Peran berhasil diperbarui",
+    "deleted": "Peran berhasil dihapus",
+    "createFailed": "Gagal membuat peran",
+    "updateFailed": "Gagal memperbarui peran",
+    "deleteFailed": "Gagal menghapus peran"
+  }
+}

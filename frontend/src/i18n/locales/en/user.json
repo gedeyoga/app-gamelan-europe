@@ -1,0 +1,60 @@
+{
+  "title": "Users",
+  "subtitle": "Manage application user accounts",
+  "add": "Add User",
+  "search": {
+    "placeholder": "Search name or email...",
+    "ariaLabel": "Search users"
+  },
+  "errors": {
+    "loadRoles": "Failed to load role list.",
+    "loadData": "Failed to load user data. Please try again.",
+    "forbidden": "You don't have access to view user data.",
+    "roleAssignCreated": "User was created, but failed to update role.",
+    "roleAssignUpdated": "User was updated, but failed to update role."
+  },
+  "table": {
+    "name": "Name",
+    "email": "Email",
+    "status": "Status",
+    "role": "Role",
+    "created": "Created",
+    "empty": "No users yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "statusOptions": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "BLOCKED": "Blocked"
+  },
+  "form": {
+    "createTitle": "Add User",
+    "editTitle": "Edit User",
+    "createDescription": "Create a new user account.",
+    "editDescription": "Update user account data.",
+    "fullName": "Full name",
+    "email": "Email",
+    "password": "Password",
+    "passwordEditPlaceholder": "Leave empty to keep unchanged",
+    "role": "Role",
+    "noRole": "No role",
+    "selectRole": "Select role",
+    "roleNoPermission": "Missing user:update permission — role selection is disabled and will not be saved.",
+    "status": "Status"
+  },
+  "delete": {
+    "title": "Delete User",
+    "description": "Are you sure you want to delete user {{name}}? This action cannot be undone."
+  },
+  "toast": {
+    "created": "User created successfully",
+    "updated": "User updated successfully",
+    "deleted": "User deleted successfully",
+    "createFailed": "Failed to create user",
+    "updateFailed": "Failed to update user",
+    "deleteFailed": "Failed to delete user"
+  }
+}

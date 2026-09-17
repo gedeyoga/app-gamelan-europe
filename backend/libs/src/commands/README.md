@@ -1,0 +1,1 @@
+Empty placeholder. Command/job/worker handlers live here per RULES.md.

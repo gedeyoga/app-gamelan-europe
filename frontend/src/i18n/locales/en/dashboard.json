@@ -1,0 +1,17 @@
+{
+  "title": "Dashboard",
+  "empty": "No data yet",
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "roles": "Roles"
+  },
+  "group": {
+    "dataManagement": "Data Management"
+  },
+  "userMenu": {
+    "settings": "Settings",
+    "logout": "Log out",
+    "profile": "Profile"
+  }
+}

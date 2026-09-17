@@ -1,0 +1,54 @@
+{
+  "actions": {
+    "save": "Simpan",
+    "cancel": "Batal",
+    "delete": "Hapus",
+    "create": "Buat",
+    "search": "Cari",
+    "retry": "Coba lagi",
+    "close": "Tutup",
+    "loading": "Memuat...",
+    "edit": "Edit",
+    "previous": "Sebelumnya",
+    "next": "Berikutnya",
+    "saving": "Menyimpan...",
+    "deleting": "Menghapus..."
+  },
+  "pagination": {
+    "total_one": "Total {{count}} {{entity}} · halaman {{page}}",
+    "total_other": "Total {{count}} {{entity}} · halaman {{page}}"
+  },
+  "search": {
+    "defaultPlaceholder": "Cari...",
+    "defaultAriaLabel": "Cari data",
+    "clear": "Hapus pencarian"
+  },
+  "table": {
+    "actions": "Aksi",
+    "actionsFor": "Aksi untuk {{name}}"
+  },
+  "empty": {
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "noData": "Belum ada data"
+  },
+  "language": {
+    "label": "Bahasa",
+    "english": "English",
+    "indonesian": "Bahasa Indonesia",
+    "switcherAria": "Ganti bahasa"
+  },
+  "sort": {
+    "by": "Urutkan berdasarkan {{column}}"
+  },
+  "forbidden": {
+    "code": "403",
+    "title": "Tidak punya akses",
+    "description": "Akun Anda tidak memiliki permission untuk membuka halaman ini. Hubungi admin bila Anda merasa ini keliru.",
+    "backToDashboard": "Kembali ke dashboard",
+    "logout": "Keluar"
+  },
+  "toast": {
+    "dismiss": "Tutup",
+    "errorDefault": "Terjadi kesalahan"
+  }
+}

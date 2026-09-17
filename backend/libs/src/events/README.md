@@ -1,0 +1,1 @@
+Empty placeholder. Event emitter/listener code lives here per RULES.md.

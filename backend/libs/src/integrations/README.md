@@ -1,0 +1,1 @@
+Empty placeholder. Third-party clients (payment, email, external API) live here per RULES.md.
