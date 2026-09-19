@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 
 interface ValidationErrorLike {
   property?: string;
@@ -13,6 +13,8 @@ interface FieldError {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse();
@@ -43,6 +45,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       });
       return;
     }
+
+    // Error tak terduga (mis. Prisma P2022 kolom hilang) → log detail agar tidak 500 buta.
+    const method = ctx.getRequest?.()?.method;
+    const url = ctx.getRequest?.()?.url;
+    this.logger.error(`Unhandled error on ${method} ${url}`, exception instanceof Error ? exception.stack : String(exception));
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,

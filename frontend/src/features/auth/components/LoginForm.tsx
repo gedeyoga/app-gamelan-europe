@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { LogIn } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -117,6 +118,7 @@ export function LoginForm() {
         />
 
         <Button type="submit" className="w-full" disabled={login.isPending}>
+          <LogIn data-icon="inline-start" className="size-4" />
           {login.isPending ? t('common:actions.loading') : t('auth:login.submit')}
         </Button>
       </form>

@@ -125,6 +125,14 @@ export function isValidationError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.statusCode === 422
 }
 
+/**
+ * True bila error adalah konflik (ApiError statusCode 409), mis. slug duplikat.
+ * Dipakai untuk menampilkan error per-field tanpa toast/banner generik.
+ */
+export function isConflictError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.statusCode === 409
+}
+
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem(TOKEN_KEY)
   return token ? { Authorization: `Bearer ${token}` } : {}

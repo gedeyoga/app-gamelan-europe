@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -90,7 +90,11 @@ export function UserTable({
                   <>
                     {t('user:table.notFound', { term: trimmedSearch })}{' '}
                     {onResetSearch && (
-                      <button className="underline" onClick={onResetSearch}>
+                      <button
+                        className="inline-flex items-center gap-1 underline"
+                        onClick={onResetSearch}
+                      >
+                        <RotateCcw className="size-3.5" aria-hidden="true" />
                         {t('user:table.reset')}
                       </button>
                     )}
@@ -122,10 +126,14 @@ export function UserTable({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {canUpdate && (
-                          <DropdownMenuItem onClick={() => onEdit(user)}>{t('user:table.edit')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEdit(user)}>
+                            <Pencil />
+                            {t('user:table.edit')}
+                          </DropdownMenuItem>
                         )}
                         {canDelete && (
                           <DropdownMenuItem variant="destructive" onClick={() => onDelete(user)}>
+                            <Trash2 />
                             {t('user:table.delete')}
                           </DropdownMenuItem>
                         )}

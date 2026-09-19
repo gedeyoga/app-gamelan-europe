@@ -13,5 +13,9 @@
   "nameMax": "Name must be at most {{count}} characters",
   "descriptionMax": "Description must be at most {{count}} characters",
   "roleInvalid": "Selected role is invalid",
-  "passwordMismatch": "Passwords do not match"
+  "passwordMismatch": "Passwords do not match",
+  "storyNameRequired": "Title is required",
+  "storyNameMax": "Title must be at most {{count}} characters",
+  "storySlugMax": "Slug must be at most {{count}} characters",
+  "storySlugPattern": "Slug may only contain lowercase letters, numbers, and hyphens"
 }

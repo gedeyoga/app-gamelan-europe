@@ -119,6 +119,7 @@ deleteUser.mutate(id, {
 - Tampil via `lib/datetime.ts` (`formatDateTime` default tanggal+jam; `formatDate` bila perlu tanggal saja): locale browser (`undefined`), zona client otomatis (tanpa opsi `timeZone`); larang fungsi format lokal per fitur, larang hardcode `timeZone`/locale.
 - Invalid/kosong → `'—'` (helper tidak pernah melempar).
 - Kirim: input tanggal (form/filter) dikirim sebagai ISO UTC (`date.toISOString()`); filter tanggal via `filter[createdAt][gte]=<ISO UTC>`.
+- **Wajib komponen shadcn** — semua pemilihan tanggal/waktu di UI memakai komponen reusable `components/shared/date-time-picker.tsx` (`Popover` + `Calendar`, jam/menit via `Select`); `value`/`onChange` bertipe ISO string | `undefined`. **Dilarang** `<input type="date|datetime-local|time">` native (termasuk di dialog publish story). Path komponen: `src/components/shared/date-time-picker.tsx`.
 
 ## API Integration
 
@@ -170,5 +171,5 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 - Jalankan lint/typecheck sebelum menyelesaikan tugas apa pun.
 ## Wajib Baca Docs Sebelum Edit
 
-Sebelum edit file apa pun, baca dokumentasi terkait: docs/RULES.md, docs/module/<domain>.md (brief modul yang akan diedit), docs/DESIGN_SYSTEM.md (design token komponen), dan file existing di area yang akan diedit � pahami pattern sebelum menambah. Skip rule ini ? diff biasanya melawan konvensi. Pola ada di existing code; tiru, jangan re-invent.
+Sebelum edit file apa pun, baca dokumentasi terkait: docs/RULES.md, docs/module/<domain>.md (brief modul yang akan diedit), docs/DESIGN_SYSTEM.md (design token komponen), dan file existing di area yang akan diedit � pahami pattern sebelum menambah. Skip rule ini ? diff biasanya melawan konvensi. Pola ada di existing code; tiru, jangan re-invent.
 

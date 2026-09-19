@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Save, X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -313,10 +314,12 @@ export function UserFormDialog({
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>
+                  <X data-icon="inline-start" className="size-4" />
                   {t('common:actions.cancel')}
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isSubmitting}>
+                <Save data-icon="inline-start" className="size-4" />
                 {isSubmitting
                   ? t('common:actions.saving')
                   : mode === 'edit'

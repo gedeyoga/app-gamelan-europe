@@ -1,4 +1,4 @@
-import { Home, Shield, Users } from 'lucide-react'
+import { Home, Newspaper, Shield, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -44,8 +44,14 @@ function isNavVisible(item: NavItem, can: (code: string) => boolean): boolean {
 
 export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const { t } = useTranslation('dashboard')
+  const { t: tStory } = useTranslation('story')
   const { theme, toggleTheme } = useTheme()
-  const { pathname } = useLocation()
+  const { pathname: rawPathname } = useLocation()
+  // Normalisasi trailing slash (kecuali root `/`) agar `/stories/new/` tetap match.
+  const pathname = rawPathname.length > 1 ? rawPathname.replace(/\/+$/, '') : rawPathname
+
+  const isStoryEditor =
+    pathname === '/stories/new' || /^\/stories\/[^/]+\/edit$/.test(pathname)
 
   const dashboardNavItems: NavItem[] = useMemo(
     () => [{ title: t('nav.dashboard'), url: '/', icon: Home }],
@@ -56,6 +62,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     () => [
       { title: t('nav.users'), url: '/users', icon: Users, permission: 'user:read' },
       { title: t('nav.roles'), url: '/roles', icon: Shield, permission: 'role:read' },
+      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'story:read' },
     ],
     [t],
   )
@@ -72,6 +79,46 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     (pathname === '/profile'
       ? { title: t('userMenu.profile'), url: '/profile', icon: Home }
       : undefined)
+
+  // Route editor story: tanpa sidebar, header ringkas + breadcrumb Dashboard / Story / judul.
+  if (isStoryEditor) {
+    const storyTitle =
+      pathname === '/stories/new' ? tStory('form.createTitle') : tStory('form.editTitle')
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div className="flex min-h-svh flex-col lg:h-svh lg:overflow-hidden">
+          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    <NavLink to="/">{t('nav.dashboard')}</NavLink>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    <NavLink to="/stories">{t('nav.story')}</NavLink>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{storyTitle}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-2">
+              <LanguageSwitcher />
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            </div>
+          </header>
+          <main className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden">
+            <Outlet />
+          </main>
+        </div>
+      </TooltipProvider>
+    )
+  }
 
   return (
     <TooltipProvider delayDuration={0}>

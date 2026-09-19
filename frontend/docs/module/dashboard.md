@@ -27,6 +27,7 @@ Struktur nested:
 
 - `SidebarProvider` (dari `components/ui/sidebar`) → `AppSidebar` di kiri + area main.
 - Area main: baris header (SidebarTrigger, breadcrumb, theme toggle) lalu `<Outlet/>` (halaman anak).
+- **Pengecualian — sidebar hidden**: pada route editor story (`/stories/new` & `/stories/:id/edit`) `AppShell` mendeteksi `isStoryEditor` (match `pathname`, setelah normalisasi trailing slash kecuali root) dan merender layout khusus **tanpa** sidebar (`SidebarProvider`/`AppSidebar`/`SidebarInset`/`SidebarTrigger` ditiadakan) — hanya header sticky `h-14` berisi breadcrumb (Dashboard / Story / judul) + `LanguageSwitcher` + `ThemeToggle`, lalu `<main>` dengan `<Outlet/>`. Breadcrumb adalah **sumber judul halaman** (halaman editor tidak merender `<h1>` ganda). Route lain (termasuk list `/stories`) tetap memakai sidebar.
 
 ## 4. Sidebar (AppSidebar)
 
@@ -103,3 +104,4 @@ src/features/dashboard/
   - Data user + logout **dipass via props** dari container route (`src/app/routes/dashboard.tsx` memakai `useAuth()`), bukan dipanggil langsung di `features/dashboard` — menjaga aturan "tanpa import lintas domain" (AGENTS.md §Reusable Component & brief §10).
   - `TooltipProvider` (`delayDuration={0}`) dibungkus di `app-shell.tsx` karena `SidebarMenuButton` memakai tooltip saat sidebar collapsed.
   - Anti-flash theme: inline `<script>` di `frontend/index.html` set class `dark` sebelum React mount, sinkron dengan `useTheme` (`localStorage['theme']`, fallback `prefers-color-scheme`). Tanpa dependency baru.
+  - **Sidebar hidden pada route editor story**: `app-shell.tsx` punya branch `isStoryEditor` untuk `/stories/new` & `/stories/:id/edit` (layout tanpa sidebar, header ringkas + breadcrumb Dashboard / Story / judul) — lihat `docs/module/story.md` §2/§8. Tidak ada config baru; murni `pathname`.

@@ -10,6 +10,9 @@ import { LoginPage } from './login'
 import { ProfilePage } from './profile'
 import { RegisterPage } from './register'
 import { RolesPage } from './roles'
+import { StoriesPage } from './stories'
+import { StoryEditPage } from './story-edit'
+import { StoryNewPage } from './story-new'
 import { UsersPage } from './users'
 
 export const router = createBrowserRouter([
@@ -38,6 +41,16 @@ export const router = createBrowserRouter([
           </RequirePermission>
         ),
       },
+      {
+        path: 'stories',
+        element: (
+          <RequirePermission code="story:read">
+            <StoriesPage />
+          </RequirePermission>
+        ),
+      },
+      { path: 'stories/new', element: <StoryNewPage /> },
+      { path: 'stories/:id/edit', element: <StoryEditPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: '403', element: <ForbiddenPage /> },
     ],

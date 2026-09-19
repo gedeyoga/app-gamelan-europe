@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, ShieldAlert } from 'lucide-react'
+import { Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -217,7 +217,7 @@ export function RolesPage() {
         </div>
         {canCreateRole && (
           <Button onClick={openCreateDialog}>
-            <Plus className="size-4" />
+            <Plus data-icon="inline-start" className="size-4" />
             {t('role:add')}
           </Button>
         )}
@@ -231,9 +231,15 @@ export function RolesPage() {
           {permissionErrorKind === 'create'
             ? t('role:errors.permissionAssignCreated')
             : t('role:errors.permissionAssignUpdated')}
-          <button className="ml-2 underline" onClick={() => setPermissionErrorKind(null)}>
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-2 h-auto p-0"
+            onClick={() => setPermissionErrorKind(null)}
+          >
+            <X className="size-3.5" data-icon="inline-start" />
             {t('common:actions.close')}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -244,14 +250,17 @@ export function RolesPage() {
             : permissionsQuery.isError
               ? t('role:errors.loadPermissions')
               : t('role:errors.loadRolePermissions')}
-          <button
-            className="ml-2 underline"
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-2 h-auto p-0"
             onClick={() =>
               permissionsQuery.isError ? permissionsQuery.refetch() : rolePermissionsQuery.refetch()
             }
           >
+            <RefreshCw className="size-3.5" data-icon="inline-start" />
             {t('common:actions.retry')}
-          </button>
+          </Button>
         </div>
       )}
 

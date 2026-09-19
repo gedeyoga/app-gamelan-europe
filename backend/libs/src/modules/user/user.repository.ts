@@ -38,25 +38,31 @@ export class UserRepository {
     return { items, total };
   }
 
-  async create(data: Prisma.UserCreateInput): Promise<UserEntity> {
+  async create(data: Prisma.UserUncheckedCreateInput): Promise<UserEntity> {
     try {
       return await this.prisma.user.create({ data, select: userSelect });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw this.toUniqueConstraintError(e);
       }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        throw this.toForeignKeyConstraintError(e);
+      }
       throw e;
     }
   }
 
-  async update(id: string, data: Prisma.UserUpdateInput): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+  async update(id: string, data: Prisma.UserUncheckedUpdateInput): Promise<UserEntity> {
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
     try {
       return await this.prisma.user.update({ where: { id }, data, select: userSelect });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw this.toUniqueConstraintError(e);
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        throw this.toForeignKeyConstraintError(e);
       }
       throw e;
     }
@@ -71,8 +77,31 @@ export class UserRepository {
     });
   }
 
+  // P2003 mengidentifikasi FK lewat `meta.field_name` (nama kolom) atau, di Postgres
+  // versi Prisma ini, `meta.constraint` (mis. `users_country_id_fkey`). Keduanya didukung;
+  // FK tak dikenal → 422 generik, jangan salah label.
+  private toForeignKeyConstraintError(e: Prisma.PrismaClientKnownRequestError): UnprocessableEntityException {
+    const meta = e.meta as { field_name?: string; constraint?: string } | undefined;
+    const byColumn: Record<string, { field: string; message: string }> = {
+      country_id: { field: 'countryId', message: 'Country not found' },
+      role_id: { field: 'roleId', message: 'Role not found' },
+      organization_id: { field: 'organizationId', message: 'Organization not found' },
+    };
+    const column =
+      meta?.field_name && byColumn[meta.field_name]
+        ? meta.field_name
+        : Object.keys(byColumn).find((key) => (meta?.constraint ?? '').includes(key)) ??
+          meta?.field_name ??
+          '';
+    const mapped = byColumn[column] ?? { field: column || 'unknown', message: 'Related record not found' };
+    return new UnprocessableEntityException({
+      message: 'Validation failed',
+      errors: [mapped],
+    });
+  }
+
   async updateRole(id: string, roleId: string): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
 
     const role = await this.prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
@@ -82,7 +111,7 @@ export class UserRepository {
   }
 
   async remove(id: string): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
     return this.prisma.user.delete({ where: { id }, select: userSelect });
   }

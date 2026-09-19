@@ -13,5 +13,9 @@
   "nameMax": "Nama maksimal {{count}} karakter",
   "descriptionMax": "Deskripsi maksimal {{count}} karakter",
   "roleInvalid": "Role yang dipilih tidak valid",
-  "passwordMismatch": "Password tidak cocok"
+  "passwordMismatch": "Password tidak cocok",
+  "storyNameRequired": "Judul wajib diisi",
+  "storyNameMax": "Judul maksimal {{count}} karakter",
+  "storySlugMax": "Slug maksimal {{count}} karakter",
+  "storySlugPattern": "Slug hanya boleh berisi huruf kecil, angka, dan tanda hubung"
 }

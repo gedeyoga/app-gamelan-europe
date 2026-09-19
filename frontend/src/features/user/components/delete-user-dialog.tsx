@@ -1,3 +1,4 @@
+import { Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ export function DeleteUserDialog({
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button type="button" variant="outline" disabled={isSubmitting}>
+              <X data-icon="inline-start" className="size-4" />
               {t('common:actions.cancel')}
             </Button>
           </AlertDialogCancel>
@@ -50,6 +52,7 @@ export function DeleteUserDialog({
               disabled={isSubmitting}
               onClick={onConfirm}
             >
+              <Trash2 data-icon="inline-start" className="size-4" />
               {isSubmitting ? t('common:actions.deleting') : t('common:actions.delete')}
             </Button>
           </AlertDialogAction>

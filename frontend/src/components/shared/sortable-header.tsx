@@ -47,7 +47,11 @@ export function SortableHeader({
       )}
     >
       {label}
-      <Icon className={cn('size-3.5', !active && 'text-muted-foreground')} aria-hidden="true" />
+      <Icon
+        className={cn('size-3.5', !active && 'text-muted-foreground')}
+        aria-hidden="true"
+        data-icon="inline-end"
+      />
     </Button>
   )
 }

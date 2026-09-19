@@ -4,6 +4,7 @@ export interface ListFilterOptions {
   enumFields?: Record<string, string[]>;
   mapFields?: Record<string, string>;
   dateFields?: string[];
+  numberFields?: string[];
 }
 
 const OPERATORS = new Set(['eq', 'ne', 'in', 'like', 'gt', 'gte', 'lt', 'lte']);
@@ -23,6 +24,25 @@ export function parseDateInput(value: unknown, rawKey: string): Date {
     return parsed;
   }
   throw new UnprocessableEntityException(`Invalid ISO 8601 date for filter field "${rawKey}"`);
+}
+
+export function parseNumberInput(value: unknown, rawKey: string): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN;
+  // Caller (saat ini) hanya untuk kolom Prisma `Int` 32-bit. Nilai dikonversi via Number:
+  // bentuk integral seperti '1.0', '1e3', '0x10' diterima; non-integer (1.5), array,
+  // whitespace, non-numerik, dan nilai di luar rentang Int32 ditolak 422.
+  if (!Number.isInteger(parsed) || parsed < -2147483648 || parsed > 2147483647) {
+    throw new UnprocessableEntityException({
+      message: 'Validation failed',
+      errors: [{ field: rawKey, message: `filter[${rawKey}] must be a 32-bit integer` }],
+    });
+  }
+  return parsed;
 }
 
 export function buildWhere<W>(
@@ -93,6 +113,18 @@ export function buildWhere<W>(
         effectiveValue = (effectiveValue as unknown[]).map((v) => parseDateInput(v, rawKey));
       } else {
         effectiveValue = parseDateInput(effectiveValue, rawKey);
+      }
+    }
+
+    // Koersi angka: field di `numberFields` selalu jadi number; `like` ditolak (hanya string).
+    if (options.numberFields?.includes(field)) {
+      if (op === 'like') {
+        throw new UnprocessableEntityException(`Operator "like" is not allowed for number field "${rawKey}"`);
+      }
+      if (op === 'in') {
+        effectiveValue = (effectiveValue as unknown[]).map((v) => parseNumberInput(v, rawKey));
+      } else {
+        effectiveValue = parseNumberInput(effectiveValue, rawKey);
       }
     }
 

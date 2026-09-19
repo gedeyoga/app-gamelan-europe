@@ -1,4 +1,4 @@
-import { ShieldAlert } from 'lucide-react'
+import { ArrowLeft, LogOut, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -24,13 +24,17 @@ export function ForbiddenPage() {
       <p className="max-w-md text-sm text-muted-foreground">{t('forbidden.description')}</p>
       <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
         <Button asChild>
-          <Link to="/">{t('forbidden.backToDashboard')}</Link>
+          <Link to="/">
+            <ArrowLeft data-icon="inline-start" className="size-4" />
+            {t('forbidden.backToDashboard')}
+          </Link>
         </Button>
         <Button
           variant="outline"
           onClick={() => logoutMutation.mutate()}
           disabled={logoutMutation.isPending}
         >
+          <LogOut data-icon="inline-start" className="size-4" />
           {t('forbidden.logout')}
         </Button>
       </div>

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { UserPlus } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -147,6 +148,7 @@ export function RegisterForm() {
         />
 
         <Button type="submit" className="w-full" disabled={register.isPending}>
+          <UserPlus data-icon="inline-start" className="size-4" />
           {register.isPending ? t('common:actions.loading') : t('auth:register.submit')}
         </Button>
       </form>

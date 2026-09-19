@@ -4,7 +4,8 @@
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",
-    "roles": "Roles"
+    "roles": "Roles",
+    "story": "Story"
   },
   "group": {
     "dataManagement": "Manajemen Data"

@@ -103,11 +103,7 @@ Semua token dipetakan ke utility Tailwind lewat blok `@theme inline` sebagai `--
 
 ## 8. Komponen Tersedia
 
-Katalog dari `src/components/ui/` saat ini:
-
-| Komponen | File |
-| --- | --- |
-| Button | `src/components/ui/button.tsx` |
+Komponen shadcn/ui berada di `src/components/ui/`. Lihat isi folder tersebut sebagai sumber kebenaran — jangan menyalin daftar manual di dokumen ini karena cepat usang.
 
 Cara menambah komponen baru (via CLI, jangan manual):
 
@@ -121,6 +117,15 @@ pnpm dlx shadcn@latest add <component>
 - Komposisi komponen shadcn: gunakan `asChild` (Radix Slot) untuk mengganti elemen dasar, dan override `className` untuk menyesuaikan style lokal.
 - Jangan override token global (`:root`/`.dark`) untuk kasus sekali pakai — gunakan utility Tailwind/className lokal.
 - Ikuti aturan reusable component di `AGENTS.md`: presentational, data via props, tanpa fetch di komponen, tanpa import lintas domain.
+- **Cursor pointer**: semua elemen interaktif memakai `cursor: pointer` lewat satu blok **unlayered** di `src/index.css` (di luar `@layer base`). Unlayered sengaja dipilih agar aturan ini menang atas `cursor-default` bawaan shadcn yang ditulis di layer `utilities` (CSS unlayered selalu menang atas semua `@layer`) — tanpa `!important`. Elemen disabled dikecualikan: `button:not(:disabled)`, `[role='button']:not([aria-disabled='true'])`, `[role='menuitem']`, `[role='menuitemcheckbox']`, `[role='menuitemradio']` minus `[data-disabled]`, `[role='option']` minus `[data-disabled]`/`[aria-disabled='true']`, `[role='tab']` minus `[data-disabled]`/`[aria-disabled='true']`, `a[href]`, `summary`, `label[for]`, `select:not(:disabled)`, serta trigger slot (`[data-slot='select-trigger']`, `[data-slot='dropdown-menu-trigger']`, `[data-slot='toggle']`). Tambahan: `button:disabled` dan `[aria-disabled='true']` memakai `cursor: not-allowed`. Jangan tambah `cursor-pointer` per komponen.
+- **Ikon tombol**: setiap `<Button>` memakai ikon **lucide-react** kontekstual. Ikon leading (sebelum label) wajib diberi `data-icon="inline-start"` pada `<svg>` agar padding shadcn (`has-data-[icon=inline-start]`) aktif; ikon trailing (mis. `ChevronDown`, ikon sort) wajib diberi `data-icon="inline-end"` pada `<svg>` agar padding shadcn (`has-data-[icon=inline-end]`) aktif. Tombol icon-only (`size="icon*"`) tetap wajib punya ikon + `aria-label` (atau `sr-only`). Contoh:
+
+  ```tsx
+  <Button onClick={onCreate}>
+    <Plus className="size-4" data-icon="inline-start" />
+    {t('story:add')}
+  </Button>
+  ```
 
 ## 10. Pola List CRUD: SearchBar + SortableHeader + Pagination
 
@@ -145,6 +150,7 @@ Wajib dipakai semua menu CRUD (detail rules di `AGENTS.md` seksi List CRUD):
 
 - Nilai kosong/invalid (termasuk `NaN`) tampil sebagai `'—'` dan tidak pernah melempar.
 - Kirim tanggal sebagai ISO UTC: `date.toISOString()`; contoh filter: `filter[createdAt][gte]=<ISO UTC>`.
+- **Wajib komponen shadcn** — semua pemilihan tanggal/waktu memakai komponen reusable `src/components/shared/date-time-picker.tsx`; `value`/`onChange` bertipe ISO string | `undefined`. **Dilarang** `<input type="date|datetime-local|time">` native. Komponen shadcn yang dipakai: `Popover` (`components/ui/popover.tsx`), `Calendar` (`components/ui/calendar.tsx`, basis `react-day-picker`), `Select` (`components/ui/select.tsx` untuk jam 00–23 & menit 00–59), dan `Button variant="outline"` sebagai trigger. `Calendar` ditambah via CLI `pnpm dlx shadcn@latest add calendar` (style `radix-nova`).
 
 ## Lampiran — Nilai Token (Light `:root`)
 

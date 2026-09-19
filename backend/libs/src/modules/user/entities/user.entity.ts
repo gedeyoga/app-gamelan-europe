@@ -7,6 +7,8 @@ export const userSelect = {
   status: true,
   roleId: true,
   role: { select: { id: true, name: true } },
+  countryId: true,
+  country: { select: { id: true, iso2: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;

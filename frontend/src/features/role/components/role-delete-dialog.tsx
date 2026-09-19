@@ -1,3 +1,4 @@
+import { Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ export function RoleDeleteDialog({ role, isPending, error, onConfirm, onOpenChan
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button type="button" variant="outline" disabled={isPending}>
+              <X data-icon="inline-start" className="size-4" />
               {t('common:actions.cancel')}
             </Button>
           </AlertDialogCancel>
@@ -55,6 +57,7 @@ export function RoleDeleteDialog({ role, isPending, error, onConfirm, onOpenChan
               disabled={isPending}
               onClick={onConfirm}
             >
+              <Trash2 data-icon="inline-start" className="size-4" />
               {isPending ? t('common:actions.deleting') : t('common:actions.delete')}
             </Button>
           </AlertDialogAction>

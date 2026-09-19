@@ -109,12 +109,14 @@ export class AuthService {
       fullName: user.fullName,
       status: user.status,
       role: user.role,
+      countryId: user.countryId,
+      country: user.country,
       permissions,
     };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    if (dto.fullName === undefined && dto.email === undefined) {
+    if (dto.fullName === undefined && dto.email === undefined && dto.countryId === undefined) {
       throw new BadRequestException('At least one field must be provided');
     }
     if (dto.email !== undefined && dto.email !== '') {
@@ -123,9 +125,10 @@ export class AuthService {
         throw new ConflictException('Email already in use');
       }
     }
-    const data: { fullName?: string; email?: string } = {};
+    const data: { fullName?: string; email?: string; countryId?: string } = {};
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
     if (dto.email !== undefined) data.email = dto.email;
+    if (dto.countryId !== undefined) data.countryId = dto.countryId;
     await this.userRepository.update(userId, data);
     return this.me(userId);
   }

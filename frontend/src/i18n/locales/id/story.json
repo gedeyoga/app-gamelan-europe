@@ -1,0 +1,150 @@
+{
+  "title": "Story",
+  "subtitle": "Kelola story dan konten artikel",
+  "add": "Tambah Story",
+  "search": {
+    "placeholder": "Cari judul atau slug...",
+    "ariaLabel": "Cari story"
+  },
+  "view": {
+    "card": "Tampilan kartu",
+    "list": "Tampilan daftar"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data story. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data story.",
+    "loadDetail": "Gagal memuat detail story.",
+    "uploadFailed": "Gagal mengunggah gambar. Silakan coba lagi.",
+    "createCategoryFailed": "Gagal membuat kategori.",
+    "slugDuplicate": "Slug ini sudah dipakai. Silakan pilih slug lain.",
+    "noCreatePermission": "Tidak punya izin untuk membuat story.",
+    "noUpdatePermission": "Tidak punya izin untuk mengubah story."
+  },
+  "table": {
+    "name": "Judul",
+    "thumbnail": "Thumbnail",
+    "author": "Penulis",
+    "status": "Status",
+    "categories": "Kategori",
+    "publishedAt": "Diterbitkan",
+    "empty": "Belum ada story",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "card": {
+    "noThumbnail": "Tanpa thumbnail"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Diajukan",
+    "APPROVED": "Disetujui",
+    "PUBLISHED": "Terbit"
+  },
+  "form": {
+    "createTitle": "Tambah Story",
+    "editTitle": "Edit Story",
+    "titleLabel": "Judul",
+    "titlePlaceholder": "Masukkan judul story...",
+    "slugLabel": "Slug",
+    "slugPlaceholder": "judul-story",
+    "slugGenerate": "Buat ulang slug",
+    "slugManualHint": "Slug diubah manual — pembuatan otomatis dihentikan.",
+    "settingsTitle": "Pengaturan",
+    "hideSettings": "Sembunyikan pengaturan",
+    "showSettings": "Tampilkan pengaturan",
+    "thumbnail": "Thumbnail",
+    "categories": "Kategori",
+    "categoryPlaceholder": "Pilih kategori",
+    "categorySearch": "Cari atau tambah kategori...",
+    "categoryAdd": "Tambah \"{{name}}\"",
+    "categoryCreating": "Menambahkan...",
+    "categoryEmpty": "Kategori tidak ditemukan",
+    "save": "Simpan",
+    "saveChanges": "Simpan perubahan",
+    "saveAsDraft": "Simpan sebagai Draft",
+    "requestPublish": "Ajukan untuk Terbit",
+    "publish": "Terbitkan",
+    "cancel": "Batal"
+  },
+  "publishDialog": {
+    "title": "Terbitkan Story",
+    "description": "Pilih tanggal dan waktu terbit.",
+    "dateLabel": "Tanggal & waktu terbit",
+    "datePlaceholder": "Pilih tanggal & waktu",
+    "confirm": "Terbitkan"
+  },
+  "workflow": {
+    "requested": "Menunggu persetujuan",
+    "approve": "Setujui",
+    "reject": "Tolak"
+  },
+  "confirm": {
+    "title": "Konfirmasi",
+    "description": "Yakin ingin {{action}}? Perubahan akan disimpan.",
+    "submit": "Lanjutkan"
+  },
+  "delete": {
+    "title": "Hapus Story",
+    "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "editor": {
+    "placeholder": "Tulis cerita di sini...",
+    "bold": "Tebal",
+    "italic": "Miring",
+    "strike": "Coret",
+    "h2": "Judul 2",
+    "h3": "Judul 3",
+    "alignLeft": "Rata kiri",
+    "alignCenter": "Rata tengah",
+    "alignRight": "Rata kanan",
+    "bulletList": "Daftar butir",
+    "orderedList": "Daftar bernomor",
+    "blockquote": "Kutipan",
+    "codeBlock": "Blok kode",
+    "inlineCode": "Kode inline",
+    "horizontalRule": "Garis horizontal",
+    "hardBreak": "Baris baru",
+    "clearFormat": "Hapus format",
+    "link": "Tautan",
+    "uploadImage": "Sisipkan gambar",
+    "uploading": "Mengunggah gambar...",
+    "imageProcessing": "Memproses gambar...",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB.",
+    "dropHere": "Lepaskan gambar untuk mengunggah",
+    "undo": "Urungkan",
+    "redo": "Ulangi"
+  },
+  "thumbnail": {
+    "upload": "Unggah thumbnail",
+    "uploading": "Mengunggah...",
+    "remove": "Hapus",
+    "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB."
+  },
+  "gallery": {
+    "title": "Galeri",
+    "add": "Tambah gambar",
+    "empty": "Belum ada gambar galeri.",
+    "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
+    "uploading": "Mengunggah...",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB.",
+    "remove": "Hapus",
+    "moveUp": "Naikkan",
+    "moveDown": "Turunkan",
+    "preview": "Pratinjau",
+    "previewTitle": "Pratinjau gambar",
+    "previous": "Sebelumnya",
+    "next": "Berikutnya",
+    "counter": "{{current}} / {{total}}"
+  },
+  "toast": {
+    "created": "Story berhasil dibuat",
+    "updated": "Story berhasil diperbarui",
+    "deleted": "Story berhasil dihapus",
+    "createFailed": "Gagal membuat story",
+    "updateFailed": "Gagal memperbarui story",
+    "deleteFailed": "Gagal menghapus story"
+  }
+}

@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -78,7 +78,11 @@ export function RoleTable({
                   <>
                     {t('role:table.notFound', { term: trimmedSearch })}{' '}
                     {onResetSearch && (
-                      <button className="underline" onClick={onResetSearch}>
+                      <button
+                        className="inline-flex items-center gap-1 underline"
+                        onClick={onResetSearch}
+                      >
+                        <RotateCcw className="size-3.5" aria-hidden="true" />
                         {t('role:table.reset')}
                       </button>
                     )}
@@ -107,10 +111,14 @@ export function RoleTable({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {canUpdate && (
-                          <DropdownMenuItem onClick={() => onEdit(role)}>{t('role:table.edit')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEdit(role)}>
+                            <Pencil />
+                            {t('role:table.edit')}
+                          </DropdownMenuItem>
                         )}
                         {canDelete && (
                           <DropdownMenuItem variant="destructive" onClick={() => onDelete(role)}>
+                            <Trash2 />
                             {t('role:table.delete')}
                           </DropdownMenuItem>
                         )}

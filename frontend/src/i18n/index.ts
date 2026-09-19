@@ -7,6 +7,7 @@ import commonEn from './locales/en/common.json';
 import dashboardEn from './locales/en/dashboard.json';
 import profileEn from './locales/en/profile.json';
 import roleEn from './locales/en/role.json';
+import storyEn from './locales/en/story.json';
 import userEn from './locales/en/user.json';
 import validationEn from './locales/en/validation.json';
 import authId from './locales/id/auth.json';
@@ -14,6 +15,7 @@ import commonId from './locales/id/common.json';
 import dashboardId from './locales/id/dashboard.json';
 import profileId from './locales/id/profile.json';
 import roleId from './locales/id/role.json';
+import storyId from './locales/id/story.json';
 import userId from './locales/id/user.json';
 import validationId from './locales/id/validation.json';
 
@@ -31,6 +33,7 @@ void i18n.use(initReactI18next).init({
       dashboard: dashboardEn,
       user: userEn,
       role: roleEn,
+      story: storyEn,
       profile: profileEn,
       validation: validationEn,
     },
@@ -40,6 +43,7 @@ void i18n.use(initReactI18next).init({
       dashboard: dashboardId,
       user: userId,
       role: roleId,
+      story: storyId,
       profile: profileId,
       validation: validationId,
     },
@@ -47,7 +51,7 @@ void i18n.use(initReactI18next).init({
   lng: initialLocale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'auth', 'dashboard', 'user', 'role', 'profile', 'validation'],
+  ns: ['common', 'auth', 'dashboard', 'user', 'role', 'story', 'profile', 'validation'],
   interpolation: {
     escapeValue: false,
   },

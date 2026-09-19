@@ -40,6 +40,10 @@
   "sort": {
     "by": "Sort by {{column}}"
   },
+  "dateTime": {
+    "hour": "Hour",
+    "minute": "Minute"
+  },
   "forbidden": {
     "code": "403",
     "title": "No access",

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { ShieldAlert } from 'lucide-react'
+import { RefreshCw, ShieldAlert } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/auth-provider'
@@ -99,6 +99,7 @@ export function ProfilePage() {
               className="h-auto p-0 text-destructive"
               onClick={() => void session.refetch()}
             >
+              <RefreshCw data-icon="inline-start" className="size-4" />
               {t('common:actions.retry')}
             </Button>
           </div>

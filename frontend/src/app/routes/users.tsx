@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, ShieldAlert } from 'lucide-react'
+import { Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -195,7 +195,7 @@ export function UsersPage() {
         </div>
         {canCreateUser && (
           <Button onClick={openCreateDialog}>
-            <Plus className="size-4" />
+            <Plus data-icon="inline-start" className="size-4" />
             {t('user:add')}
           </Button>
         )}
@@ -205,6 +205,7 @@ export function UsersPage() {
         <div className="text-sm text-destructive">
           {t('user:errors.loadRoles')}{' '}
           <Button variant="link" size="sm" className="h-auto p-0" onClick={() => rolesQuery.refetch()}>
+            <RefreshCw data-icon="inline-start" className="size-4" />
             {t('common:actions.retry')}
           </Button>
         </div>
@@ -215,9 +216,15 @@ export function UsersPage() {
           {roleErrorKind === 'create'
             ? t('user:errors.roleAssignCreated')
             : t('user:errors.roleAssignUpdated')}
-          <button className="ml-2 underline" onClick={() => setRoleErrorKind(null)}>
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-2 h-auto p-0"
+            onClick={() => setRoleErrorKind(null)}
+          >
+            <X className="size-3.5" data-icon="inline-start" />
             {t('common:actions.close')}
-          </button>
+          </Button>
         </div>
       )}
 

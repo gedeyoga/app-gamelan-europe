@@ -128,3 +128,27 @@
     @apply font-sans;
     }
 }
+
+/* Semua elemen interaktif memakai cursor pointer. Sengaja UNLAYERED (di luar @layer) agar
+   menang atas `cursor-default` shadcn di layer utilities; disabled dikecualikan. */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+[role='menuitem']:not([data-disabled]),
+[role='menuitemcheckbox']:not([data-disabled]),
+[role='menuitemradio']:not([data-disabled]),
+[role='option']:not([data-disabled]):not([aria-disabled='true']),
+[role='tab']:not([data-disabled]):not([aria-disabled='true']),
+a[href],
+summary,
+label[for],
+select:not(:disabled),
+[data-slot='select-trigger']:not(:disabled),
+[data-slot='dropdown-menu-trigger']:not(:disabled),
+[data-slot='toggle']:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}

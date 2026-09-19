@@ -10,7 +10,7 @@ import { RegisterUserDto } from './dto/register-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-export const USER_FILTER_FIELDS = ['email', 'fullName', 'status', 'roleId', 'createdAt', 'updatedAt'];
+export const USER_FILTER_FIELDS = ['email', 'fullName', 'status', 'roleId', 'countryId', 'createdAt', 'updatedAt'];
 export const USER_DATE_FIELDS = ['createdAt', 'updatedAt'];
 // Semua kolom yang ditampilkan di menu Users wajib sortable.
 export const USER_SORT_FIELDS = ['fullName', 'email', 'status', 'roleName', 'createdAt', 'updatedAt'];
@@ -51,6 +51,7 @@ export class UserService {
       fullName: dto.fullName,
       passwordHash,
       status: dto.status,
+      countryId: dto.countryId,
     });
   }
 
@@ -84,10 +85,11 @@ export class UserService {
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserEntity> {
-    const data: Prisma.UserUpdateInput = {};
+    const data: Prisma.UserUncheckedUpdateInput = {};
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.countryId !== undefined) data.countryId = dto.countryId;
     if (dto.password !== undefined) {
       data.passwordHash = await argon2Hash(dto.password, this.argon2Options());
     }

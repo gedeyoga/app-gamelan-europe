@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Save, X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -74,14 +75,12 @@ export function ProfileCard({
             .max(255, t('validation:emailMax', { count: 255 }))
             .email(t('validation:emailInvalid')),
           changePassword: z.boolean(),
-          currentPassword: z.string().max(128, t('validation:passwordMax', { count: 128 })).optional(),
+          currentPassword: z.string().max(128, t('validation:passwordMax', { count: 128 })),
           newPassword: z
             .string()
             .trim()
-            .min(8, t('validation:passwordMin', { count: 8 }))
-            .max(128, t('validation:passwordMax', { count: 128 }))
-            .optional(),
-          confirmPassword: z.string().max(128, t('validation:passwordMax', { count: 128 })).optional(),
+            .max(128, t('validation:passwordMax', { count: 128 })),
+          confirmPassword: z.string().max(128, t('validation:passwordMax', { count: 128 })),
         })
         .superRefine((data, ctx) => {
           if (!data.changePassword) return
@@ -331,9 +330,11 @@ export function ProfileCard({
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={handleCancel} disabled={isPending}>
+                  <X data-icon="inline-start" className="size-4" />
                   {t('editProfile.cancel')}
                 </Button>
                 <Button type="submit" disabled={isPending}>
+                  <Save data-icon="inline-start" className="size-4" />
                   {isPending ? t('common:actions.saving') : t('editProfile.save')}
                 </Button>
               </div>

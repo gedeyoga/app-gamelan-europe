@@ -1,0 +1,150 @@
+{
+  "title": "Story",
+  "subtitle": "Manage stories and article content",
+  "add": "Add Story",
+  "search": {
+    "placeholder": "Search title or slug...",
+    "ariaLabel": "Search stories"
+  },
+  "view": {
+    "card": "Card view",
+    "list": "List view"
+  },
+  "errors": {
+    "loadData": "Failed to load story data. Please try again.",
+    "forbidden": "You don't have access to view story data.",
+    "loadDetail": "Failed to load story detail.",
+    "uploadFailed": "Failed to upload image. Please try again.",
+    "createCategoryFailed": "Failed to create category.",
+    "slugDuplicate": "This slug is already in use. Please choose another.",
+    "noCreatePermission": "You don't have permission to create a story.",
+    "noUpdatePermission": "You don't have permission to edit a story."
+  },
+  "table": {
+    "name": "Title",
+    "thumbnail": "Thumbnail",
+    "author": "Author",
+    "status": "Status",
+    "categories": "Categories",
+    "publishedAt": "Published At",
+    "empty": "No stories yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "card": {
+    "noThumbnail": "No thumbnail"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Request",
+    "APPROVED": "Approved",
+    "PUBLISHED": "Published"
+  },
+  "form": {
+    "createTitle": "Add Story",
+    "editTitle": "Edit Story",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Enter story title...",
+    "slugLabel": "Slug",
+    "slugPlaceholder": "story-title",
+    "slugGenerate": "Regenerate slug",
+    "slugManualHint": "Slug edited manually — auto-generation stopped.",
+    "settingsTitle": "Settings",
+    "hideSettings": "Hide settings",
+    "showSettings": "Show settings",
+    "thumbnail": "Thumbnail",
+    "categories": "Categories",
+    "categoryPlaceholder": "Select categories",
+    "categorySearch": "Search or add category...",
+    "categoryAdd": "Add \"{{name}}\"",
+    "categoryCreating": "Adding...",
+    "categoryEmpty": "No category found",
+    "save": "Save",
+    "saveChanges": "Save changes",
+    "saveAsDraft": "Save as draft",
+    "requestPublish": "Request to publish",
+    "publish": "Publish",
+    "cancel": "Cancel"
+  },
+  "publishDialog": {
+    "title": "Publish story",
+    "description": "Choose publish date and time.",
+    "dateLabel": "Publish date & time",
+    "datePlaceholder": "Choose date & time",
+    "confirm": "Publish"
+  },
+  "workflow": {
+    "requested": "Awaiting approval",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "confirm": {
+    "title": "Confirm",
+    "description": "Are you sure you want to {{action}}? Changes will be saved.",
+    "submit": "Continue"
+  },
+  "delete": {
+    "title": "Delete Story",
+    "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+  "editor": {
+    "placeholder": "Write your story here...",
+    "bold": "Bold",
+    "italic": "Italic",
+    "strike": "Strikethrough",
+    "h2": "Heading 2",
+    "h3": "Heading 3",
+    "alignLeft": "Align left",
+    "alignCenter": "Align center",
+    "alignRight": "Align right",
+    "bulletList": "Bullet list",
+    "orderedList": "Numbered list",
+    "blockquote": "Quote",
+    "codeBlock": "Code block",
+    "inlineCode": "Inline code",
+    "horizontalRule": "Horizontal rule",
+    "hardBreak": "Line break",
+    "clearFormat": "Clear formatting",
+    "link": "Link",
+    "uploadImage": "Insert image",
+    "uploading": "Uploading image...",
+    "imageProcessing": "Processing image...",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB.",
+    "dropHere": "Drop image to upload",
+    "undo": "Undo",
+    "redo": "Redo"
+  },
+  "thumbnail": {
+    "upload": "Upload thumbnail",
+    "uploading": "Uploading...",
+    "remove": "Remove",
+    "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB."
+  },
+  "gallery": {
+    "title": "Gallery",
+    "add": "Add images",
+    "empty": "No gallery images yet.",
+    "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
+    "uploading": "Uploading...",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB.",
+    "remove": "Remove",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "preview": "Preview",
+    "previewTitle": "Image preview",
+    "previous": "Previous",
+    "next": "Next",
+    "counter": "{{current}} / {{total}}"
+  },
+  "toast": {
+    "created": "Story created successfully",
+    "updated": "Story updated successfully",
+    "deleted": "Story deleted successfully",
+    "createFailed": "Failed to create story",
+    "updateFailed": "Failed to update story",
+    "deleteFailed": "Failed to delete story"
+  }
+}

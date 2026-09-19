@@ -17,12 +17,14 @@
     "prisma:migrate:dev": "prisma migrate dev --schema libs/prisma/schema.prisma",
     "prisma:migrate:deploy": "prisma migrate deploy --schema libs/prisma/schema.prisma",
     "prisma:migrate:reset": "prisma migrate reset --force --schema libs/prisma/schema.prisma",
-    "prisma:seed": "ts-node libs/prisma/seed.ts"
+    "prisma:seed": "ts-node libs/prisma/seed.ts",
+    "prisma:seed:geo": "ts-node libs/prisma/seed-geo.ts"
   },
   "prisma": {
     "seed": "ts-node libs/prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1135.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
@@ -40,7 +42,8 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -49,6 +52,7 @@
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/passport-jwt": "^4.0.1",
     "concurrently": "^9.1.0",

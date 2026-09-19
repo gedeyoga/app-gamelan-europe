@@ -14,18 +14,59 @@ enum UserStatus {
   BLOCKED
 }
 
-model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  fullName      String         @map("full_name")
-  passwordHash  String         @map("password_hash")
-  status        UserStatus     @default(ACTIVE)
-  roleId        String?        @map("role_id")
-  role          Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  refreshTokens RefreshToken[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+enum SubscriptionType {
+  MONTHLY
+  YEARLY
+}
 
+enum BillingStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+enum BillingLineType {
+  ITEM
+  DISCOUNT
+  TAX
+}
+
+enum ContentStatus {
+  DRAFT
+  REQUEST
+  APPROVED
+  PUBLISHED
+}
+
+enum CategoryType {
+  STORY
+  ARCHIVE
+}
+
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  fullName       String         @map("full_name")
+  phone          String?
+  address        String?
+  countryId      String?        @map("country_id")
+  country        Country?       @relation(fields: [countryId], references: [iso2], onDelete: SetNull)
+  passwordHash   String         @map("password_hash")
+  status         UserStatus     @default(ACTIVE)
+  roleId         String?        @map("role_id")
+  role           Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  organizationId String?        @map("organization_id")
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  refreshTokens  RefreshToken[]
+  billings       Billing[]
+  events         Event[]        @relation("EventCreator")
+  posts          Post[]         @relation("PostCreator")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([roleId])
+  @@index([organizationId])
+  @@index([countryId])
   @@map("users")
 }
 
@@ -61,6 +102,7 @@ model RolePermission {
   createdAt    DateTime   @default(now()) @map("created_at")
 
   @@id([roleId, permissionId])
+  @@index([permissionId])
   @@map("role_permissions")
 }
 
@@ -76,4 +118,289 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  city      String?
+  country   String?
+  address   String?
+  lat       Decimal?  @db.Decimal(10, 7)
+  lng       Decimal?  @db.Decimal(10, 7)
+  users     User[]
+  billings  Billing[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("organizations")
+}
+
+model Subscription {
+  id               String           @id @default(uuid())
+  name             String
+  slug             String           @unique
+  subscriptionType SubscriptionType @map("subscription_type")
+  currency         String
+  billings         Billing[]
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  @@map("subscriptions")
+}
+
+model Billing {
+  id               String           @id @default(uuid())
+  userId           String           @map("user_id")
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId   String?          @map("organization_id")
+  organization     Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  subscriptionId   String           @map("subscription_id")
+  subscription     Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  code             String           @unique
+  status           BillingStatus    @default(PENDING)
+  subscriptionType SubscriptionType @map("subscription_type")
+  currency         String
+  total            Decimal          @db.Decimal(12, 2)
+  discount         Decimal?         @db.Decimal(12, 2)
+  tax              Decimal?         @db.Decimal(12, 2)
+  paidAt           DateTime?        @map("paid_at")
+  canceledAt       DateTime?        @map("canceled_at")
+  lines            BillingLine[]
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@map("billings")
+}
+
+model BillingLine {
+  id          String          @id @default(uuid())
+  billingId   String          @map("billing_id")
+  billing     Billing         @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  description String
+  type        BillingLineType
+  qty         Int             @default(1)
+  amount      Decimal         @db.Decimal(12, 2)
+  currency    String
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([billingId])
+  @@map("billing_lines")
+}
+
+model Event {
+  id          String            @id @default(uuid())
+  name        String
+  slug        String            @unique
+  status      ContentStatus     @default(DRAFT)
+  publishedAt DateTime?         @map("published_at")
+  approvedAt  DateTime?         @map("approved_at")
+  content     String
+  thumbnail   String?
+  createdBy   String?           @map("created_by")
+  creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  dates       EventDate[]
+  eventTypes  AssignEventType[]
+  locations   EventLocation[]
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@map("events")
+}
+
+model EventDate {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date      DateTime
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId])
+  @@map("event_dates")
+}
+
+model EventType {
+  id          String            @id @default(uuid())
+  name        String
+  assignments AssignEventType[]
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@map("event_types")
+}
+
+model AssignEventType {
+  id          String    @id @default(uuid())
+  eventId     String    @map("event_id")
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventTypeId String    @map("event_type_id")
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([eventId, eventTypeId])
+  @@index([eventId])
+  @@index([eventTypeId])
+  @@map("assign_event_types")
+}
+
+model EventLocation {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  address   String?
+  lat       Decimal? @db.Decimal(10, 7)
+  lng       Decimal? @db.Decimal(10, 7)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId])
+  @@map("event_locations")
+}
+
+model Image {
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  key        String   @unique
+  filename   String
+  mimeType   String?  @map("mime_type")
+  size       Int?
+  width      Int?
+  height     Int?
+  variants   Json?
+  order      Int      @default(0) @map("order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([entityType, entityId])
+  @@map("images")
+}
+
+model Post {
+  id              String         @id @default(uuid())
+  name            String
+  slug            String         @unique
+  status          ContentStatus  @default(DRAFT)
+  publishedAt     DateTime?      @map("published_at")
+  approvedAt      DateTime?      @map("approved_at")
+  content         String
+  thumbnail       String?
+  galleryImageIds String[]       @default([]) @map("gallery_image_ids")
+  createdBy       String?        @map("created_by")
+  creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  categories      PostCategory[]
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@map("posts")
+}
+
+model Category {
+  id        String         @id @default(uuid())
+  name      String
+  type      CategoryType
+  posts     PostCategory[]
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+model PostCategory {
+  id         String   @id @default(uuid())
+  postId     String   @map("post_id")
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  categoryId String   @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([postId, categoryId])
+  @@index([postId])
+  @@index([categoryId])
+  @@map("post_categories")
+}
+
+model Region {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  translations Json?
+  wikiDataId   String?   @map("wiki_data_id")
+  countries    Country[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("regions")
+}
+
+model Country {
+  id             Int       @id @default(autoincrement())
+  name           String
+  iso2           String    @unique @db.Char(2)
+  iso3           String?   @db.Char(3)
+  numericCode    String?   @map("numeric_code")
+  phoneCode      String?   @map("phone_code")
+  capital        String?
+  currency       String?
+  currencyName   String?   @map("currency_name")
+  currencySymbol String?   @map("currency_symbol")
+  tld            String?
+  native         String?
+  population     BigInt?
+  gdp            BigInt?
+  regionName     String?   @map("region_name")
+  subregion      String?
+  nationality    String?
+  timezones      Json?
+  translations   Json?
+  latitude       Decimal?  @db.Decimal(10, 8)
+  longitude      Decimal?  @db.Decimal(11, 8)
+  emoji          String?
+  emojiU         String?   @map("emoji_u")
+  wikiDataId     String?   @map("wiki_data_id")
+  regionId       Int?      @map("region_id")
+  region         Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  users          User[]
+  states         State[]
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([regionId])
+  @@map("countries")
+}
+
+model State {
+  id           Int      @id
+  name         String
+  countryCode  String   @map("country_code") @db.Char(2)
+  fipsCode     String?  @map("fips_code")
+  iso2         String?
+  iso3166_2    String?
+  type         String?
+  level        Int?
+  parentId     Int?     @map("parent_id")
+  native       String?
+  latitude     Decimal? @db.Decimal(10, 8)
+  longitude    Decimal? @db.Decimal(11, 8)
+  timezone     String?
+  translations Json?
+  wikiDataId   String?  @map("wiki_data_id")
+  countryId    Int      @map("country_id")
+  country      Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@index([countryCode])
+  @@map("states")
 }

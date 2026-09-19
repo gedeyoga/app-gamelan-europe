@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -35,10 +36,12 @@ export function DataTablePagination({
           disabled={page <= 1 || isPending}
           onClick={onPrev}
         >
+          <ChevronLeft className="size-4" data-icon="inline-start" />
           {t('common:actions.previous')}
         </Button>
         <Button variant="outline" size="sm" disabled={!hasNextPage || isPending} onClick={onNext}>
           {t('common:actions.next')}
+          <ChevronRight className="size-4" data-icon="inline-end" />
         </Button>
       </div>
     </div>

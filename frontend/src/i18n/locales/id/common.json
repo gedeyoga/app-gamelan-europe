@@ -40,6 +40,10 @@
   "sort": {
     "by": "Urutkan berdasarkan {{column}}"
   },
+  "dateTime": {
+    "hour": "Jam",
+    "minute": "Menit"
+  },
   "forbidden": {
     "code": "403",
     "title": "Tidak punya akses",

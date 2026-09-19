@@ -890,6 +890,11 @@ export class HealthController {
 | POST | `/api/v1/auth/register` | Registrasi mandiri. |
 | POST | `/api/v1/auth/login` | Login, terbit JWT. |
 | POST | `/api/v1/auth/refresh` | Rotasi refresh token (body `refreshToken`). |
+| GET | `/api/v1/regions` | Data referensi region untuk dropdown pra-login. |
+| GET | `/api/v1/countries` | Data referensi negara untuk dropdown pra-login. |
+| GET | `/api/v1/countries/:id` | Detail negara (referensi). |
+| GET | `/api/v1/states` | Data referensi state/provinsi untuk dropdown pra-login. |
+| GET | `/api/v1/states/:id` | Detail state (referensi). |
 
 **LOGIN-only** (tanpa dekorator, lolos karena ada `request.user` dari `JwtAuthGuard`):
 

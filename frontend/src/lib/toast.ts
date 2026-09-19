@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 
-import { ApiError, isValidationError } from '@/lib/api-client'
+import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
 
-export { isValidationError }
+export { isConflictError, isValidationError }
 
 const TOAST_DURATION_MS = 4000
 

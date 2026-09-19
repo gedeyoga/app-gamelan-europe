@@ -44,16 +44,29 @@ Create user via **register tetap PUBLIC** (`POST /api/v1/auth/register`), sedang
 
 ```prisma
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  fullName     String     @map("full_name")
-  passwordHash String     @map("password_hash")
-  status       UserStatus @default(ACTIVE)
-  roleId       String?    @map("role_id")
-  role         Role?      @relation(fields: [roleId], references: [id])
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id             String         @id @default(uuid())
+  email          String         @unique
+  fullName       String         @map("full_name")
+  phone          String?
+  address        String?
+  countryId      String?        @map("country_id")
+  country        Country?       @relation(fields: [countryId], references: [iso2], onDelete: SetNull)
+  passwordHash   String         @map("password_hash")
+  status         UserStatus     @default(ACTIVE)
+  roleId         String?        @map("role_id")
+  role           Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  organizationId String?        @map("organization_id")
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  refreshTokens  RefreshToken[]
+  billings       Billing[]
+  events         Event[]        @relation("EventCreator")
+  posts          Post[]         @relation("PostCreator")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
+  @@index([roleId])
+  @@index([organizationId])
+  @@index([countryId])
   @@map("users")
 }
 
@@ -64,8 +77,10 @@ enum UserStatus {
 }
 ```
 
-- `email` unik (constraint DB) → `P2002` dipetakan ke `ConflictException` (RULES bab 6).
+- `email` unik (constraint DB) → `P2002` dipetakan ke `UnprocessableEntityException` (422) via `toUniqueConstraintError`.
 - `roleId` nullable: user boleh belum punya role (didapat setelah di-assign).
+- `countryId` (ISO-2) nullable → FK ke `Country.iso2`, `onDelete: SetNull`, diindeks (`@@index([countryId])`). `roleId`/`organizationId` juga diindeks.
+- `countryId` tidak ada di tabel → `P2003` dipetakan ke `UnprocessableEntityException` (422) field `countryId` (`toForeignKeyConstraintError`).
 
 ---
 
@@ -85,7 +100,9 @@ export const userSelect = {
   fullName: true,
   status: true,
   roleId: true,
-  role: true,
+  role: { select: { id: true, name: true } },
+  countryId: true,
+  country: { select: { id: true, iso2: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;
@@ -164,7 +181,7 @@ export class LoginDto {
 ```typescript
 // libs/src/modules/user/dto/create-user.dto.ts
 import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
 import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
@@ -180,8 +197,9 @@ export class CreateUserDto {
   @MaxLength(100)
   fullName: string;
 
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  // RULES exception: password jangan di-trim (spasi leading/trailing signifikan).
   @IsString()
+  @IsNotEmpty()
   @MinLength(8)
   @MaxLength(128)
   password: string;
@@ -189,17 +207,24 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  // ISO-2 country code (relasi ke Country.iso2).
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryId?: string;
 }
 ```
 
 ```typescript
 // libs/src/modules/user/dto/update-user.dto.ts
 import { PartialType } from '@nestjs/mapped-types';
-import { RegisterUserDto } from './register-user.dto';
+import { CreateUserDto } from './create-user.dto';
 
-// UpdateUserDto = RegisterUserDto dengan semua field opsional;
+// UpdateUserDto = CreateUserDto dengan semua field opsional;
 // password di sini sudah di-hash di service, bukan dikirim sebagai password polos.
-export class UpdateUserDto extends PartialType(RegisterUserDto) {}
+export class UpdateUserDto extends PartialType(CreateUserDto) {}
 ```
 
 ```typescript
@@ -215,7 +240,7 @@ export class UpdateUserRoleDto {
 }
 ```
 
-> `UpdateUserDto` memperluas `RegisterUserDto` (PartialType) sehingga `email` & `fullName` tetap tervalidasi bila dikirim. `password` pada update di-eksekusi via jalur khusus (hash di service), bukan lewat `UpdateUserDto`.
+> `UpdateUserDto` memperluas `CreateUserDto` (PartialType) sehingga `email`/`fullName`/`status`/`countryId` tetap tervalidasi bila dikirim. `password` pada update tidak lewat `UpdateUserDto` — hash di service.
 
 ### Tabel validasi & contoh 422
 
@@ -224,6 +249,8 @@ export class UpdateUserRoleDto {
 | `email` | trim, `@IsEmail()`, `@MaxLength(255)` | 422 `{ field: 'email', message }` |
 | `fullName` | trim, `@IsString()`, `@MaxLength(100)` | 422 `{ field: 'fullName', message }` |
 | `password` | trim, `@MinLength(8)`, `@MaxLength(128)` | 422 `{ field: 'password', message }` |
+| `status` | opsional, `@IsEnum(UserStatus)` | 422 `{ field: 'status', message }` |
+| `countryId` | trim opsional, `@Length(2, 2)` (ISO-2, relasi `Country.iso2`) | 422 `{ field: 'countryId', message }` |
 | `roleId` (assign) | trim, `@IsUUID()` | 422 `{ field: 'roleId', message }` |
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
 
@@ -244,7 +271,7 @@ Method penting dengan `select` + map error Prisma (RULES bab 6).
 
 ```typescript
 // libs/src/modules/user/user.repository.ts
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { userSelect, userWithPasswordSelect, UserEntity, UserAuthEntity } from './entities/user.entity';
@@ -263,48 +290,101 @@ export class UserRepository {
     return this.prisma.user.findUnique({ where: { email }, select: userWithPasswordSelect });
   }
 
+  async findByIdWithPassword(id: string): Promise<UserAuthEntity | null> {
+    return this.prisma.user.findUnique({ where: { id }, select: userWithPasswordSelect });
+  }
+
   async findByEmail(email: string): Promise<UserEntity | null> {
     return this.prisma.user.findUnique({ where: { email }, select: userSelect });
   }
 
-  async findAll(params: { skip: number; take: number }): Promise<UserEntity[]> {
-    return this.prisma.user.findMany({ ...params, select: userSelect });
+  async findMany(params: {
+    where: Prisma.UserWhereInput;
+    skip: number;
+    take: number;
+    orderBy: Prisma.UserOrderByWithRelationInput;
+  }): Promise<{ items: UserEntity[]; total: number }> {
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ ...params, select: userSelect }),
+      this.prisma.user.count({ where: params.where }),
+    ]);
+    return { items, total };
   }
 
-  async create(data: Prisma.UserCreateInput): Promise<UserEntity> {
+  // Input sengaja `Unchecked*` supaya bisa menulis FK scalar (`countryId`, `roleId`).
+  async create(data: Prisma.UserUncheckedCreateInput): Promise<UserEntity> {
     try {
       return await this.prisma.user.create({ data, select: userSelect });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException('User already exists');
+        throw this.toUniqueConstraintError(e); // email duplikat → 422
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        throw this.toForeignKeyConstraintError(e); // countryId tak ada → 422
       }
       throw e;
     }
   }
 
-  async update(id: string, data: Prisma.UserUpdateInput): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+  async update(id: string, data: Prisma.UserUncheckedUpdateInput): Promise<UserEntity> {
+    // Pre-check pakai select minimal → tidak menyentuh kolom drift (phone/address/organization_id).
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
     try {
       return await this.prisma.user.update({ where: { id }, data, select: userSelect });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException('User already exists');
+        throw this.toUniqueConstraintError(e);
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        throw this.toForeignKeyConstraintError(e);
       }
       throw e;
     }
   }
 
-  async delete(id: string): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('User not found');
-    return this.prisma.user.delete({ where: { id }, select: userSelect });
+  private toUniqueConstraintError(e: Prisma.PrismaClientKnownRequestError): UnprocessableEntityException {
+    const target = (e.meta?.target as string[] | undefined) ?? ['email'];
+    const field = target[0] ?? 'email';
+    return new UnprocessableEntityException({
+      message: 'Validation failed',
+      errors: [{ field, message: `${field} already exists` }],
+    });
   }
 
-  async updateRole(id: string, roleId: string | null): Promise<UserEntity> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+  // P2003: FK diidentifikasi lewat meta.field_name (nama kolom) atau meta.constraint
+  // (Postgres, mis. `users_country_id_fkey`). FK tak dikenal → 422 generik, jangan salah label.
+  private toForeignKeyConstraintError(e: Prisma.PrismaClientKnownRequestError): UnprocessableEntityException {
+    const meta = e.meta as { field_name?: string; constraint?: string } | undefined;
+    const byColumn: Record<string, { field: string; message: string }> = {
+      country_id: { field: 'countryId', message: 'Country not found' },
+      role_id: { field: 'roleId', message: 'Role not found' },
+      organization_id: { field: 'organizationId', message: 'Organization not found' },
+    };
+    const column =
+      meta?.field_name && byColumn[meta.field_name]
+        ? meta.field_name
+        : Object.keys(byColumn).find((key) => (meta?.constraint ?? '').includes(key)) ??
+          meta?.field_name ??
+          '';
+    const mapped = byColumn[column] ?? { field: column || 'unknown', message: 'Related record not found' };
+    return new UnprocessableEntityException({ message: 'Validation failed', errors: [mapped] });
+  }
+
+  async updateRole(id: string, roleId: string): Promise<UserEntity> {
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
+
+    const role = await this.prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
+    if (!role) throw new NotFoundException('Role not found');
+
     return this.prisma.user.update({ where: { id }, data: { roleId }, select: userSelect });
+  }
+
+  async remove(id: string): Promise<UserEntity> {
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('User not found');
+    return this.prisma.user.delete({ where: { id }, select: userSelect });
   }
 }
 ```
@@ -374,10 +454,12 @@ Semua path memakai prefix **`/api/v1`**. Respon sukses `{ data, message }`.
 | POST | `/api/v1/auth/login` | Login, verifikasi password, terbitkan JWT | PUBLIC |
 | POST | `/api/v1/auth/logout` | Logout, blacklist token | LOGIN |
 | POST | `/api/v1/auth/refresh` | Refresh token (rotasi) | PUBLIC |
-| GET | `/api/v1/auth/me` | Profil user aktif + role + permissions | LOGIN |
+| GET | `/api/v1/auth/me` | Profil user aktif + role + country + permissions | LOGIN |
+| PATCH | `/api/v1/auth/me` | Update profil sendiri (`fullName`/`email`/`countryId`) | LOGIN |
+| POST | `/api/v1/auth/change-password` | Ganti password sendiri (revoke semua refresh token) | LOGIN |
 
 > Detail mekanisme auth (skema token, refresh rotation, logout Redis, guard, error) → **[`auth.md`](./auth.md)**.
-> Response `/auth/me` → `{ data: { id, email, fullName, status, role, permissions }, message }` — `permissions` = array `permission.code` milik user.
+> Response `/auth/me` → `{ data: { id, email, fullName, status, role, countryId, country, permissions }, message }` — `permissions` = array `permission.code` milik user.
 
 Auth (register):
 
@@ -386,8 +468,8 @@ Auth (register):
 | Request body | `{ email, fullName, password }` (RegisterUserDto) |
 | Response 201 | `{ data: <user tanpa password_hash>, message: 'success' }` |
 | Validasi | `email` valid, `fullName` string non-empty, `password` min 8 → gagal = 422 |
-| Error 409 | email sudah dipakai (`ConflictException`) |
-| Error 422 | validasi DTO |
+| Error 409 | _tidak ada_ — email duplikat dipetakan ke 422 (`UnprocessableEntityException`) |
+| Error 422 | validasi DTO / email sudah dipakai (`P2002`) |
 
 Auth (login):
 
@@ -398,6 +480,16 @@ Auth (login):
 | Error 401 | email tak ada / password salah (`UnauthorizedException`) |
 | Error 422 | validasi DTO |
 
+Auth (update profile — `PATCH /auth/me`):
+
+| Item | Nilai |
+| --- | --- |
+| Request body | `UpdateProfileDto` — `{ fullName?, email?, countryId? }`; minimal satu field wajib diisi |
+| Validasi | `fullName` ≤100, `email` valid, `countryId` `@Length(2, 2)` ISO-2 → gagal = 422 |
+| Response 200 | `{ data: <hasil /auth/me>, message: 'success' }` |
+| Error 400 | tidak ada field yang dikirim (`BadRequestException`) |
+| Error 422 | validasi DTO; `countryId` tak ada (`P2003` → `{ field: 'countryId', message: 'Country not found' }`) |
+
 ### User CRUD
 
 | Method | Path | Deskripsi | Akses |
@@ -405,7 +497,7 @@ Auth (login):
 | POST | `/api/v1/users` | Buat user oleh admin | PERMISSION: `user:create` |
 | GET | `/api/v1/users` | List user (pagination + search + sort semua kolom tampil) | PERMISSION: `user:read` |
 | GET | `/api/v1/users/:id` | Detail user | PERMISSION: `user:read` |
-| PATCH | `/api/v1/users/:id` | Update user (email/fullName/status) | PERMISSION: `user:update` |
+| PATCH | `/api/v1/users/:id` | Update user (email/fullName/status/countryId) | PERMISSION: `user:update` |
 | PATCH | `/api/v1/users/:id/role` | Set role user | PERMISSION: `user:update` |
 | DELETE | `/api/v1/users/:id` | Hapus user | PERMISSION: `user:delete` |
 
@@ -413,7 +505,7 @@ Kontrak list (RULES Bab 19/19a/19b):
 
 | Item | Nilai |
 | --- | --- |
-| `filter` whitelist | `email, fullName, status, roleId, createdAt, updatedAt` (enum `status` invalid → 422; `createdAt, updatedAt` ISO 8601, dikoersi ke `Date` via `USER_DATE_FIELDS` + `parseDateInput`, invalid → 422, `like` ditolak) |
+| `filter` whitelist | `email, fullName, status, roleId, countryId, createdAt, updatedAt` (enum `status` invalid → 422; `createdAt, updatedAt` ISO 8601, dikoersi ke `Date` via `USER_DATE_FIELDS` + `parseDateInput`, invalid → 422, `like` ditolak) |
 | `search` | OR `like insensitive` ke `fullName, email` (`USER_SEARCHABLE_FIELDS`); trim, kosong/<2 char diabaikan |
 | `sortBy` whitelist | `fullName, email, status, roleName, createdAt, updatedAt` (`USER_SORT_FIELDS`); `roleName` → `role.name` via `USER_SORT_MAP`; tak dikenal → 422 |
 | Contoh | `GET /users?search=budi&sortBy=fullName&sortOrder=asc&filter[status]=ACTIVE` · `GET /users?filter[createdAt][gte]=2026-09-01T00:00:00Z` |
@@ -422,10 +514,10 @@ User CRUD detail:
 
 | Method / Path | Request body/params | Response | Error |
 | --- | --- | --- | --- |
-| `POST /users` | body `CreateUserDto` | 201 `{ data: <user>, message }` | 409 duplikat email, 422 validasi |
+| `POST /users` | body `CreateUserDto` | 201 `{ data: <user>, message }` | 422 duplikat email (`P2002`), 422 validasi, 422 `countryId` tak ada (`P2003`) |
 | `GET /users` | query `?page=&limit=&search=&sortBy=&sortOrder=&filter[field]=` | 200 `{ data: [user], message }` | 422 sortBy/filter tak dikenal |
 | `GET /users/:id` | path `id` | 200 `{ data: <user>, message }` | 404 tidak ditemukan |
-| `PATCH /users/:id` | path `id`, body `UpdateUserDto` | 200 `{ data: <user>, message }` | 404, 409 duplikat, 422 |
+| `PATCH /users/:id` | path `id`, body `UpdateUserDto` | 200 `{ data: <user>, message }` | 404, 422 duplikat email, 422 `countryId` tak ada, 422 validasi |
 | `PATCH /users/:id/role` | path `id`, body `{ roleId }` | 200 `{ data: <user>, message }` | 404 user/role, 422 |
 | `DELETE /users/:id` | path `id` | 200 `{ data: <user>, message }` | 404 |
 
@@ -445,12 +537,13 @@ Keputusan akses user (eksplisit):
 
 | Endpoint | Exception | Status | Penyebab |
 | --- | --- | --- | --- |
-| register | `ConflictException` | 409 | email duplikat (P2002) |
+| register/create/update | `UnprocessableEntityException` | 422 | email duplikat (`P2002` → `{ field: 'email', message: 'email already exists' }`) |
 | register | `UnprocessableEntityException` | 422 | validasi DTO (password < 8, email invalid) |
 | login | `UnauthorizedException` | 401 | email tak ada / password salah |
 | login | `UnprocessableEntityException` | 422 | validasi DTO |
-| create/list/detail/update/delete/role | `NotFoundException` | 404 | resource tidak ada |
-| create/update | `ConflictException` | 409 | email duplikat |
+| create/list/detail/update/remove/role | `NotFoundException` | 404 | resource tidak ada |
+| create/update/profile | `UnprocessableEntityException` | 422 | `countryId` tidak ada (FK `P2003` → `{ field: 'countryId', message: 'Country not found' }`) |
+| profile (`PATCH /auth/me`) | `BadRequestException` | 400 | tidak ada field yang dikirim |
 | semua | `ForbiddenException` | 403 | JWT valid tapi permission kurang |
 | semua | `UnauthorizedException` | 401 | JWT invalid/expired |
 | semua | `UnprocessableEntityException` | 422 | validasi DTO |

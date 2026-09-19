@@ -468,6 +468,38 @@ Semua path memakai prefix **`/api/v1`**. Semua respon sukses `{ data, message }`
 
 > Kedua endpoint `roles/:id/permissions` memakai permission **`permission:*` yang sudah ada** — bukan resource baru (`role-permission:*` tidak ada). `PUT` = `permission:update`, `GET` = `permission:read` (TETAP, sesuai controller).
 
+### Story & Category (sinkron dengan [story.md](./story.md#11-tabel-endpoint-lengkap))
+
+Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Category`, upload gambar ke S3 lewat `POST /images`.
+
+| Method | Path | Deskripsi | Akses |
+| --- | --- | --- | --- |
+| POST | `/api/v1/posts` | Buat story | PERMISSION: `story:create` |
+| GET | `/api/v1/posts` | List story | PERMISSION: `story:read` |
+| GET | `/api/v1/posts/:id` | Detail story | PERMISSION: `story:read` |
+| PATCH | `/api/v1/posts/:id` | Update story | PERMISSION: `story:update` |
+| DELETE | `/api/v1/posts/:id` | Hapus story (+ row `images` & objek S3) | PERMISSION: `story:delete` |
+| POST | `/api/v1/categories` | Buat kategori (idempoten) | PERMISSION: `category:create` |
+| GET | `/api/v1/categories` | List kategori | PERMISSION: `category:read` |
+| GET | `/api/v1/categories/:id` | Detail kategori | PERMISSION: `category:read` |
+| PATCH | `/api/v1/categories/:id` | Update kategori | PERMISSION: `category:update` |
+| DELETE | `/api/v1/categories/:id` | Hapus kategori | PERMISSION: `category:delete` |
+| POST | `/api/v1/images` | Upload gambar ke S3 (multipart `file`) | PERMISSION: `story:create`, `story:update` (ANY-of) |
+
+> Tidak ada endpoint `GET /uploads` maupun permission `image:*`; gambar disajikan langsung oleh S3/CDN via URL absolut.
+
+### Geographic Reference (sinkron dengan [country.md](./country.md), [region.md](./region.md) & [state.md](./state.md))
+
+Data referensi geografis untuk dropdown pra-login → **PUBLIC**, tanpa RBAC.
+
+| Method | Path | Deskripsi | Akses |
+| --- | --- | --- | --- |
+| GET | `/api/v1/regions` | List region (dropdown) | PUBLIC (`@Public()`) |
+| GET | `/api/v1/countries` | List negara (dropdown, pagination) | PUBLIC (`@Public()`) |
+| GET | `/api/v1/countries/:id` | Detail negara by `id` (Int) | PUBLIC (`@Public()`) |
+| GET | `/api/v1/states` | List state/provinsi (dropdown, pagination, filter `countryId`/`countryCode` — `countryCode` uppercase ISO-2, case-sensitive) | PUBLIC (`@Public()`) |
+| GET | `/api/v1/states/:id` | Detail state by `id` (Int), + `country` | PUBLIC (`@Public()`) |
+
 ---
 
 ## 9. Error Handling Umum

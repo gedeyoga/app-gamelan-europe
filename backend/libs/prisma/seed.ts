@@ -39,6 +39,14 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'permission:read', description: 'Melihat daftar/detail permission' },
   { code: 'permission:update', description: 'Mengubah permission / relasi role-permission' },
   { code: 'permission:delete', description: 'Menghapus permission' },
+  { code: 'story:create', description: 'Membuat story baru' },
+  { code: 'story:read', description: 'Melihat daftar/detail story' },
+  { code: 'story:update', description: 'Mengubah story' },
+  { code: 'story:delete', description: 'Menghapus story' },
+  { code: 'category:create', description: 'Membuat kategori baru' },
+  { code: 'category:read', description: 'Melihat daftar/detail kategori' },
+  { code: 'category:update', description: 'Mengubah kategori' },
+  { code: 'category:delete', description: 'Menghapus kategori' },
 ];
 
 // Saat ini hanya role `admin`. Struktur array siap tambah role baru

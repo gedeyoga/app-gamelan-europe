@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -83,7 +84,7 @@ export function RoleFormDialog({
           .string()
           .trim()
           .max(255, t('validation:descriptionMax', { count: 255 })),
-        permissionIds: z.array(z.string().uuid()).optional().default([]),
+        permissionIds: z.array(z.string().uuid()).optional(),
       }),
     [t],
   )
@@ -222,6 +223,7 @@ export function RoleFormDialog({
                           onClick={checkAllFiltered}
                           disabled={filteredPermissions.length === 0 || !canEditPermissions}
                         >
+                          <Plus data-icon="inline-start" className="size-4" />
                           {t('role:form.selectAll')}
                         </Button>
                         <Button
@@ -231,6 +233,7 @@ export function RoleFormDialog({
                           onClick={uncheckAllFiltered}
                           disabled={filteredPermissions.length === 0 || !canEditPermissions}
                         >
+                          <Trash2 data-icon="inline-start" className="size-4" />
                           {t('role:form.clearAll')}
                         </Button>
                       </div>
@@ -298,10 +301,12 @@ export function RoleFormDialog({
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isPending}>
+                  <X data-icon="inline-start" className="size-4" />
                   {t('common:actions.cancel')}
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isPending}>
+                <Save data-icon="inline-start" className="size-4" />
                 {isPending
                   ? t('common:actions.saving')
                   : mode === 'edit'
