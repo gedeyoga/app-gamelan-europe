@@ -14,6 +14,15 @@ const authenticatedUser = (id: string): AuthenticatedUser => ({
   exp: 9999999999,
 });
 
+const apiKeyUser = (permissions: string[]): AuthenticatedUser => ({
+  id: 'creator-id',
+  email: 'creator@example.com',
+  jti: '',
+  exp: 0,
+  apiKeyId: 'api-key-id',
+  permissions,
+});
+
 describe('PermissionsGuard (deny-by-default)', () => {
   let guard: PermissionsGuard;
   let reflectorGetAll: jest.Mock;
@@ -100,5 +109,27 @@ describe('PermissionsGuard (deny-by-default)', () => {
       guard.canActivate(buildContext(authenticatedUser('user-2'))),
     ).resolves.toBe(true);
     expect(getPermissionCodesByUserId).toHaveBeenCalledWith('user-2');
+  });
+
+  it('API key principal without @Permissions metadata → 403 Permission required (no LOGIN-only exception)', async () => {
+    mockMetadata(false, undefined);
+    await expect(guard.canActivate(buildContext(apiKeyUser(['user:read'])))).rejects.toThrow(
+      new ForbiddenException('Permission required'),
+    );
+    expect(getPermissionCodesByUserId).not.toHaveBeenCalled();
+  });
+
+  it('API key principal with matching permission → allowed, uses embedded permissions (no DB call)', async () => {
+    mockMetadata(false, ['user:read']);
+    await expect(guard.canActivate(buildContext(apiKeyUser(['user:read'])))).resolves.toBe(true);
+    expect(getPermissionCodesByUserId).not.toHaveBeenCalled();
+  });
+
+  it('API key principal without the required code → 403 Forbidden resource', async () => {
+    mockMetadata(false, ['user:read']);
+    await expect(guard.canActivate(buildContext(apiKeyUser(['role:read'])))).rejects.toThrow(
+      new ForbiddenException('Forbidden resource'),
+    );
+    expect(getPermissionCodesByUserId).not.toHaveBeenCalled();
   });
 });

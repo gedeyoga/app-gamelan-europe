@@ -1,0 +1,65 @@
+{
+  "title": "API Keys",
+  "subtitle": "Manage API keys for programmatic access",
+  "add": "Create API Key",
+  "search": {
+    "placeholder": "Search API key name...",
+    "ariaLabel": "Search API keys"
+  },
+  "errors": {
+    "loadData": "Failed to load API key data. Please try again.",
+    "forbidden": "You don't have access to view API keys.",
+    "loadPermissions": "Failed to load permission list.",
+    "permissionsForbidden": "You don't have access to view the permission list."
+  },
+  "table": {
+    "name": "Name",
+    "key": "Key",
+    "permissions": "Permissions",
+    "lastUsed": "Last Used",
+    "created": "Created",
+    "never": "Never",
+    "empty": "No API keys yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "form": {
+    "createTitle": "Create API Key",
+    "editTitle": "Edit API Key",
+    "createDescription": "Create a new API key with custom permissions.",
+    "editDescription": "Update API key name and permissions.",
+    "name": "Name",
+    "permissions": "Permissions",
+    "permissionsHint": "Select the permissions granted to this key.",
+    "searchPermissions": "Search permissions...",
+    "searchPermissionsAria": "Search permissions",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "noPermissions": "No permissions yet",
+    "noMatch": "No matching permissions"
+  },
+  "created": {
+    "title": "API Key Created",
+    "description": "API key \"{{name}}\" was created successfully.",
+    "warning": "Copy now. This key cannot be viewed again.",
+    "keyLabel": "API key",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copiedToast": "API key copied to clipboard",
+    "done": "Done"
+  },
+  "delete": {
+    "title": "Delete API Key",
+    "description": "Delete API key \"{{name}}\"? Access is revoked immediately and permanently. This action cannot be undone."
+  },
+  "toast": {
+    "created": "API key created successfully",
+    "updated": "API key updated successfully",
+    "deleted": "API key deleted successfully",
+    "createFailed": "Failed to create API key",
+    "updateFailed": "Failed to update API key",
+    "deleteFailed": "Failed to delete API key"
+  }
+}

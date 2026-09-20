@@ -17,6 +17,9 @@ export interface AuthenticatedUser {
   email: string;
   jti: string;
   exp: number;
+  // Diisi hanya untuk principal dari `x-api-key` (bukan JWT).
+  apiKeyId?: string;
+  permissions?: string[];
 }
 
 @Injectable()

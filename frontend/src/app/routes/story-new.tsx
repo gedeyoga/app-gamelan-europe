@@ -25,6 +25,7 @@ const INITIAL_VALUES: StoryFormValues = {
   content: '',
   thumbnail: '',
   status: 'DRAFT',
+  visibility: 'PUBLIC',
   categoryIds: [],
   imageIds: [],
 }

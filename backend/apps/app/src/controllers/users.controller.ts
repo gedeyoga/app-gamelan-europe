@@ -1,5 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { CreateUserDto, ListQueryDto, Permissions, UpdateUserDto, UpdateUserRoleDto, UserService } from '@app/libs';
+import {
+  AuthenticatedUser,
+  CreateUserDto,
+  CurrentUser,
+  ListQueryDto,
+  Permissions,
+  UpdateUserDto,
+  UpdateUserRoleDto,
+  UserService,
+} from '@app/libs';
 
 @Controller('users')
 export class UsersController {
@@ -8,14 +17,14 @@ export class UsersController {
   @Post()
   @Permissions('user:create')
   @HttpCode(201)
-  create(@Body() dto: CreateUserDto) {
-    return this.userService.create(dto);
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.userService.create(dto, user.id);
   }
 
   @Get()
   @Permissions('user:read')
-  async list(@Query() query: ListQueryDto) {
-    const { items, total } = await this.userService.list(query);
+  async list(@Query() query: ListQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    const { items, total } = await this.userService.list(query, user.id);
     return {
       data: items,
       meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },
@@ -24,25 +33,25 @@ export class UsersController {
 
   @Get(':id')
   @Permissions('user:read')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.userService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.userService.findOne(id, user.id);
   }
 
   @Patch(':id')
   @Permissions('user:update')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto) {
-    return this.userService.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.userService.update(id, dto, user.id);
   }
 
   @Patch(':id/role')
   @Permissions('user:update')
-  assignRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRoleDto) {
-    return this.userService.assignRole(id, dto.roleId);
+  assignRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRoleDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.userService.assignRole(id, dto.roleId, user.id);
   }
 
   @Delete(':id')
   @Permissions('user:delete')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.userService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.userService.remove(id, user.id);
   }
 }

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Length, MaxLength, MinLength } from 'class-validator';
 import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
@@ -32,4 +32,12 @@ export class CreateUserDto {
   @IsString()
   @Length(2, 2)
   countryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  roleId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 }

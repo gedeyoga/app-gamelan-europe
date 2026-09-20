@@ -56,6 +56,31 @@ Assert manual (tanpa runner test):
 
 `RegisterForm` → submit → `useRegister` mutation. Pasca sukses: auto-login **atau** redirect ke `/login`.
 
+Field form (react-hook-form + zod):
+
+| Field | Tipe | Catatan |
+| --- | --- | --- |
+| `fullName` | Input teks | trim, wajib, max 100. |
+| `email` | Input email | trim, wajib, max 255, format email. |
+| `password` | Input password | wajib, min 8, max 128. |
+| `confirmPassword` | Input password | wajib cocok dengan `password`. |
+| `phone` | Komposit dial + nasional | `{ dial, national }`; opsional (kosong = tidak dikirim). |
+| `countryId` | `Select` negara | opsional (sentinel `none` = tanpa negara), nilai `iso2`. |
+| `organization` | Checkbox | bila dicentang, `organizationName` wajib. |
+| `organizationName` | Input teks | trim, max 200; hanya dikirim bila `organization` true. |
+
+Tidak ada field alamat.
+
+**Phone (dial-code combobox):**
+
+- Dial code dipilih via **combobox searchable** (`PhoneCodeCombobox`, cmdk + Popover) berisi opsi dial unik dari daftar negara (`useCountries`), diurut dial numerik; filter mencocokkan nama, `iso2`, dial, dan `+dial` (mis. ketik `+62`).
+- Combobox **default dari region locale browser** (`id-ID` → `ID`) saat opsi tersedia, sekali saja dan tidak pernah menimpa pilihan user.
+- Trigger combobox mewarisi status invalid + `aria-describedby` pesan error field `phone` (`useFormField`) agar kontrol yang salah terekspos ke AT; indikator terpilih tunggal memakai `data-checked` dari `CommandItem`.
+- Validasi: bila nomor nasional diisi, dial wajib ada (`validation:phoneCodeRequired`); total digit `dial + national` harus 7–15 (`validation:phoneInvalid`).
+- **Kontrak E.164**: payload dikirim sebagai `phone` string `+<dial><national>` (contoh `+628123456789`), atau `undefined` bila nomor kosong — hanya digit yang diikutkan, mirror validasi backend `/^\+[1-9]\d{6,14}$/`.
+- **Leading zero nasional dibuang** (`replace(/^0+/, '')`) sebelum validasi & penggabungan: `dial=62` + `08239482032` → `+628239482032`; `dial=62` + `0000000` → nasional kosong → dianggap tidak diisi (tanpa error). E.164 tidak memuat trunk prefix. Pengupasan hanya di jalur validasi/submit, input user tetap utuh saat mengetik.
+
+
 ## 6. Penyimpanan Token & Status Sesi
 
 - Token disimpan di `localStorage` (key: `auth.token`, `auth.refreshToken`, `auth.user`, `auth.refreshedAt`).

@@ -1,5 +1,7 @@
 export type ContentStatus = 'DRAFT' | 'REQUEST' | 'APPROVED' | 'PUBLISHED'
 
+export type Visibility = 'PUBLIC' | 'PRIVATE'
+
 export type CategoryType = 'STORY' | 'ARCHIVE'
 
 export interface StoryCategory {
@@ -13,35 +15,15 @@ export interface Creator {
   fullName: string
 }
 
-export type ImageVariantName = 'large' | 'medium' | 'thumbnail'
-
-export interface ImageVariant {
-  name: ImageVariantName
-  url: string
-  key: string
-  width: number
-  height: number
-  size: number
-  mimeType: string
-}
-
-export interface UploadedImage {
-  id: string
-  url: string
-  key: string
-  filename: string
-  mimeType: string | null
-  size: number
-  width: number
-  height: number
-  variants: ImageVariant[]
-}
+export type { ImageVariant, ImageVariantName, UploadedImage } from '@/types/image'
+import type { UploadedImage } from '@/types/image'
 
 export interface Story {
   id: string
   name: string
   slug: string
   status: ContentStatus
+  visibility: Visibility
   publishedAt: string | null
   content?: string
   thumbnail: string | null
@@ -59,6 +41,7 @@ export interface CreateStoryInput {
   content?: string
   thumbnail?: string | null
   status?: ContentStatus
+  visibility?: Visibility
   categoryIds?: string[]
   imageIds?: string[]
   /** Galeri gambar berurut (id `Image`); bila dikirim = replace seluruh galeri. */
@@ -71,3 +54,5 @@ export interface CreateStoryInput {
 export type UpdateStoryInput = Partial<CreateStoryInput>
 
 export const CONTENT_STATUSES = ['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED'] as const
+
+export const VISIBILITIES = ['PUBLIC', 'PRIVATE'] as const

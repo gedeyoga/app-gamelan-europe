@@ -34,7 +34,7 @@ import { Toggle } from '@/components/ui/toggle'
 import { isValidationError } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 
-import type { UploadedImage } from '../types'
+import type { UploadedImage } from '@/types/image'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_SIZE_BYTES = 5 * 1024 * 1024
@@ -86,6 +86,47 @@ export function RichTextEditor({
     editable: !disabled,
     shouldRerenderOnTransaction: true,
     onUpdate: ({ editor: instance }) => onChange(instance.getHTML()),
+    // ProseMirror memasang listener sendiri di DOM konten (bubble) dan memanggil
+    // `preventDefault()` sebelum event sampai ke handler React, sehingga `onDrop`
+    // di wrapper tidak dapat diandalkan. Jalur resmi: `editorProps.handleDrop`/
+    // `handlePaste` — dipanggil ProseMirror sebelum default-nya, `return true`
+    // menandai event sudah ditangani (ProseMirror ikut `preventDefault`).
+    editorProps: {
+      handleDrop: (view, event) => {
+        const dt = event.dataTransfer
+        if (!dt) return false
+        const hasFiles = dt.types.includes('Files') || dt.files.length > 0
+        if (!hasFiles) return false
+        // Non-editable: biarkan jalur default; wrapper tetap `preventDefault`
+        // agar browser tidak membuka file yang dijatuhkan.
+        if (!view.editable) return false
+        const files = Array.from(dt.files).filter((file) => ACCEPTED_TYPES.includes(file.type))
+        if (files.length === 0) return false
+        // Upload berjalan: klaim event agar tidak dobel, tapi jangan sisipkan.
+        if (isUploading) return true
+        setIsDragging(false)
+        dragDepth.current = 0
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos
+        void (async () => {
+          let pos = at
+          for (const file of files) pos = await uploadAndInsert(file, pos)
+        })()
+        return true
+      },
+      handlePaste: (view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
+          ACCEPTED_TYPES.includes(file.type),
+        )
+        if (files.length === 0 || !view.editable) return false
+        if (isUploading) return true
+        const at = view.state.selection.from
+        void (async () => {
+          let pos: number | undefined = at
+          for (const file of files) pos = await uploadAndInsert(file, pos)
+        })()
+        return true
+      },
+    },
   })
 
   // Sinkron konten dari luar (mis. detail edit selesai dimuat).
@@ -166,23 +207,14 @@ export function RichTextEditor({
     if (dragDepth.current === 0) setIsDragging(false)
   }
 
-  async function handleDrop(event: React.DragEvent<HTMLDivElement>) {
-    // Drag `<img>` inline bisa menyertakan 'Files' di `types` tanpa file nyata.
-    // files kosong → bukan file drop: jangan preventDefault, jangan proses.
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    // Insertion file ditangani `editorProps.handleDrop` (jalur ProseMirror).
+    // Di sini hanya: cegah browser membuka file, lalu reset overlay.
+    // `files.length === 0` → drag `<img>` inline, biarkan ProseMirror memindahkannya.
     if (event.dataTransfer.files.length === 0) return
-    // File drop nyata: blokir default (cegah browser membuka file) walau disabled.
     event.preventDefault()
     dragDepth.current = 0
     setIsDragging(false)
-    if (disabled || isUploading) return
-    const files = Array.from(event.dataTransfer.files).filter((file) =>
-      ACCEPTED_TYPES.includes(file.type),
-    )
-    if (files.length === 0) return
-    let at = editor?.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos
-    for (const file of files) {
-      at = await uploadAndInsert(file, at)
-    }
   }
 
   function handleLink() {
@@ -206,7 +238,7 @@ export function RichTextEditor({
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
-      onDrop={(event) => void handleDrop(event)}
+      onDrop={handleDrop}
     >
       {isDragging && !disabled && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-none border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">

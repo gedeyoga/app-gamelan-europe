@@ -21,7 +21,8 @@ const storageBase = {
   IMAGE_WEBP_QUALITY: Joi.number().integer().min(1).max(100).default(82),
   IMAGE_LARGE_WIDTH: Joi.number().integer().min(1).default(1920),
   IMAGE_MEDIUM_WIDTH: Joi.number().integer().min(1).default(1024),
-  IMAGE_THUMB_SIZE: Joi.number().integer().min(1).default(480),
+  IMAGE_THUMB_WIDTH: Joi.number().integer().min(1).default(1280),
+  IMAGE_THUMB_HEIGHT: Joi.number().integer().min(1).default(720),
 };
 
 export const appEnvValidationSchema = Joi.object({

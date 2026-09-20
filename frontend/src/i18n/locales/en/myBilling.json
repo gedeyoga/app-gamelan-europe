@@ -1,0 +1,43 @@
+{
+  "title": "My Billing",
+  "subtitle": "Your subscription and billing records",
+  "currentSubscription": {
+    "title": "Current Subscription",
+    "plan": "Plan",
+    "type": "Type",
+    "currency": "Currency"
+  },
+  "noSubscription": {
+    "title": "No active subscription",
+    "description": "You don't have an active plan yet. Available plans are listed below."
+  },
+  "availablePlans": {
+    "title": "Available Plans",
+    "empty": "No plans available at the moment.",
+    "type": "Type",
+    "currency": "Currency"
+  },
+  "billings": {
+    "title": "Billing History",
+    "empty": "No billing records yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search"
+  },
+  "table": {
+    "code": "Code",
+    "subscription": "Subscription",
+    "status": "Status",
+    "total": "Total",
+    "created": "Created"
+  },
+  "search": {
+    "placeholder": "Search code or currency...",
+    "ariaLabel": "Search my billings"
+  },
+  "errors": {
+    "loadData": "Failed to load your billing data. Please try again.",
+    "loadSubscription": "Failed to load your subscription. Please try again.",
+    "loadPlans": "Failed to load available plans. Please try again.",
+    "forbidden": "You don't have access to this page."
+  }
+}

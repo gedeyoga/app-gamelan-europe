@@ -9,6 +9,8 @@ export const userSelect = {
   role: { select: { id: true, name: true } },
   countryId: true,
   country: { select: { id: true, iso2: true, name: true } },
+  organizationId: true,
+  organization: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;

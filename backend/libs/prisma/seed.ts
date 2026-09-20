@@ -43,19 +43,74 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'story:read', description: 'Melihat daftar/detail story' },
   { code: 'story:update', description: 'Mengubah story' },
   { code: 'story:delete', description: 'Menghapus story' },
+  { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
+  { code: 'story:approve', description: 'Menyetujui story (REQUEST -> APPROVED)' },
+  { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
+  { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
+  { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
   { code: 'category:create', description: 'Membuat kategori baru' },
   { code: 'category:read', description: 'Melihat daftar/detail kategori' },
   { code: 'category:update', description: 'Mengubah kategori' },
   { code: 'category:delete', description: 'Menghapus kategori' },
+  { code: 'event:create', description: 'Membuat event baru' },
+  { code: 'event:read', description: 'Melihat daftar/detail event' },
+  { code: 'event:update', description: 'Mengubah event' },
+  { code: 'event:delete', description: 'Menghapus event' },
+  { code: 'event:submit', description: 'Mengajukan event untuk review (DRAFT -> REQUEST)' },
+  { code: 'event:approve', description: 'Menyetujui event (REQUEST -> APPROVED)' },
+  { code: 'event:reject', description: 'Menolak event (REQUEST -> DRAFT)' },
+  { code: 'event:publish', description: 'Menerbitkan event (APPROVED -> PUBLISHED)' },
+  { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
+  { code: 'organization:create', description: 'Membuat organization baru' },
+  { code: 'organization:read', description: 'Melihat daftar/detail organization' },
+  { code: 'organization:update', description: 'Mengubah organization' },
+  { code: 'organization:delete', description: 'Menghapus organization' },
+  { code: 'subscription:create', description: 'Membuat subscription baru' },
+  { code: 'subscription:read', description: 'Melihat daftar/detail subscription' },
+  { code: 'subscription:update', description: 'Mengubah subscription' },
+  { code: 'subscription:delete', description: 'Menghapus subscription' },
+  { code: 'billing:create', description: 'Membuat billing baru' },
+  { code: 'billing:read', description: 'Melihat daftar/detail billing' },
+  { code: 'billing:update', description: 'Mengubah billing' },
+  { code: 'billing:delete', description: 'Menghapus billing' },
+  { code: 'apikey:create', description: 'Membuat API key baru' },
+  { code: 'apikey:read', description: 'Melihat daftar/detail API key' },
+  { code: 'apikey:update', description: 'Mengubah nama/permission API key' },
+  { code: 'apikey:delete', description: 'Menghapus API key' },
 ];
 
-// Saat ini hanya role `admin`. Struktur array siap tambah role baru
-// (mis. `{ name: 'kasir', description: '...', permissions: ['order:read'] }`).
+// Role default (idempoten, additive). `admin` = semua permission;
+// `organization` = pengelola konten organisasi (transisi maksimal sampai REQUEST);
+// `member` = read-only.
 const DEFAULT_ROLES: DefaultRole[] = [
   {
     name: 'admin',
     description: 'Admin dengan akses penuh RBAC',
     permissions: DEFAULT_PERMISSIONS.map((p) => p.code),
+  },
+  {
+    name: 'organization',
+    description: 'Pengelola story/event milik anggota organisasinya',
+    permissions: [
+      'story:create',
+      'story:read',
+      'story:update',
+      'story:delete',
+      'story:submit',
+      'event:create',
+      'event:read',
+      'event:update',
+      'event:delete',
+      'event:submit',
+      'category:read',
+      'user:create',
+      'user:read',
+    ],
+  },
+  {
+    name: 'member',
+    description: 'Anggota organisasi — hanya melihat konten terbit',
+    permissions: ['story:read', 'event:read', 'category:read'],
   },
 ];
 

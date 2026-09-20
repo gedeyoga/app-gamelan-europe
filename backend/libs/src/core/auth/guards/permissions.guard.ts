@@ -52,7 +52,8 @@ export class PermissionsGuard implements CanActivate {
       this.logger.warn(
         `Missing @Permissions metadata on ${targetClass.name}.${handler.name} — Permission required`,
       );
-      if (!user?.id) {
+      // API key tidak boleh menikmati LOGIN-only exception: butuh @Permissions eksplisit.
+      if (!user?.id || user.apiKeyId) {
         throw new ForbiddenException('Permission required');
       }
       return true;
@@ -62,8 +63,9 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Unauthorized');
     }
 
-    // Fresh permission codes from DB on every request (never trust stale claims).
-    const codes = await this.permissionService.getPermissionCodesByUserId(user.id);
+    // Principal API key membawa permission-nya sendiri; JWT load fresh dari DB.
+    const codes =
+      user.permissions ?? (await this.permissionService.getPermissionCodesByUserId(user.id));
     const allowed = required.some((code) => codes.includes(code));
     if (!allowed) throw new ForbiddenException('Forbidden resource');
     return true;

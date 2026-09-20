@@ -3,9 +3,8 @@ import { ImageUp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { useFileDrop } from '@/lib/use-file-drop'
 import { cn } from '@/lib/utils'
-
-import { useFileDrop } from '../lib/use-file-drop'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_SIZE_BYTES = 5 * 1024 * 1024

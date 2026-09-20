@@ -1,0 +1,65 @@
+{
+  "title": "API Keys",
+  "subtitle": "Kelola API key untuk akses programatik",
+  "add": "Buat API Key",
+  "search": {
+    "placeholder": "Cari nama API key...",
+    "ariaLabel": "Cari API key"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data API key. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat API key.",
+    "loadPermissions": "Gagal memuat daftar permission.",
+    "permissionsForbidden": "Tidak punya akses untuk melihat daftar permission."
+  },
+  "table": {
+    "name": "Nama",
+    "key": "Key",
+    "permissions": "Permissions",
+    "lastUsed": "Terakhir Dipakai",
+    "created": "Dibuat",
+    "never": "Belum pernah",
+    "empty": "Belum ada API key",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "form": {
+    "createTitle": "Buat API Key",
+    "editTitle": "Edit API Key",
+    "createDescription": "Buat API key baru dengan permission khusus.",
+    "editDescription": "Perbarui nama dan permission API key.",
+    "name": "Nama",
+    "permissions": "Permissions",
+    "permissionsHint": "Pilih permission yang diberikan ke key ini.",
+    "searchPermissions": "Cari permission...",
+    "searchPermissionsAria": "Cari permission",
+    "selectAll": "Pilih semua",
+    "clearAll": "Hapus semua",
+    "noPermissions": "Belum ada permission",
+    "noMatch": "Tidak ada permission yang cocok"
+  },
+  "created": {
+    "title": "API Key Dibuat",
+    "description": "API key \"{{name}}\" berhasil dibuat.",
+    "warning": "Salin sekarang. Key tidak bisa dilihat lagi.",
+    "keyLabel": "API key",
+    "copy": "Salin",
+    "copied": "Tersalin",
+    "copiedToast": "API key disalin ke clipboard",
+    "done": "Selesai"
+  },
+  "delete": {
+    "title": "Hapus API Key",
+    "description": "Hapus API key \"{{name}}\"? Akses langsung dicabut secara permanen. Tindakan ini tidak dapat dibatalkan."
+  },
+  "toast": {
+    "created": "API key berhasil dibuat",
+    "updated": "API key berhasil diperbarui",
+    "deleted": "API key berhasil dihapus",
+    "createFailed": "Gagal membuat API key",
+    "updateFailed": "Gagal memperbarui API key",
+    "deleteFailed": "Gagal menghapus API key"
+  }
+}

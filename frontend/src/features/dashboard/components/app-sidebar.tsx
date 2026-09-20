@@ -30,6 +30,7 @@ export interface NavItem {
 interface AppSidebarProps {
   navItems: NavItem[]
   dataManagementItems: NavItem[]
+  paymentItems: NavItem[]
   user: SidebarUserInfo | null
   onLogout: () => void
   className?: string
@@ -38,6 +39,7 @@ interface AppSidebarProps {
 export function AppSidebar({
   navItems,
   dataManagementItems,
+  paymentItems,
   user,
   onLogout,
   className,
@@ -94,6 +96,28 @@ export function AppSidebar({
             <SidebarGroupLabel>{t('group.dataManagement')}</SidebarGroupLabel>
             <SidebarMenu>
               {dataManagementItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {paymentItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{t('group.payment')}</SidebarGroupLabel>
+            <SidebarMenu>
+              {paymentItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

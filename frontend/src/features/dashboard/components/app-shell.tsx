@@ -1,4 +1,4 @@
-import { Home, Newspaper, Shield, Users } from 'lucide-react'
+import { Building2, CalendarDays, CreditCard, Home, KeyRound, Newspaper, Receipt, Shield, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -45,6 +45,7 @@ function isNavVisible(item: NavItem, can: (code: string) => boolean): boolean {
 export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const { t } = useTranslation('dashboard')
   const { t: tStory } = useTranslation('story')
+  const { t: tEvent } = useTranslation('event')
   const { theme, toggleTheme } = useTheme()
   const { pathname: rawPathname } = useLocation()
   // Normalisasi trailing slash (kecuali root `/`) agar `/stories/new/` tetap match.
@@ -52,9 +53,20 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
 
   const isStoryEditor =
     pathname === '/stories/new' || /^\/stories\/[^/]+\/edit$/.test(pathname)
+  const isEventEditor =
+    pathname === '/events/new' || /^\/events\/[^/]+\/edit$/.test(pathname)
+  // `/stories/:id` (bukan `/new`, bukan `/edit`): halaman read-only dengan layout penuh tanpa sidebar/header.
+  const isStoryDetail = /^\/stories\/(?!new$)[^/]+$/.test(pathname)
+  // `/events/:id`: halaman detail read-only — pola sama, tanpa sidebar/header.
+  const isEventDetail = /^\/events\/(?!new$)[^/]+$/.test(pathname)
 
   const dashboardNavItems: NavItem[] = useMemo(
-    () => [{ title: t('nav.dashboard'), url: '/', icon: Home }],
+    () => [
+      { title: t('nav.dashboard'), url: '/', icon: Home },
+      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'story:read' },
+      { title: t('nav.event'), url: '/events', icon: CalendarDays, permission: 'event:read' },
+      { title: t('nav.myBilling'), url: '/my-billings', icon: Receipt },
+    ],
     [t],
   )
 
@@ -62,9 +74,33 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     () => [
       { title: t('nav.users'), url: '/users', icon: Users, permission: 'user:read' },
       { title: t('nav.roles'), url: '/roles', icon: Shield, permission: 'role:read' },
-      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'story:read' },
+      {
+        title: t('nav.organizations'),
+        url: '/organizations',
+        icon: Building2,
+        permission: 'organization:read',
+      },
+      { title: t('nav.apiKey'), url: '/api-keys', icon: KeyRound, permission: 'apikey:read' },
     ],
     [t],
+  )
+
+  const paymentNavItems: NavItem[] = useMemo(
+    () => [
+      {
+        title: t('nav.subscription'),
+        url: '/subscriptions',
+        icon: CreditCard,
+        permission: 'subscription:read',
+      },
+      { title: t('nav.billing'), url: '/billings', icon: Receipt, permission: 'billing:read' },
+    ],
+    [t],
+  )
+
+  const visibleDashboardNavItems = useMemo(
+    () => dashboardNavItems.filter((item) => isNavVisible(item, can)),
+    [dashboardNavItems, can],
   )
 
   const visibleDataManagementNavItems = useMemo(
@@ -72,18 +108,35 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     [dataManagementNavItems, can],
   )
 
+  const visiblePaymentNavItems = useMemo(
+    () => paymentNavItems.filter((item) => isNavVisible(item, can)),
+    [paymentNavItems, can],
+  )
+
   const currentItem: NavItem | undefined =
-    [...dashboardNavItems, ...visibleDataManagementNavItems].find(
+    [...visibleDashboardNavItems, ...visibleDataManagementNavItems, ...visiblePaymentNavItems].find(
       (item) => item.url === pathname,
     ) ??
     (pathname === '/profile'
       ? { title: t('userMenu.profile'), url: '/profile', icon: Home }
       : undefined)
 
-  // Route editor story: tanpa sidebar, header ringkas + breadcrumb Dashboard / Story / judul.
-  if (isStoryEditor) {
-    const storyTitle =
-      pathname === '/stories/new' ? tStory('form.createTitle') : tStory('form.editTitle')
+  // Route detail story/event: benar-benar kosong — tanpa sidebar, tanpa header/breadcrumb, tanpa padding.
+  if (isStoryDetail || isEventDetail) {
+    return <Outlet />
+  }
+
+  // Route editor story/event: tanpa sidebar, header ringkas + breadcrumb Dashboard / section / judul.
+  if (isStoryEditor || isEventEditor) {
+    const editorTitle = isStoryEditor
+      ? pathname === '/stories/new'
+        ? tStory('form.createTitle')
+        : tStory('form.editTitle')
+      : pathname === '/events/new'
+        ? tEvent('form.createTitle')
+        : tEvent('form.editTitle')
+    const sectionLabel = isStoryEditor ? t('nav.story') : t('nav.event')
+    const sectionUrl = isStoryEditor ? '/stories' : '/events'
     return (
       <TooltipProvider delayDuration={0}>
         <div className="flex min-h-svh flex-col lg:h-svh lg:overflow-hidden">
@@ -98,12 +151,12 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   <BreadcrumbLink asChild>
-                    <NavLink to="/stories">{t('nav.story')}</NavLink>
+                    <NavLink to={sectionUrl}>{sectionLabel}</NavLink>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{storyTitle}</BreadcrumbPage>
+                  <BreadcrumbPage>{editorTitle}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -124,8 +177,9 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     <TooltipProvider delayDuration={0}>
       <SidebarProvider>
         <AppSidebar
-          navItems={dashboardNavItems}
+          navItems={visibleDashboardNavItems}
           dataManagementItems={visibleDataManagementNavItems}
+          paymentItems={visiblePaymentNavItems}
           user={user}
           onLogout={onLogout}
         />

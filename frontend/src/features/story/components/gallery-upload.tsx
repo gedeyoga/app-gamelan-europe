@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
-import { useFileDrop } from '../lib/use-file-drop'
+import { useFileDrop } from '@/lib/use-file-drop'
 import type { UploadedImage } from '../types'
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']

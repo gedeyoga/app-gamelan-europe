@@ -1,0 +1,86 @@
+{
+  "title": "Billing Management",
+  "subtitle": "Manage billing records",
+  "add": "Add Billing",
+  "search": {
+    "placeholder": "Search code or currency...",
+    "ariaLabel": "Search billings"
+  },
+  "errors": {
+    "loadData": "Failed to load billing data. Please try again.",
+    "forbidden": "You don't have access to view billing data.",
+    "loadOptions": "Failed to load form options (user/organization/subscription)."
+  },
+  "table": {
+    "code": "Code",
+    "user": "User",
+    "subscription": "Subscription",
+    "status": "Status",
+    "total": "Total",
+    "created": "Created",
+    "empty": "No billings yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "statusOptions": {
+    "PENDING": "Pending",
+    "PAID": "Paid",
+    "CANCELED": "Canceled"
+  },
+  "subscriptionTypeOptions": {
+    "MONTHLY": "Monthly",
+    "YEARLY": "Yearly"
+  },
+  "lineTypeOptions": {
+    "ITEM": "Item",
+    "DISCOUNT": "Discount",
+    "TAX": "Tax"
+  },
+  "form": {
+    "createTitle": "Add Billing",
+    "editTitle": "Edit Billing",
+    "createDescription": "Create a new billing record.",
+    "editDescription": "Update billing record data.",
+    "code": "Code",
+    "user": "User",
+    "selectUser": "Select user",
+    "organization": "Organization",
+    "selectOrganization": "Select organization",
+    "noOrganization": "No organization",
+    "subscription": "Subscription",
+    "selectSubscription": "Select subscription",
+    "status": "Status",
+    "subscriptionType": "Type",
+    "currency": "Currency",
+    "total": "Total",
+    "discount": "Discount",
+    "tax": "Tax",
+    "paidAt": "Paid at",
+    "canceledAt": "Canceled at",
+    "datePlaceholder": "Pick date & time",
+    "lines": "Billing lines",
+    "linesEmpty": "No lines yet",
+    "addLine": "Add line",
+    "removeLine": "Remove line",
+    "lineLabel": "Line {{number}}",
+    "description": "Description",
+    "lineType": "Type",
+    "qty": "Qty",
+    "amount": "Amount",
+    "lineCurrency": "Currency"
+  },
+  "delete": {
+    "title": "Delete Billing",
+    "description": "Are you sure you want to delete billing {{code}}? This action cannot be undone."
+  },
+  "toast": {
+    "created": "Billing created successfully",
+    "updated": "Billing updated successfully",
+    "deleted": "Billing deleted successfully",
+    "createFailed": "Failed to create billing",
+    "updateFailed": "Failed to update billing",
+    "deleteFailed": "Failed to delete billing"
+  }
+}

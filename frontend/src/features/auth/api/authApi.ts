@@ -1,7 +1,8 @@
-import { request } from '@/lib/api-client'
+import { request, requestList, type ListResult } from '@/lib/api-client'
 
 import type {
   AuthResponse,
+  Country,
   LoginRequest,
   RefreshResponse,
   RegisterRequest,
@@ -23,6 +24,24 @@ export function register(payload: RegisterRequest): Promise<User> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+const COUNTRY_PAGE_LIMIT = 100
+
+// Endpoint publik; countryId register opsional sehingga kegagalan load tidak memblokir submit.
+// Backend cap limit=100 sedangkan dataset ~250 negara -> paginasi sampai habis.
+export async function listCountries(): Promise<ListResult<Country>> {
+  const items: Country[] = []
+  let page = 1
+  for (;;) {
+    const res = await requestList<Country>(
+      `/countries?page=${page}&limit=${COUNTRY_PAGE_LIMIT}&sortBy=name&sortOrder=asc`,
+    )
+    items.push(...res.items)
+    if (res.items.length < COUNTRY_PAGE_LIMIT || items.length >= res.total) break
+    page += 1
+  }
+  return { items, page: 1, limit: COUNTRY_PAGE_LIMIT, total: items.length }
 }
 
 export function me(): Promise<SessionUser> {

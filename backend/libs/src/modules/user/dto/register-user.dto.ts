@@ -1,5 +1,12 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+// Blank/whitespace → undefined agar `@IsOptional` melewati validasi (semantik: absent).
+const trimOrUndefined = ({ value }: { value: unknown }) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
 
 export class RegisterUserDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -20,4 +27,24 @@ export class RegisterUserDto {
   @MinLength(8)
   @MaxLength(128)
   password: string;
+
+  @Transform(trimOrUndefined)
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+[1-9]\d{6,14}$/, { message: 'phone must be in E.164 format, e.g. +628239482032' })
+  @MaxLength(16)
+  phone?: string;
+
+  @Transform(trimOrUndefined)
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  countryId?: string;
+
+  @Transform(trimOrUndefined)
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  organizationName?: string;
 }

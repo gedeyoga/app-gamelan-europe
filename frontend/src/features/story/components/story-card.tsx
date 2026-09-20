@@ -1,9 +1,11 @@
 import { ImageOff, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +43,7 @@ export function StoryCard({
   const showActions = canUpdate || canDelete
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className={CARD_GRID_CLASS}>
       {items.length === 0 ? (
         <div className="col-span-full rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
           {trimmedSearch.length > 0 ? (
@@ -63,21 +65,49 @@ export function StoryCard({
         </div>
       ) : (
         items.map((story) => (
-          <Card key={story.id}>
-            {story.thumbnail ? (
-              <img
-                src={story.thumbnail}
-                alt={story.name}
-                className="aspect-video w-full object-cover"
-              />
-            ) : (
-              <div className="flex aspect-video w-full items-center justify-center bg-muted text-muted-foreground">
-                <ImageOff className="size-6" aria-hidden="true" />
-                <span className="sr-only">{t('story:card.noThumbnail')}</span>
+          <Card key={story.id} className="pt-0">
+            <div className="relative">
+              <Link
+                to={`/stories/${story.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t('story:detail.open', { name: story.name })}
+              >
+                {story.thumbnail ? (
+                  <img
+                    src={story.thumbnail}
+                    alt={story.name}
+                    className="aspect-video w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-video w-full items-center justify-center bg-muted text-muted-foreground">
+                    <ImageOff className="size-6" aria-hidden="true" />
+                    <span className="sr-only">{t('story:card.noThumbnail')}</span>
+                  </div>
+                )}
+              </Link>
+              <div className="absolute left-2 top-2 z-10 flex flex-wrap items-center gap-1">
+                <Badge className="shadow-sm" variant={STATUS_VARIANT[story.status]}>
+                  {t(`story:statusOptions.${story.status}`, { defaultValue: story.status })}
+                </Badge>
+                {story.visibility === 'PRIVATE' && (
+                  <Badge variant="secondary" className="shadow-sm">
+                    {t('story:card.memberOnly')}
+                  </Badge>
+                )}
               </div>
-            )}
+            </div>
             <CardHeader>
-              <CardTitle className="line-clamp-2">{story.name}</CardTitle>
+              <CardTitle className="line-clamp-2">
+                <Link
+                  to={`/stories/${story.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  {story.name}
+                </Link>
+              </CardTitle>
               {showActions && (
                 <CardAction>
                   <DropdownMenu>
@@ -120,14 +150,9 @@ export function StoryCard({
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-muted-foreground">
-                  {story.creator?.fullName ?? '—'}
-                </span>
-                <Badge variant={STATUS_VARIANT[story.status]}>
-                  {t(`story:statusOptions.${story.status}`, { defaultValue: story.status })}
-                </Badge>
-              </div>
+              <span className="truncate text-muted-foreground">
+                {story.creator?.fullName ?? '—'}
+              </span>
               <span className="text-xs text-muted-foreground">
                 {formatDateTime(story.publishedAt)}
               </span>

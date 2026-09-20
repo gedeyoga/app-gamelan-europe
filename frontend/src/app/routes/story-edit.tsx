@@ -29,6 +29,7 @@ function toFormValues(story: Story): StoryFormValues {
     content: story.content ?? '',
     thumbnail: story.thumbnail ?? '',
     status: story.status,
+    visibility: story.visibility,
     categoryIds: story.categories.map((category) => category.id),
     imageIds: [],
   }

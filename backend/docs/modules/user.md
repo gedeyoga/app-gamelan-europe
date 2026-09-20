@@ -103,6 +103,8 @@ export const userSelect = {
   role: { select: { id: true, name: true } },
   countryId: true,
   country: { select: { id: true, iso2: true, name: true } },
+  organizationId: true,
+  organization: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;
@@ -181,7 +183,7 @@ export class LoginDto {
 ```typescript
 // libs/src/modules/user/dto/create-user.dto.ts
 import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Length, MaxLength, MinLength } from 'class-validator';
 import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
@@ -214,6 +216,14 @@ export class CreateUserDto {
   @IsString()
   @Length(2, 2)
   countryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  roleId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 }
 ```
 
@@ -251,6 +261,8 @@ export class UpdateUserRoleDto {
 | `password` | trim, `@MinLength(8)`, `@MaxLength(128)` | 422 `{ field: 'password', message }` |
 | `status` | opsional, `@IsEnum(UserStatus)` | 422 `{ field: 'status', message }` |
 | `countryId` | trim opsional, `@Length(2, 2)` (ISO-2, relasi `Country.iso2`) | 422 `{ field: 'countryId', message }` |
+| `roleId` | opsional, `@IsUUID()` (create: assign role; `UpdateUserDto` mewarisinya tapi diabaikan service — pakai `PATCH /users/:id/role`) | 422 `{ field: 'roleId', message }` |
+| `organizationId` | opsional, `@IsUUID()` (create: pindah user ke organization; `UpdateUserDto` mewarisinya, service update belum menerapkannya) | 422 `{ field: 'organizationId', message }` |
 | `roleId` (assign) | trim, `@IsUUID()` | 422 `{ field: 'roleId', message }` |
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
 
@@ -531,6 +543,29 @@ Keputusan akses user (eksplisit):
 | `PATCH /users/:id`, `/users/:id/role` | `user:update` | update & assign role |
 | `DELETE /users/:id` | `user:delete` | delete |
 
+### Row-level scoping (role `organization`/`member`)
+
+Selain permission, `UserService` menerapkan row-level scoping via `AccessScopeService` (detail [rbac.md §10](./rbac.md#10-row-level-scoping)). Role `organization` hanya mengelola anggota organisasinya; `member` read-only.
+
+| Endpoint | `all` (admin) | `organization` | `member`/`published` | `none` |
+| --- | --- | --- | --- | --- |
+| `POST /users` | `roleId`/`organizationId` dari body diteruskan apa adanya | `organizationId` **dipaksa** org sendiri; `roleId` **dipaksa** role `member`; `roleId`/`organizationId` body **diabaikan** | 403 | 403 |
+| `GET /users` | semua user | hanya `organizationId === scope.organizationId` (di-`AND` ke filter) | 403 (defensif) | list kosong `{ items: [], total: 0 }` |
+| `GET /users/:id` | bebas | hanya anggota org sendiri, lain → **403** | 403 | 403 |
+| `PATCH /users/:id` | ✅ | 403 | 403 | 403 |
+| `PATCH /users/:id/role` | ✅ | 403 | 403 | 403 |
+| `DELETE /users/:id` | ✅ | 403 | 403 | 403 |
+
+- **Create sebagai `organization`:** user baru selalu masuk organisasi si pembuat dan ber-role `member`. Bila role `member` belum ada di DB → **500** `InternalServerErrorException('Member role not configured')` (jalankan `pnpm prisma:seed`).
+- **Update/remove/assignRole admin-only:** ditegakkan `assertAdminScope` → non-admin **403**, terlepas dari scope barisnya.
+- `UpdateUserDto` mewarisi `roleId`/`organizationId` dari `CreateUserDto`, tetapi `update()` **belum** menerapkannya (hanya `email`/`fullName`/`status`/`countryId`/`password`); pindah role lewat `PATCH /users/:id/role`.
+
+```json
+// 403 — user organization mengakses anggota org lain
+{ "statusCode": 403, "message": "Forbidden resource", "errors": [] }
+```
+
+
 ---
 
 ## 8. Error & Exception
@@ -544,6 +579,8 @@ Keputusan akses user (eksplisit):
 | create/list/detail/update/remove/role | `NotFoundException` | 404 | resource tidak ada |
 | create/update/profile | `UnprocessableEntityException` | 422 | `countryId` tidak ada (FK `P2003` → `{ field: 'countryId', message: 'Country not found' }`) |
 | profile (`PATCH /auth/me`) | `BadRequestException` | 400 | tidak ada field yang dikirim |
+| `POST /users` (role `organization`), `GET/PATCH/DELETE /users*` non-admin | `ForbiddenException` | 403 | scope baris (bukan anggota organisasinya) / endpoint admin-only |
+| `POST /users` (role `organization`) | `InternalServerErrorException` | 500 | role `member` belum di-seed (`Member role not configured`) |
 | semua | `ForbiddenException` | 403 | JWT valid tapi permission kurang |
 | semua | `UnauthorizedException` | 401 | JWT invalid/expired |
 | semua | `UnprocessableEntityException` | 422 | validasi DTO |

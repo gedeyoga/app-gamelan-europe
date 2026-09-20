@@ -25,6 +25,7 @@
     "thumbnail": "Thumbnail",
     "author": "Author",
     "status": "Status",
+    "visibility": "Visibility",
     "categories": "Categories",
     "publishedAt": "Published At",
     "empty": "No stories yet",
@@ -34,13 +35,18 @@
     "delete": "Delete"
   },
   "card": {
-    "noThumbnail": "No thumbnail"
+    "noThumbnail": "No thumbnail",
+    "memberOnly": "Members Only"
   },
   "statusOptions": {
     "DRAFT": "Draft",
     "REQUEST": "Request",
     "APPROVED": "Approved",
     "PUBLISHED": "Published"
+  },
+  "visibilityOptions": {
+    "PUBLIC": "Public",
+    "PRIVATE": "Private"
   },
   "form": {
     "createTitle": "Add Story",
@@ -55,6 +61,7 @@
     "hideSettings": "Hide settings",
     "showSettings": "Show settings",
     "thumbnail": "Thumbnail",
+    "visibility": "Visibility",
     "categories": "Categories",
     "categoryPlaceholder": "Select categories",
     "categorySearch": "Search or add category...",
@@ -138,6 +145,14 @@
     "previous": "Previous",
     "next": "Next",
     "counter": "{{current}} / {{total}}"
+  },
+  "detail": {
+    "back": "Back to stories",
+    "open": "View details for \"{{name}}\"",
+    "notFound": "Story not found.",
+    "authorFallback": "Unknown author",
+    "noContent": "This story has no content yet.",
+    "gallery": "Gallery"
   },
   "toast": {
     "created": "Story created successfully",

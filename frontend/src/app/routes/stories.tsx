@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 import { DataTablePagination } from '@/components/shared/data-table-pagination'
 import { SearchBar } from '@/components/shared/search-bar'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
@@ -45,7 +46,7 @@ function StoriesTableSkeleton() {
 
 function StoriesCardSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className={CARD_GRID_CLASS}>
       {Array.from({ length: 8 }).map((_, index) => (
         <div key={index} className="flex flex-col gap-3 rounded-xl border p-4">
           <Skeleton className="aspect-video w-full" />

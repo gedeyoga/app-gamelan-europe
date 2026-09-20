@@ -1,6 +1,6 @@
 # RBAC — Role Based Access Control (Spec)
 
-Menu: [user.md](./user.md) · [role.md](./role.md) · [permission.md](./permission.md) · [role-permissions.md](./role-permissions.md)
+Menu: [user.md](./user.md) · [role.md](./role.md) · [permission.md](./permission.md) · [role-permissions.md](./role-permissions.md) · [api-key.md](./api-key.md)
 
 ---
 
@@ -155,11 +155,21 @@ Format: **lowercase** `resource:action`.
 | permission | read | `permission:read` |
 | permission | update | `permission:update` |
 | permission | delete | `permission:delete` |
+| organization | create | `organization:create` |
+| organization | read | `organization:read` |
+| organization | update | `organization:update` |
+| organization | delete | `organization:delete` |
+| apikey | create | `apikey:create` |
+| apikey | read | `apikey:read` |
+| apikey | update | `apikey:update` |
+| apikey | delete | `apikey:delete` |
+
+Selain CRUD, resource konten (`story`, `event`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (REQUEST→APPROVED), `reject` (REQUEST→DRAFT), `publish` (APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
 
 Aturan:
 
 - Selalu lowercase, `:` pemisah `resource` dan `action`.
-- `resource` = domain (tunggal), `action` ∈ `create | read | update | delete`.
+- `resource` = domain (tunggal), `action` ∈ `create | read | update | delete` (+ action workflow konten).
 - Resource lain di luar RBAC (mis. `payment`, `order`) mengikuti pola yang sama saat ditambahkan.
 
 ---
@@ -338,23 +348,66 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 
 | Konstanta | Isi |
 | --- | --- |
-| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 12 code RBAC (`user/role/permission` × `create/read/update/delete`, format lowercase `resource:action`). |
-| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — saat ini hanya `admin` (`description: 'Admin dengan akses penuh RBAC'`, `permissions`: seluruh code di `DEFAULT_PERMISSIONS`). Struktur array siap tambah role baru. |
+| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 50 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9 (`create,read,update,delete,submit,approve,reject,publish,unpublish`), `category:*` 4, `event:*` 9 (`create,read,update,delete,submit,approve,reject,publish,unpublish`), `organization:*` 4 (`create,read,update,delete`), `subscription:*` 4, `billing:*` 4, `apikey:*` 4 (`create,read,update,delete`). Format lowercase `resource:action`. |
+| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `organization` (story/event create·read·update·delete + `story:submit`/`event:submit`, `category:read`, `user:create`, `user:read`), `member` (read-only: `story:read`, `event:read`, `category:read`). Struktur array siap tambah role baru. |
 | User admin | Dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` → role `admin`, status `ACTIVE`. |
+
+### Matriks role → permission
+
+50 permission dibagi ke 3 role. `admin` = seluruh 50 code; `organization` = 13 code; `member` = 3 code.
+
+| Resource | Code | admin | organization | member |
+| --- | --- | :---: | :---: | :---: |
+| user | `user:create` | ✅ | ✅ | — |
+| user | `user:read` | ✅ | ✅ | — |
+| user | `user:update` | ✅ | — | — |
+| user | `user:delete` | ✅ | — | — |
+| role | `role:create/read/update/delete` (4) | ✅ | — | — |
+| permission | `permission:create/read/update/delete` (4) | ✅ | — | — |
+| story | `story:create` | ✅ | ✅ | — |
+| story | `story:read` | ✅ | ✅ | ✅ |
+| story | `story:update` | ✅ | ✅ | — |
+| story | `story:delete` | ✅ | ✅ | — |
+| story | `story:submit` | ✅ | ✅ | — |
+| story | `story:approve` | ✅ | — | — |
+| story | `story:reject` | ✅ | — | — |
+| story | `story:publish` | ✅ | — | — |
+| story | `story:unpublish` | ✅ | — | — |
+| event | `event:create` | ✅ | ✅ | — |
+| event | `event:read` | ✅ | ✅ | ✅ |
+| event | `event:update` | ✅ | ✅ | — |
+| event | `event:delete` | ✅ | ✅ | — |
+| event | `event:submit` | ✅ | ✅ | — |
+| event | `event:approve` | ✅ | — | — |
+| event | `event:reject` | ✅ | — | — |
+| event | `event:publish` | ✅ | — | — |
+| event | `event:unpublish` | ✅ | — | — |
+| category | `category:create` | ✅ | — | — |
+| category | `category:read` | ✅ | ✅ | ✅ |
+| category | `category:update` | ✅ | — | — |
+| category | `category:delete` | ✅ | — | — |
+| organization | `organization:create/read/update/delete` (4) | ✅ | — | — |
+| apikey | `apikey:create/read/update/delete` (4) | ✅ | — | — |
+
+> `organization` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`). Row-level scoping (konten milik organisasinya) dijelaskan di [§10](#10-row-level-scoping).
+
 
 ```typescript
 // libs/prisma/seed.ts (ringkas) — deklaratif + upsert dalam satu $transaction
 const DEFAULT_PERMISSIONS = [
   { code: 'user:create', description: 'Membuat user baru' },
-  // ... total 12 code user/role/permission x create/read/update/delete
+  // ... 38 code: RBAC 12 + story 9 + category 4 + event 9 + organization 4
 ];
 
 const DEFAULT_ROLES = [
-  {
-    name: 'admin',
-    description: 'Admin dengan akses penuh RBAC',
-    permissions: DEFAULT_PERMISSIONS.map((p) => p.code),
-  },
+  { name: 'admin', description: 'Admin dengan akses penuh RBAC',
+    permissions: DEFAULT_PERMISSIONS.map((p) => p.code) },
+  { name: 'organization', description: 'Pengelola story/event milik anggota organisasinya',
+    permissions: ['story:create', 'story:read', 'story:update', 'story:delete', 'story:submit',
+      'event:create', 'event:read', 'event:update', 'event:delete', 'event:submit',
+      'category:read', 'user:create', 'user:read'] },
+  { name: 'member', description: 'Anggota organisasi — hanya melihat konten terbit',
+    permissions: ['story:read', 'event:read', 'category:read'] },
 ];
 
 await prisma.$transaction(async (tx) => {
@@ -468,6 +521,18 @@ Semua path memakai prefix **`/api/v1`**. Semua respon sukses `{ data, message }`
 
 > Kedua endpoint `roles/:id/permissions` memakai permission **`permission:*` yang sudah ada** — bukan resource baru (`role-permission:*` tidak ada). `PUT` = `permission:update`, `GET` = `permission:read` (TETAP, sesuai controller).
 
+### API Keys (sinkron dengan [api-key.md](./api-key.md#7-endpoint))
+
+| Method | Path | Deskripsi | Akses |
+| --- | --- | --- | --- |
+| POST | `/api/v1/api-keys` | Buat API key (raw `key` tampil sekali) | PERMISSION: `apikey:create` |
+| GET | `/api/v1/api-keys` | List API key (tanpa key/hash) | PERMISSION: `apikey:read` |
+| GET | `/api/v1/api-keys/:id` | Detail API key | PERMISSION: `apikey:read` |
+| PATCH | `/api/v1/api-keys/:id` | Update nama/permission API key | PERMISSION: `apikey:update` |
+| DELETE | `/api/v1/api-keys/:id` | Hapus permanen (hard delete) | PERMISSION: `apikey:delete` |
+
+> Akses data selain lewat JWT bisa memakai header **`x-api-key: <raw>`**; principal key membawa permission custom-nya sendiri. Modul lengkap: [api-key.md](./api-key.md).
+
 ### Story & Category (sinkron dengan [story.md](./story.md#11-tabel-endpoint-lengkap))
 
 Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Category`, upload gambar ke S3 lewat `POST /images`.
@@ -479,6 +544,11 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | GET | `/api/v1/posts/:id` | Detail story | PERMISSION: `story:read` |
 | PATCH | `/api/v1/posts/:id` | Update story | PERMISSION: `story:update` |
 | DELETE | `/api/v1/posts/:id` | Hapus story (+ row `images` & objek S3) | PERMISSION: `story:delete` |
+| POST | `/api/v1/posts/:id/submit` | Ajukan story review (`DRAFT`→`REQUEST`) | PERMISSION: `story:submit` |
+| POST | `/api/v1/posts/:id/approve` | Setujui story (`REQUEST`→`APPROVED`) | PERMISSION: `story:approve` |
+| POST | `/api/v1/posts/:id/reject` | Tolak story (`REQUEST`→`DRAFT`) | PERMISSION: `story:reject` |
+| POST | `/api/v1/posts/:id/publish` | Terbitkan story (`APPROVED`→`PUBLISHED`) | PERMISSION: `story:publish` |
+| POST | `/api/v1/posts/:id/unpublish` | Tarik story (`PUBLISHED`→`DRAFT`) | PERMISSION: `story:unpublish` |
 | POST | `/api/v1/categories` | Buat kategori (idempoten) | PERMISSION: `category:create` |
 | GET | `/api/v1/categories` | List kategori | PERMISSION: `category:read` |
 | GET | `/api/v1/categories/:id` | Detail kategori | PERMISSION: `category:read` |
@@ -487,6 +557,20 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | POST | `/api/v1/images` | Upload gambar ke S3 (multipart `file`) | PERMISSION: `story:create`, `story:update` (ANY-of) |
 
 > Tidak ada endpoint `GET /uploads` maupun permission `image:*`; gambar disajikan langsung oleh S3/CDN via URL absolut.
+
+> **Permission action story (`story:submit`, `story:approve`, `story:reject`, `story:publish`, `story:unpublish`) kini di-enforce** oleh endpoint `POST /api/v1/posts/:id/<action>` (lihat [story.md](./story.md#action--transisi)). Transisi status tak valid → **409**. `PATCH /api/v1/posts/:id` (`story:update`) tetap untuk update konten.
+>
+> ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (admin) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `organization`/`member`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
+
+### Organization (sinkron dengan [organization.md](./organization.md))
+
+| Method | Path | Deskripsi | Akses |
+| --- | --- | --- | --- |
+| POST | `/api/v1/organizations` | Buat organization | PERMISSION: `organization:create` |
+| GET | `/api/v1/organizations` | List organization | PERMISSION: `organization:read` |
+| GET | `/api/v1/organizations/:id` | Detail organization | PERMISSION: `organization:read` |
+| PATCH | `/api/v1/organizations/:id` | Update organization | PERMISSION: `organization:update` |
+| DELETE | `/api/v1/organizations/:id` | Hapus organization | PERMISSION: `organization:delete` |
 
 ### Geographic Reference (sinkron dengan [country.md](./country.md), [region.md](./region.md) & [state.md](./state.md))
 
@@ -534,3 +618,101 @@ Format respon:
 ```
 
 Detail exception per endpoint ada di tiap file module: [user.md](./user.md#8-error--exception) · [role.md](./role.md#8-error--exception) · [permission.md](./permission.md#8-error--exception) · [role-permissions.md](./role-permissions.md#8-error--exception).
+
+---
+
+## 10. Row-Level Scoping
+
+Selain RBAC (permission per endpoint), konten `Post`/`Event` dan `User` dibatasi **per baris** berdasarkan role + organisasi pemilik. Sumber tunggal: `AccessScopeService.resolve(userId)` → `libs/src/core/auth/access-scope.service.ts` (provider global `LibsModule`).
+
+### Resolusi scope
+
+```typescript
+// Role (role.code) yang boleh membaca konten ber-visibility PRIVATE.
+export const PRIVATE_READER_ROLES = ['admin', 'member', 'organization'] as const;
+
+export type AccessScope =
+  | { kind: 'all'; canViewPrivate: boolean }                   // admin
+  | { kind: 'organization'; organizationId: string; userId: string; canViewPrivate: boolean }
+  | { kind: 'published'; canViewPrivate: boolean }
+  | { kind: 'none'; canViewPrivate: boolean };
+
+async resolve(userId: string): Promise<AccessScope> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true, role: { select: { code: true } } },
+  });
+  const code = user?.role?.code;
+  const canViewPrivate = (PRIVATE_READER_ROLES as readonly string[]).includes(code ?? '');
+  if (code === 'admin') return { kind: 'all', canViewPrivate };
+  if (code === 'organization') {
+    return user?.organizationId
+      ? { kind: 'organization', organizationId: user.organizationId, userId, canViewPrivate }
+      : { kind: 'none', canViewPrivate };                      // organization tanpa org → none
+  }
+  return { kind: 'published', canViewPrivate };                // role lain (termasuk member)
+}
+```
+
+| `kind` | Pemicu | Arti |
+| --- | --- | --- |
+| `all` | role `admin` | Tanpa pembatasan baris. |
+| `organization` | role `organization` **dan** punya `organizationId` | Hanya konten yang `creator.organizationId === organizationId`. |
+| `published` | role selain admin/organization (mis. `member`) | Baca hanya konten **yang sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now`; tidak punya hak tulis. Scheduled publish (publishedAt di masa depan) belum terlihat. |
+| `none` | role `organization` **tanpa** `organizationId` | Tidak boleh apa-apa. |
+
+Tiap varian membawa `canViewPrivate` (boolean, **independen** dari `kind`) yang dihitung dari `PRIVATE_READER_ROLES`. Dengan begitu role custom non-all/non-org tetap tidak bocor meski punya permission baca.
+
+> Scope **ortogonal** dengan permission: guard RBAC tetap jalan lebih dulu. Scoping hanya mempersempit baris yang boleh diakses setelah permission lolos. Role `published` (member) memang tak punya permission tulis, scoping hanya jaring pengaman tambahan.
+
+### Baca (`list`)
+
+Scope digabung (AND) ke filter list:
+
+| `kind` | Perlakuan `list` |
+| --- | --- |
+| `all` | Tanpa tambahan. |
+| `organization` | `{ creator: { organizationId } }` (post/event) / `{ organizationId }` (user) di-`AND` dengan filter. |
+| `published` | `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }` di-`AND` dengan filter; **non-reader** (`!canViewPrivate`) ditambah `{ visibility: PUBLIC }`. Scheduled publish (masa depan) tak ikut. |
+| `none` | **List kosong** `{ items: [], total: 0 }` (bukan 403). |
+
+Parenthesis: untuk `Post`/`Event` scope di-`AND` ke `filterWhere`; untuk `User` scope di-`AND` ke `{ organizationId }` (field langsung). Khusus `User`, `published` → **403** (bukan list kosong), `none` → list kosong.
+
+### Baca (`findOne`) — 403 vs list kosong
+
+| `kind` | `findOne` |
+| --- | --- |
+| `all` | Bebas. |
+| `organization` | `creator.organizationId !== scope.organizationId` → **403** `ForbiddenException('Forbidden resource')`. |
+| `published` | `status !== PUBLISHED` **atau** `publishedAt == null` **atau** `publishedAt > now` → **403**. |
+| `none` | **403**. |
+
+Kontras: `list` menyembunyikan baris (hasil kosong), `findOne` menolak eksplisit dengan **403**.
+
+### Tulis (`create`/`update`/`remove`/`transition`)
+
+| `kind` | Perlakuan |
+| --- | --- |
+| `all` | Bebas. |
+| `organization` | `create` diizinkan (konten baru milik creator di org-nya); `update`/`remove`/`transition` hanya bila baris `creator.organizationId === scope.organizationId`, selain itu **403**. |
+| `published` | **403** (defensif; guard permission umumnya sudah memblok lebih dulu). |
+| `none` | **403**. |
+
+### Bypass workflow ditutup
+
+Untuk scope `!= all`, field `status`/`publishedAt` dari body **diabaikan**:
+
+- `create` → paksa `status = DRAFT`, `publishedAt = undefined` (dan `approvedAt` tidak diisi).
+- `update` → blok `status`/`publishedAt` dilewati; hanya konten yang berubah.
+
+Akibatnya role `organization` tidak bisa memaksa `PUBLISHED`/`APPROVED` lewat `POST`/`PATCH` — harus lewat endpoint action (`story:publish`/`event:publish`, yang tidak dimilikinya). Admin (`all`) tetap bisa (backward-compat FE).
+
+### Cakupan
+
+| Domain | Scoping | Catatan |
+| --- | --- | --- |
+| `Post` (`post.service.ts`) | ✅ | `creator.organizationId`; list/findOne/create/update/remove/transition. |
+| `Event` (`event.service.ts`) | ✅ | Idem post. |
+| `User` (`user.service.ts`) | ✅ | `organizationId`; `organization` hanya anggota org-nya & dipaksa role `member` saat create; non-admin `update`/`remove`/`assignRole` → 403. |
+| `Organization` | ✗ | Admin-only via permission `organization:*`; tanpa scoping baris. |
+| `Category` | ✗ | Taksonomi global; `organization` hanya punya `category:read`. |

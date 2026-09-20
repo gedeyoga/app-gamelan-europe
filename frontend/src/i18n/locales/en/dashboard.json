@@ -5,10 +5,17 @@
     "dashboard": "Dashboard",
     "users": "Users",
     "roles": "Roles",
-    "story": "Story"
+    "story": "Story",
+    "event": "Event",
+    "myBilling": "My Billing",
+    "organizations": "Organizations",
+    "apiKey": "API Keys",
+    "subscription": "Subscription",
+    "billing": "Billing Management"
   },
   "group": {
-    "dataManagement": "Data Management"
+    "dataManagement": "Data Management",
+    "payment": "Payment"
   },
   "userMenu": {
     "settings": "Settings",

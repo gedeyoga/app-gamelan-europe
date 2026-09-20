@@ -1005,7 +1005,7 @@ async function bootstrap(): Promise<void> {
 
 ## 23. Seeding RBAC (Upsert)
 
-Lokasi tunggal: `libs/prisma/seed.ts` — berisi `DEFAULT_PERMISSIONS` (array `{ code, description }`), `DEFAULT_ROLES` (array `{ name, description, permissions: string[] }`, saat ini hanya `admin` dengan semua permission), dan user admin dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` (role `admin`, status `ACTIVE`).
+Lokasi tunggal: `libs/prisma/seed.ts` — berisi `DEFAULT_PERMISSIONS` (array `{ code, description }`), `DEFAULT_ROLES` (array `{ name, description, permissions: string[] }`, saat ini `admin`/`organization`/`member` — lihat [rbac.md §7](./modules/rbac.md#7-seed-default)), dan user admin dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` (role `admin`, status `ACTIVE`).
 
 Aturan wajib:
 

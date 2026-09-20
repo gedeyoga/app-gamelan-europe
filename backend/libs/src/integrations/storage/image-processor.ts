@@ -73,7 +73,8 @@ export class ImageProcessor {
     const quality = this.int('IMAGE_WEBP_QUALITY', 82);
     const largeWidth = this.int('IMAGE_LARGE_WIDTH', 1920);
     const mediumWidth = this.int('IMAGE_MEDIUM_WIDTH', 1024);
-    const thumbSize = this.int('IMAGE_THUMB_SIZE', 480);
+    const thumbWidth = this.int('IMAGE_THUMB_WIDTH', 1280);
+    const thumbHeight = this.int('IMAGE_THUMB_HEIGHT', 720);
 
     try {
       const variants: ProcessedVariant[] = [];
@@ -95,7 +96,7 @@ export class ImageProcessor {
 
       const thumbnail = await this.render(
         buffer,
-        { width: thumbSize, height: thumbSize, fit: 'cover' },
+        { width: thumbWidth, height: thumbHeight, fit: 'cover' },
         quality,
       );
       variants.push({ name: 'thumbnail', ...thumbnail });

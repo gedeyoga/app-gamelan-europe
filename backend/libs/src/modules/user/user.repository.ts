@@ -52,6 +52,34 @@ export class UserRepository {
     }
   }
 
+  // Self-register + buat organization baru secara atomik: bila user gagal (mis. P2002 email),
+  // organization ikut rollback → tidak ada orphan. Error tetap dipetakan 422 per-field.
+  async createWithOrganization(
+    data: Prisma.UserUncheckedCreateInput,
+    organizationName: string,
+  ): Promise<UserEntity> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const organization = await tx.organization.create({
+          data: { name: organizationName },
+          select: { id: true },
+        });
+        return tx.user.create({
+          data: { ...data, organizationId: organization.id },
+          select: userSelect,
+        });
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw this.toUniqueConstraintError(e);
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        throw this.toForeignKeyConstraintError(e);
+      }
+      throw e;
+    }
+  }
+
   async update(id: string, data: Prisma.UserUncheckedUpdateInput): Promise<UserEntity> {
     const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');

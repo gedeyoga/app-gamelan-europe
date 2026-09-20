@@ -1,0 +1,148 @@
+{
+  "title": "Event",
+  "subtitle": "Kelola event dan jadwal",
+  "add": "Tambah Event",
+  "search": {
+    "placeholder": "Cari nama atau slug event...",
+    "ariaLabel": "Cari event"
+  },
+  "view": {
+    "card": "Tampilan kartu",
+    "list": "Tampilan daftar"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data event. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data event.",
+    "loadDetail": "Gagal memuat detail event.",
+    "uploadFailed": "Gagal mengunggah gambar. Silakan coba lagi.",
+    "createEventTypeFailed": "Gagal membuat tipe event.",
+    "slugDuplicate": "Slug ini sudah dipakai. Silakan pilih slug lain.",
+    "noCreatePermission": "Tidak punya izin untuk membuat event.",
+    "noUpdatePermission": "Tidak punya izin untuk mengubah event."
+  },
+  "table": {
+    "thumbnail": "Thumbnail",
+    "name": "Nama",
+    "eventTypes": "Tipe Event",
+    "dates": "Tanggal",
+    "location": "Lokasi",
+    "status": "Status",
+    "visibility": "Visibilitas",
+    "publishedAt": "Diterbitkan",
+    "empty": "Belum ada event",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "card": {
+    "noThumbnail": "Tanpa thumbnail",
+    "memberOnly": "Khusus Member"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Diajukan",
+    "APPROVED": "Disetujui",
+    "PUBLISHED": "Terbit"
+  },
+  "visibilityOptions": {
+    "PUBLIC": "Publik",
+    "PRIVATE": "Privat"
+  },
+  "form": {
+    "createTitle": "Tambah Event",
+    "editTitle": "Edit Event",
+    "titleLabel": "Nama",
+    "titlePlaceholder": "Masukkan nama event...",
+    "slugLabel": "Slug",
+    "slugPlaceholder": "nama-event",
+    "slugGenerate": "Buat ulang slug",
+    "slugManualHint": "Slug diubah manual — pembuatan otomatis dihentikan.",
+    "settingsTitle": "Pengaturan",
+    "hideSettings": "Sembunyikan pengaturan",
+    "showSettings": "Tampilkan pengaturan",
+    "thumbnail": "Thumbnail",
+    "visibility": "Visibilitas",
+    "eventTypes": "Tipe Event",
+    "eventTypePlaceholder": "Pilih tipe event",
+    "eventTypeSearch": "Cari atau tambah tipe event...",
+    "eventTypeAdd": "Tambah \"{{name}}\"",
+    "eventTypeCreating": "Menambahkan...",
+    "eventTypeEmpty": "Tipe event tidak ditemukan",
+    "eventDates": "Tanggal Event",
+    "eventDatesAdd": "Tambah tanggal",
+    "eventDatesRemove": "Hapus tanggal",
+    "eventDatesEmpty": "Belum ada tanggal.",
+    "dayLabel": "Hari {{number}}",
+    "eventDatesPlaceholder": "Pilih tanggal & waktu",
+    "startTime": "Waktu mulai",
+    "endTime": "Waktu selesai",
+    "timePlaceholder": "HH:mm",
+    "save": "Simpan",
+    "saveChanges": "Simpan perubahan",
+    "saveAsDraft": "Simpan sebagai Draft",
+    "requestPublish": "Ajukan untuk Terbit",
+    "publish": "Terbitkan",
+    "cancel": "Batal"
+  },
+  "location": {
+    "title": "Lokasi",
+    "nameLabel": "Nama lokasi",
+    "namePlaceholder": "Masukkan nama lokasi...",
+    "addressLabel": "Alamat",
+    "addressPlaceholder": "Masukkan alamat...",
+    "mapLabel": "Pilih lokasi di peta",
+    "clickHint": "Klik peta atau geser marker untuk menetapkan koordinat.",
+    "coordinates": "Koordinat: {{latitude}}, {{longitude}}",
+    "searchPlaceholder": "Cari alamat...",
+    "searching": "Mencari...",
+    "searchNoResults": "Alamat tidak ditemukan.",
+    "searchHint": "Ketik minimal 3 karakter untuk mencari alamat."
+  },
+  "publishDialog": {
+    "title": "Terbitkan Event",
+    "description": "Pilih tanggal dan waktu terbit.",
+    "dateLabel": "Tanggal & waktu terbit",
+    "datePlaceholder": "Pilih tanggal & waktu",
+    "confirm": "Terbitkan"
+  },
+  "workflow": {
+    "requested": "Menunggu persetujuan",
+    "approve": "Setujui",
+    "reject": "Tolak"
+  },
+  "confirm": {
+    "title": "Konfirmasi",
+    "description": "Yakin ingin {{action}}? Perubahan akan disimpan.",
+    "submit": "Lanjutkan"
+  },
+  "delete": {
+    "title": "Hapus Event",
+    "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "thumbnail": {
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB."
+  },
+  "detail": {
+    "back": "Kembali ke event",
+    "open": "Lihat detail \"{{name}}\"",
+    "notFound": "Event tidak ditemukan.",
+    "creatorFallback": "Penyelenggara tidak diketahui",
+    "noContent": "Event ini belum memiliki konten.",
+    "dates": "Tanggal & waktu",
+    "location": "Lokasi",
+    "openInMaps": "Buka di Maps",
+    "copyAddress": "Salin alamat",
+    "addressCopied": "Alamat disalin ke clipboard",
+    "addressCopyFailed": "Gagal menyalin alamat",
+    "mapAlt": "Peta lokasi event"
+  },
+  "toast": {
+    "created": "Event berhasil dibuat",
+    "updated": "Event berhasil diperbarui",
+    "deleted": "Event berhasil dihapus",
+    "createFailed": "Gagal membuat event",
+    "updateFailed": "Gagal memperbarui event",
+    "deleteFailed": "Gagal menghapus event"
+  }
+}

@@ -42,7 +42,8 @@
   },
   "dateTime": {
     "hour": "Hour",
-    "minute": "Minute"
+    "minute": "Minute",
+    "clear": "Clear time"
   },
   "forbidden": {
     "code": "403",

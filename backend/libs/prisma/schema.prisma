@@ -43,6 +43,11 @@ enum CategoryType {
   ARCHIVE
 }
 
+enum ContentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 model User {
   id             String         @id @default(uuid())
   email          String         @unique
@@ -61,6 +66,7 @@ model User {
   billings       Billing[]
   events         Event[]        @relation("EventCreator")
   posts          Post[]         @relation("PostCreator")
+  apiKeys        ApiKey[]       @relation("ApiKeyCreator")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
@@ -88,6 +94,7 @@ model Permission {
   code        String           @unique
   description String?
   roles       RolePermission[]
+  apiKeys     ApiKeyPermission[]
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
@@ -202,6 +209,7 @@ model Event {
   approvedAt  DateTime?         @map("approved_at")
   content     String
   thumbnail   String?
+  visibility  ContentVisibility @default(PUBLIC)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   dates       EventDate[]
@@ -219,6 +227,8 @@ model EventDate {
   eventId   String   @map("event_id")
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   date      DateTime
+  startTime String?  @map("start_time")
+  endTime   String?  @map("end_time")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -295,6 +305,7 @@ model Post {
   content         String
   thumbnail       String?
   galleryImageIds String[]       @default([]) @map("gallery_image_ids")
+  visibility      ContentVisibility @default(PUBLIC)
   createdBy       String?        @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories      PostCategory[]
@@ -377,6 +388,34 @@ model Country {
 
   @@index([regionId])
   @@map("countries")
+}
+
+model ApiKey {
+  id          String            @id @default(uuid())
+  name        String
+  keyHash     String            @unique @map("key_hash")
+  prefix      String            @map("prefix")
+  lastUsedAt  DateTime?         @map("last_used_at")
+  createdBy   String            @map("created_by")
+  creator     User              @relation("ApiKeyCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  permissions ApiKeyPermission[]
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@map("api_keys")
+}
+
+model ApiKeyPermission {
+  apiKeyId     String     @map("api_key_id")
+  permissionId String     @map("permission_id")
+  apiKey       ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@id([apiKeyId, permissionId])
+  @@index([permissionId])
+  @@map("api_key_permissions")
 }
 
 model State {

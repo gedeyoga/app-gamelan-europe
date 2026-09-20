@@ -23,8 +23,11 @@ Dokumen ini mencatat rencana desain/implementasi halaman **Story** pada frontend
 /                      (parent → DashboardLayout, ProtectedRoute)
 ├── /stories            → list (tabel)         — RequirePermission code="story:read"
 ├── /stories/new        → editor create         — gate story:create di komponen
-└── /stories/:id/edit   → editor edit           — gate story:update di komponen
+├── /stories/:id/edit   → editor edit           — gate story:update di komponen
+└── /stories/:id        → detail (read-only)    — gate story:read di komponen (layout bare)
 ```
+
+Registrasi memakai peringkat React Router: `stories/new` (segmen statis) tetap menang atas `stories/:id` (dinamis), dan `stories/:id/edit` beda jumlah segmen — tidak ada konflik.
 
 Contoh bentuk pendaftaran:
 
@@ -33,6 +36,7 @@ Contoh bentuk pendaftaran:
 { path: 'stories', element: (<RequirePermission code="story:read"><StoriesPage /></RequirePermission>) },
 { path: 'stories/new', element: <StoryNewPage /> },
 { path: 'stories/:id/edit', element: <StoryEditPage /> },
+{ path: 'stories/:id', element: <StoryDetailPage /> },
 ```
 
 ### Navigasi sidebar
@@ -47,7 +51,8 @@ Contoh bentuk pendaftaran:
 src/app/routes/
 ├── stories.tsx          # halaman list (state page/search/sort, mutation, dialog hapus)
 ├── story-new.tsx        # halaman create (container form editor)
-└── story-edit.tsx       # halaman edit (container form editor, load detail)
+├── story-edit.tsx       # halaman edit (container form editor, load detail)
+└── story-detail.tsx     # halaman detail read-only (gate story:read, layout bare)
 
 src/features/story/
 ├── api/
@@ -66,6 +71,8 @@ src/features/story/
 ├── components/
 │   ├── story-table.tsx         # presentational tabel + aksi baris
 │   ├── story-card.tsx          # presentational kartu (mode Card)
+│   ├── story-detail.tsx        # presentational detail read-only (hero + konten HTML + galeri)
+│   ├── story-gallery.tsx       # presentational galeri read-only + lightbox (Dialog)
 │   ├── status-variant.ts       # peta ContentStatus → Badge variant (dipakai tabel + kartu)
 │   ├── rich-text-editor.tsx    # TipTap (toolbar + konten HTML + sisip gambar)
 │   ├── story-meta-panel.tsx    # panel kanan: judul/slug/thumbnail/galeri/status/kategori
@@ -111,6 +118,7 @@ export interface Story {
   name: string
   slug: string
   status: ContentStatus
+  visibility: Visibility       // 'PUBLIC' | 'PRIVATE', default PUBLIC
   publishedAt: string | null
   content?: string
   thumbnail: string | null
@@ -127,6 +135,7 @@ export interface CreateStoryInput {
   content?: string
   thumbnail?: string
   status?: ContentStatus
+  visibility?: Visibility     // default PUBLIC bila di-omit
   categoryIds?: string[]
   imageIds?: string[]         // id Image (hasil POST /images) yang dipakai: inline + thumbnail
   galleryImageIds?: string[]  // id galeri berurut; bila dikirim = replace seluruh galeri
@@ -144,6 +153,7 @@ pnpm add @tiptap/react @tiptap/starter-kit @tiptap/extension-image @tiptap/exten
 
 - Alasan: butuh menyisipkan `<img>` di posisi cursor, toolbar format, dan output HTML string yang cocok dengan field `content` backend.
 - Tidak menambah dependency lain (upload via `fetch`/`FormData` lewat hook sendiri).
+- **`dompurify`** (v3, tipe bawaan) — sanitasi HTML `content` sebelum `dangerouslySetInnerHTML` di `story-detail.tsx` (helper `src/lib/sanitize-html.ts: sanitizeHtml`). Memakai default DOMPurify (script/iframe/`on*` dibuang, tag format umum dipertahankan). Trust boundary, bukan shortcut.
 - Tailwind Typography (`prose`) **tidak wajib**: styling konten editor memakai utility Tailwind langsung + token design system; jika ingin `prose` perlu `@tailwindcss/typography` (catat sebagai TODO opsional, jangan ditambah tanpa kebutuhan).
 
 ## 5. Komponen UI via CLI
@@ -178,9 +188,9 @@ Envelope: sukses `{ data, message }`; list `{ data, message, meta: { page, limit
 
 | Metode | Endpoint | Body/Param | Keterangan |
 | --- | --- | --- | --- |
-| GET | `/posts?page=&limit=&search=&sortBy=&sortOrder=&filter[status]=` | `search` OR `name, slug`; `sortBy` ∈ `name,slug,status,publishedAt,createdAt,updatedAt`; `filter` ∈ `status,publishedAt,createdAt,updatedAt` | list; item menyertakan `categories: {id,name,type}[]` + `creator: {id,fullName} \| null` |
+| GET | `/posts?page=&limit=&search=&sortBy=&sortOrder=&filter[status]=` | `search` OR `name, slug`; `sortBy` ∈ `name,slug,status,visibility,publishedAt,createdAt,updatedAt`; `filter` ∈ `status,publishedAt,createdAt,updatedAt` | list; item menyertakan `categories: {id,name,type}[]` + `creator: {id,fullName} \| null` |
 | GET | `/posts/:id` | — | detail termasuk `content`, `categories`, `creator` (dipakai editor edit) |
-| POST | `/posts` | `{ name, slug?, content?, thumbnail?, status?, categoryIds?, imageIds?, galleryImageIds? }` | 201; 409 slug duplikat; 422 validasi. `imageIds` = id `Image` yang dipakai (inline + thumbnail); `galleryImageIds` = id galeri **berurut** bila ada |
+| POST | `/posts` | `{ name, slug?, content?, thumbnail?, status?, visibility?, categoryIds?, imageIds?, galleryImageIds? }` | 201; 409 slug duplikat; 422 validasi. `imageIds` = id `Image` yang dipakai (inline + thumbnail); `galleryImageIds` = id galeri **berurut** bila ada; `visibility` ∈ `PUBLIC\|PRIVATE` (default `PUBLIC`) |
 | PATCH | `/posts/:id` | partial (field sama, semua opsional) | `categoryIds` bila dikirim = **replace seluruh kategori**; `imageIds` bila dikirim = id gambar **baru**; `galleryImageIds` bila dikirim = **replace seluruh galeri** (urut, `[]` mengosongkan); 409 slug; 422 |
 | DELETE | `/posts/:id` | — | 200 |
 | GET | `/posts/:id` | — | detail termasuk `content`, `categories`, `creator`, `gallery: ImageResponse[]` **berurut** (bentuk sama `POST /images`) |
@@ -199,11 +209,11 @@ Container `src/app/routes/stories.tsx`. Mengikuti pola List CRUD `AGENTS.md`.
 Halaman punya **2 mode layout** dengan toggle (default **card**):
 
 - **Toggle mode**: state `viewMode: 'card' | 'list'` di page; kontrol grup `Toggle` (`components/ui/toggle.tsx`, `aria-pressed`) di samping `SearchBar` dengan ikon lucide `LayoutGrid`/`List` dan `aria-label` dari i18n (`story:view.card`, `story:view.list`).
-- **Card mode** (`story-card.tsx`, presentational, `interface StoryCardProps`): grid `gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` (4 kolom di layar lebar). Tiap kartu (`ui/card.tsx`) menampilkan thumbnail (`aspect-video object-cover`; null → placeholder `bg-muted` + ikon `ImageOff` + `story:card.noThumbnail`), judul (`line-clamp-2`), badge kategori, author (`creator?.fullName` ?? `—`), badge status, dan tanggal publish (`formatDateTime`). Aksi `DropdownMenu` Edit/Hapus di `CardAction`, di-gate `canUpdate`/`canDelete`; empty state sama dengan tabel (search → `notFound` + Reset, else `empty`).
+- **Card mode** (`story-card.tsx`, presentational, `interface StoryCardProps`): grid kartu `CARD_GRID_CLASS` (konstanta dari `@/components/shared/card-grid`, `grid gap-4 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]` — jumlah kolom mengikuti lebar layar via `auto-fill`, bukan breakpoint tetap; `auto-fill` dipilih agar lebar kartu konsisten saat item sedikit). Tiap kartu (`ui/card.tsx`) menampilkan thumbnail (`aspect-video object-cover`; null → placeholder `bg-muted` + ikon `ImageOff` + `story:card.noThumbnail`), judul (`line-clamp-2`), badge kategori, author (`creator?.fullName` ?? `—`), dan tanggal publish (`formatDateTime`). Badge status & badge `memberOnly` (bila `visibility=PRIVATE`) dirender sebagai overlay `absolute left-2 top-2 z-10` di atas thumbnail (bukan di `CardContent`). Aksi `DropdownMenu` Edit/Hapus di `CardAction`, di-gate `canUpdate`/`canDelete`; empty state sama dengan tabel (search → `notFound` + Reset, else `empty`).
 - **List mode** (`story-table.tsx`, presentational, props `interface`):
-  - Kolom: `thumbnail` (img `size-10 rounded object-cover`; null → `—`), `name` (Judul), `categories` (badge list), author (`creator?.fullName` ?? `—`), `status` (badge), `publishedAt`, `Aksi`. Kolom `slug`/`createdAt`/`updatedAt` **dihapus** dari tabel agar data sama dengan card.
-  - `SortableHeader` hanya pada kolom yang masuk whitelist `sortBy` backend: `name`, `status`, `publishedAt`. Kolom `thumbnail`/`categories`/author **tidak** di-whitelist `sortBy` backend → header non-sortable (**pengecualian terdokumentasi**); kolom `Aksi` tidak sortable.
-  - Badge status memetakan `ContentStatus` (`STATUS_VARIANT` dari `./status-variant.ts`, dipakai bersama card): `DRAFT` secondary, `REQUEST` outline, `APPROVED` default, `PUBLISHED` default.
+  - Kolom: `thumbnail` (img `size-10 rounded object-cover`; null → `—`), `name` (Judul), `categories` (badge list), author (`creator?.fullName` ?? `—`), `status` (badge), `visibility` (badge `Publik`/`Privat`), `publishedAt`, `Aksi`. Kolom `slug`/`createdAt`/`updatedAt` **dihapus** dari tabel agar data sama dengan card.
+  - `SortableHeader` hanya pada kolom yang masuk whitelist `sortBy` backend: `name`, `status`, `visibility`, `publishedAt`. Kolom `thumbnail`/`categories`/author **tidak** di-whitelist `sortBy` backend → header non-sortable (**pengecualian terdokumentasi**); kolom `Aksi` tidak sortable.
+  - Badge status memetakan `ContentStatus` (`STATUS_VARIANT` dari `./status-variant.ts`, dipakai bersama card): `DRAFT` secondary, `REQUEST` outline, `APPROVED` default, `PUBLISHED` default. Badge visibilitas memakai `VISIBILITY_VARIANT` (`PUBLIC` default, `PRIVATE` secondary).
   - `categories` tampil sebagai list `Badge variant="secondary"`; kosong → `—`.
   - Tanggal via `formatDateTime` dari `@/lib/datetime`.
   - Kolom `Aksi` hilang bila `canUpdate` dan `canDelete` keduanya `false`; aksi pakai `DropdownMenu` (Edit/Hapus) seperti `user-table.tsx`.
@@ -247,7 +257,8 @@ Dibungkus `<aside className="lg:flex lg:min-h-0">` (di desktop mengisi tinggi ko
 
 `story-meta-panel.tsx`:
 
-- **Urutan field settings**: **Judul → Slug → Kategori → Thumbnail → Galeri** (blok `categoryIds` dirender tepat setelah `slug`, sebelum `thumbnail`; galeri dirender `story-form` setelah panel).
+- **Urutan field settings**: **Judul → Slug → Visibilitas → Kategori → Thumbnail → Galeri** (blok `categoryIds` dirender tepat setelah `slug`, sebelum `thumbnail`; galeri dirender `story-form` setelah panel).
+- **Visibilitas**: `Select` shadcn (bukan input native) — opsi `PUBLIC`/`PRIVATE` dari `VISIBILITIES`, label `story:visibilityOptions.*`, default `PUBLIC`; field `visibility`, ikut payload create/update.
 - **Judul** (input teks) → field `name`, `placeholder={t('story:form.titlePlaceholder')}` ("Masukkan judul story..."/"Enter story title..."). Saat create, auto-generate slug dari judul.
 - **Slug** (input teks) + tombol **"Generate ulang"**, `placeholder={t('story:form.slugPlaceholder')}` ("judul-story"/"story-title"); auto-generate berhenti setelah slug disentuh manual. Normalisasi mengikuti aturan backend (lowercase, non-alnum → `-`). Error **409 slug duplikat** ditampilkan per-field.
 - **Thumbnail** (`thumbnail-upload.tsx`): upload gambar (`POST /images`) + preview `<img src={url}>` + tombol hapus → state menyimpan `{ id, url }`; preview memakai varian **`thumbnail`** (fallback `url` large bila varian tidak ada). Field `thumbnail` dikirim sebagai **`url` (string, absolut)** sedangkan `id` dimasukkan ke `imageIds`. Area upload menerima **drag-and-drop** selain klik (hook bersama `lib/use-file-drop.ts`: `onDragEnter/Over/Leave/Drop`, highlight `ring-2 ring-primary`, counter depth anti-flicker, `preventDefault` walau disabled); mime tanpa GIF. Helper text `story:thumbnail.formats` ("Format: PNG, JPG, atau WebP. Maks 5 MB.") selalu tampil.
@@ -279,6 +290,7 @@ Dibungkus `<aside className="lg:flex lg:min-h-0">` (di desktop mengisi tinggi ko
   - `content`: opsional (string HTML).
   - `thumbnail`: opsional (URL string).
   - `status`: opsional enum `ContentStatus`.
+  - `visibility`: enum `Visibility` (`PUBLIC`/`PRIVATE`, default `PUBLIC`).
   - `categoryIds`: opsional `string[]`.
   - `imageIds`: opsional `string[]` (id `Image` hasil `POST /images`).
 - Map 422 via `mapApiFieldErrors` dari `@/lib/field-errors` → `useEffect` + guard `isValidationError(err)` → `form.setError(field, { message })`.
@@ -318,10 +330,11 @@ story:subtitle
 story:add
 story:search.placeholder / story:search.ariaLabel
 story:view.{card,list}
-story:table.{thumbnail,name,categories,author,status,publishedAt,empty,notFound,reset,edit,delete}
+story:table.{thumbnail,name,categories,author,status,visibility,publishedAt,empty,notFound,reset,edit,delete}
 story:card.{noThumbnail}
 story:statusOptions.{DRAFT,REQUEST,APPROVED,PUBLISHED}
-story:form.{createTitle,editTitle,titleLabel,titlePlaceholder,slugLabel,slugPlaceholder,slugGenerate,thumbnail,thumbnailUpload,thumbnailRemove,categories,categoryPlaceholder,categoryAdd,categorySearch,categoryEmpty,save,saveChanges,saveAsDraft,requestPublish,publish,cancel,settingsTitle}
+story:visibilityOptions.{PUBLIC,PRIVATE}
+story:form.{createTitle,editTitle,titleLabel,titlePlaceholder,slugLabel,slugPlaceholder,slugGenerate,thumbnail,thumbnailUpload,thumbnailRemove,categories,categoryPlaceholder,categoryAdd,categorySearch,categoryEmpty,visibility,save,saveChanges,saveAsDraft,requestPublish,publish,cancel,settingsTitle}
 story:publishDialog.{title,description,dateLabel,confirm}   # dialog aksi Terbitkan (publishedAt ISO 8601 UTC)
 story:workflow.{requested,approve,reject}
 story:confirm.{title,description,submit}   # dialog konfirmasi aksi status; description interpolasi {{action}}
@@ -369,8 +382,12 @@ Catatan key upload: `story:editor.uploadImage` (label/tooltip tombol), `story:ed
 - **Iterasi layout editor (rebuild)**: halaman create/edit dirombak jadi grid **70/30** (editor 70% + panel pengaturan 30% berkartu & sticky `top-20`), editor direstyle ala template "simple" Tiptap (toolbar bergrup dengan `Separator`, kanvas dokumen terpusat `max-w-2xl` di kartu), dan **sidebar disembunyikan** pada `/stories/new` & `/stories/:id/edit` via branch `isStoryEditor` di `app-shell.tsx`. Key i18n baru: `story:form.settingsTitle` (key `story:form.contentTitle` dihapus — judul "Konten" tak lagi dirender). Logika form/payload/error handling tidak berubah.
 - **Batasan iterasi**: hapus gambar inline dari content tidak menghapus aset S3 (orphan) — perlu cleanup backend (TODO, di luar FE).
 - **Iterasi galeri + dropzone**: `gallery-upload.tsx` baru (galeri multiple, urut, reorder native DnD + tombol keyboard, dropzone); `thumbnail-upload.tsx` dapat dropzone + helper format; mime PNG/JPEG/WebP (GIF dihapus) di editor/thumbnail/galeri; hook bersama `lib/use-file-drop.ts`; `Story.gallery` + `CreateStoryInput.galleryImageIds`; `StoryForm` kirim `galleryImageIds` berurut (terpisah dari `imageIds`). Key i18n baru: `story:gallery.*`, `story:thumbnail.formats`; teks `uploadInvalid` editor/thumbnail tanpa GIF. Tanpa dependency dnd-kit.
+- **Iterasi visibilitas**: field `visibility` (`PUBLIC`/`PRIVATE`, default `PUBLIC`) ditambahkan ke `Story`/`CreateStoryInput`, zod schema (`VISIBILITIES`), meta-panel (Select shadcn), tabel (kolom badge `VISIBILITY_VARIANT` + `SortableHeader` field `visibility`), i18n `en`/`id`. Sort server-side `sortBy=visibility`; wiring generik page/api/hook meneruskan tanpa perubahan. Lint 0 error (7 warning pre-existing), tsc bersih.
 - **Iterasi drag & drop gambar editor**: `rich-text-editor.tsx` kini punya satu fungsi upload bersama (`uploadAndInsert(file, at?)`) yang dipakai tombol toolbar, hidden file input, dan drop; drop menyisipkan pada posisi koordinat drop, multi-file sekuensial menjaga urutan, overlay `story:editor.dropHere` + counter `dragenter/dragleave` mencegah flicker. Tanpa dependency baru. Key i18n baru: `story:editor.dropHere`.
 - **Iterasi alur status Story**: tombol Simpan jadi dropdown (Draft / Ajukan Terbit); saat `status === 'REQUEST'` tampil baris aksi Setujui & Tolak. Field Select Status dihapus dari `StoryMetaPanel`. Keterbatasan backend yang diikuti FE: (1) tidak ada state `REJECTED` — Tolak mengembalikan ke `DRAFT`; (2) tidak ada endpoint/`story:approve`/`story:reject` terpisah — semua lewat `PATCH /posts/:id { status }` di-gate `story:update`; (3) `APPROVED` **tidak** otomatis mengisi `publishedAt`; (4) aksi **Terbitkan** kini tersedia saat `APPROVED`/`PUBLISHED` lewat dialog `publishedAt` (mengisi `publishedAt` + memaksa `PUBLISHED` di backend) — **tidak ada penjadwalan otomatis**, tanggal selalu dikirim manual.
+- **Iterasi grid card responsif**: string grid tetap `gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` diganti `CARD_GRID_CLASS` dari `components/shared/card-grid.ts` (`grid gap-4 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]`) — jumlah kolom mengikuti lebar layar native (CSS Grid `auto-fill`), dipakai juga oleh `event-card.tsx` + skeleton `StoriesCardSkeleton`/`EventsCardSkeleton`, menghindari drift 4 lokasi. Tanpa JS, tanpa dependency baru. `auto-fill` (bukan `auto-fit`) menjaga lebar kartu saat item sedikit.
+- **Iterasi badge card**: badge status dipindah dari `CardContent` ke **overlay pojok kiri-atas thumbnail** (`absolute left-2 top-2 z-10`, `shadow-sm`) di `story-card.tsx`; badge `memberOnly` (`variant="secondary"`, `shadow-sm`) muncul bila `visibility === 'PRIVATE'`. Key i18n baru `story:card.memberOnly` (`Khusus Member`/`Members Only`). Penulis kini `span` tunggal (`truncate text-muted-foreground`). `VISIBILITY_VARIANT` tidak diimpor di card (hanya `STATUS_VARIANT`). Tanpa perubahan query/payload.
+- **Iterasi security + aksesibilitas detail (review)**: (1) **stored XSS** — `story-detail.tsx` tidak lagi merender `content` mentah; disanitasi `sanitizeHtml()` (DOMPurify, `useMemo` keyed `content`) di `lib/sanitize-html.ts`, default config (script/iframe/`on*` dibuang). Dependency `dompurify@3`. (2) **detail tak terjangkau** — `story-card.tsx` (thumbnail + judul) dan `story-table.tsx` (judul) dibungkus `Link` ke `/stories/:id` (tanpa prop baru, tanpa mengubah handler Edit/Hapus; card/row tidak sendiri clickable sehingga tak perlu `stopPropagation`). Key i18n baru `story:detail.open` + `{{name}}`. (3) **request sia-sia** — `useStory(id, enabled = true)` (opsional, caller lama tak berubah); `story-detail.tsx` memanggil `useStory(id, canRead)` sehingga query tidak jalan saat `story:read` absen.
 
 
 ## 15. TODO Iterasi Berikutnya
@@ -389,3 +406,22 @@ Catatan key upload: `story:editor.uploadImage` (label/tooltip tombol), `story:ed
 - ✅ Iterasi drag & drop gambar di editor Story: upload bersama `uploadAndInsert(file, at?)`, insert pada posisi drop, multi-file urut, overlay + key `story:editor.dropHere` (HTML5 DnD native, tanpa dependency baru).
 - Alur status Story (dropdown Simpan + Setujui/Tolak saat `REQUEST`) — **selesai di FE**; batasan backend (§14) dicatat, tanpa perubahan backend.
 - ✅ Iterasi galeri + dropzone: `gallery-upload.tsx` (urut, reorder native DnD + keyboard, dropzone), dropzone thumbnail, mime tanpa GIF, `galleryImageIds`/`gallery`, key `story:gallery.*` + `story:thumbnail.formats`. Verifikasi `pnpm lint` (0 error, 7 warning pre-existing) + `pnpm exec tsc -p tsconfig.app.json --noEmit` (bersih).
+- ✅ Iterasi halaman detail read-only `/stories/:id` — §16.
+
+## 16. Halaman Detail Story (read-only, `/stories/:id`)
+
+Route `stories/:id` (`app/routes/story-detail.tsx`) di dalam `DashboardLayout` (`ProtectedRoute`); daftar route `stories/new` (statis) tetap menang atas `stories/:id` di ranking React Router.
+
+- **Data**: `useStory(id)` → `getPost(id)` (`GET /posts/:id`). Tanpa endpoint/mutation baru.
+- **Gate**: `useAuthPermissions().can('story:read')` di komponen; tanpa izin → empty-state `story:errors.forbidden`. Selain route editor/list (yang sudah di-gate), gate read tetap dicek karena route dapat diakses langsung via URL.
+- **State**: `isPending` → `<Skeleton>`; `isError` + `isForbiddenError` → empty-state `ShieldAlert`; error lain → banner `story:errors.loadDetail` + refetch (`common:actions.retry`); `!id`/tanpa data → `story:detail.notFound`.
+- **Layout bare**: `AppShell` mendeteksi `isStoryDetail = /^\/stories\/(?!new$)[^/]+$/` (mengecualikan `new`; `/edit` tidak match karena ada segmen tambahan) dan `return <Outlet />` — **tanpa** `TooltipProvider`, sidebar, header/breadcrumb, atau padding wrapper. Ditempatkan setelah semua hook `useMemo` (aturan hooks) dan sebelum branch editor. `/stories/new` & `/stories/:id/edit` tidak terpengaruh.
+- **Back button tunggal**: `Button` ikon `ArrowLeft`, `absolute left-4 top-4 z-20`, glass (`bg-background/70 backdrop-blur border shadow-sm`, `rounded-full`), `aria-label`/`title` `story:detail.back`. Aksi: `navigate(-1)` bila `location.key !== 'default'`, fallback `navigate('/stories')` (entry pertama/tab baru).
+- **View** `features/story/components/story-detail.tsx` (presentational, props `{ story: Story; className?: string }`):
+  - Hero: `thumbnail` `aspect-[21/9] object-cover` + gradient overlay `from-background`; judul + meta di-overlay bawah (`max-w-3xl mx-auto`). `thumbnail` null → header fallback (`border-b bg-muted/30`, `pt-20` memberi ruang back button) — tanpa `<img>` rusak.
+  - Meta: `Avatar` (fallback inisial dari `creator.fullName`), nama + `formatDateTime(publishedAt)`, badge status (`STATUS_VARIANT`) & visibilitas (`VISIBILITY_VARIANT`) via key `story:statusOptions.*`/`story:visibilityOptions.*`. Author kosong → `story:detail.authorFallback`.
+  - Konten: `max-w-3xl mx-auto` + utility `[&_...]` meniru tipografi `RichTextEditor` (tanpa prefix ProseMirror); dirender via `dangerouslySetInnerHTML` (HTML dari API/editor kaya teks — konsisten, **tidak** menambah dependency sanitizer). Kosong/whitespace → `story:detail.noContent`.
+  - Galeri: `story-gallery.tsx` disembunyikan bila `gallery` kosong.
+- **Galeri** `features/story/components/story-gallery.tsx` (presentational, props `{ images: UploadedImage[]; className?: string }`): grid `grid-cols-2 md:grid-cols-3` (varian `thumbnail` fallback `url`), klik buka lightbox `Dialog` `max-w-3xl` (varian `large` fallback `url`, `max-h-[70vh] object-contain`), navigasi wrap-around `ChevronLeft`/`ChevronRight` + keyboard `ArrowLeft`/`ArrowRight`, counter `{{current}} / {{total}}`. `aria-label` tombol + alt gambar dari `filename`; dialog keyboard-closeable. Menggunakan ulang key `story:gallery.*` yang sudah ada.
+- **i18n baru**: `story:detail.{back,notFound,authorFallback,noContent,gallery}` di `en` & `id` (key identik). Hero `thumbnail` null memakai header fallback tanpa `img` (tidak butuh key alt).
+- **Verifikasi**: `pnpm lint` (0 error, 8 warning pre-existing) + `pnpm exec tsc -p tsconfig.app.json --noEmit` (bersih).

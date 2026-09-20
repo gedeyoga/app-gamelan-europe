@@ -2,11 +2,15 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import {
+  ApiKeyModule,
   AuthModule,
   CategoryModule,
+  EventModule,
+  EventTypeModule,
   ImageModule,
   JwtAuthGuard,
   LibsModule,
+  OrganizationModule,
   PermissionsGuard,
   PostModule,
   StorageModule,
@@ -22,15 +26,24 @@ import { CountriesController } from './controllers/countries.controller';
 import { StatesController } from './controllers/states.controller';
 import { PostsController } from './controllers/posts.controller';
 import { CategoriesController } from './controllers/categories.controller';
+import { EventsController } from './controllers/events.controller';
+import { EventTypesController } from './controllers/event-types.controller';
 import { ImagesController } from './controllers/images.controller';
+import { OrganizationsController } from './controllers/organizations.controller';
+import { SubscriptionsController } from './controllers/subscriptions.controller';
+import { BillingsController } from './controllers/billings.controller';
+import { ApiKeysController } from './controllers/api-keys.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validationSchema: appEnvValidationSchema }),
     LibsModule,
     AuthModule,
+    ApiKeyModule,
     PostModule,
     CategoryModule,
+    EventModule,
+    EventTypeModule,
     ImageModule,
     StorageModule,
   ],
@@ -45,7 +58,13 @@ import { ImagesController } from './controllers/images.controller';
     StatesController,
     PostsController,
     CategoriesController,
+    EventsController,
+    EventTypesController,
     ImagesController,
+    OrganizationsController,
+    SubscriptionsController,
+    BillingsController,
+    ApiKeysController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

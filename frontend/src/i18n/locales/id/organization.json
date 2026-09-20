@@ -1,0 +1,48 @@
+{
+  "title": "Organizations",
+  "subtitle": "Kelola organisasi dan lokasinya",
+  "add": "Tambah Organization",
+  "search": {
+    "placeholder": "Cari nama, kota, negara, atau alamat...",
+    "ariaLabel": "Cari organisasi"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data organisasi. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data organisasi."
+  },
+  "table": {
+    "name": "Nama",
+    "city": "Kota",
+    "country": "Negara",
+    "created": "Dibuat",
+    "empty": "Belum ada organisasi",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "form": {
+    "createTitle": "Tambah Organization",
+    "editTitle": "Edit Organization",
+    "createDescription": "Buat organisasi baru.",
+    "editDescription": "Perbarui data organisasi.",
+    "name": "Nama",
+    "city": "Kota",
+    "country": "Negara",
+    "address": "Alamat",
+    "lat": "Latitude",
+    "lng": "Longitude"
+  },
+  "delete": {
+    "title": "Hapus Organization",
+    "description": "Yakin ingin menghapus organisasi {{name}}? Tindakan ini tidak dapat dibatalkan."
+  },
+  "toast": {
+    "created": "Organisasi berhasil dibuat",
+    "updated": "Organisasi berhasil diperbarui",
+    "deleted": "Organisasi berhasil dihapus",
+    "createFailed": "Gagal membuat organisasi",
+    "updateFailed": "Gagal memperbarui organisasi",
+    "deleteFailed": "Gagal menghapus organisasi"
+  }
+}

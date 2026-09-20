@@ -45,7 +45,7 @@ import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
 
-import { RichTextEditor } from './rich-text-editor'
+import { RichTextEditor } from '@/components/shared/rich-text-editor'
 import { StoryMetaPanel } from './story-meta-panel'
 import { createStorySchema, type StoryFormValues } from '../lib/schema'
 import { slugify } from '../lib/slug'
@@ -208,6 +208,7 @@ export function StoryForm({
     const payload: CreateStoryInput = {
       name,
       status: values.status,
+      visibility: values.visibility,
       categoryIds: values.categoryIds,
       ...(values.publishedAt
         ? { publishedAt: new Date(values.publishedAt).toISOString() }

@@ -26,6 +26,10 @@ export class RoleRepository {
     return role;
   }
 
+  async findByCode(code: string): Promise<RoleEntity | null> {
+    return this.prisma.role.findUnique({ where: { code }, select: roleSelect });
+  }
+
   async findByIdWithPermissions(id: string): Promise<RoleWithPermissionsEntity> {
     const role = await this.prisma.role.findUnique({ where: { id }, select: roleWithPermissionsSelect });
     if (!role) throw new NotFoundException('Role not found');

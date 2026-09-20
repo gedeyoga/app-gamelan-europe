@@ -5,7 +5,8 @@ coverage
 .gitignore
 .env
 .env.*
+!.env.example
+*.log
 *.md
 docs
-docker
 opencode.json

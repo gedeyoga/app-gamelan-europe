@@ -1,0 +1,145 @@
+# Build & Push Images
+#
+# On push to main / v* tags / manual dispatch, build the 3 images and push
+# them to GitHub Container Registry (GHCR). The deployment server then only
+# needs to pull the latest image, e.g.:
+#
+#   docker pull ghcr.io/OWNER/REPO/backend-app:latest
+#   docker pull ghcr.io/OWNER/REPO/backend-worker:latest
+#   docker pull ghcr.io/OWNER/REPO/frontend:latest
+#
+# GHCR requires lowercase image names. `github.repository` normally resolves
+# lowercase already; if the owner/repo contains uppercase letters, prepend an
+# `env:` block and set IMAGE_PREFIX to `ghcr.io/<lowercased-owner>/<repo>`.
+#
+# Deploy
+# ------
+# After the images are pushed, the `deploy` job copies `docker-compose.prod.yml`
+# from the runner to the server and updates the running stack over SSH. The
+# server does NOT need a repo clone: the compose file is copied on each deploy.
+# Required repository secrets:
+#   SSH_HOST     - server hostname or IP
+#   SSH_USER     - SSH username
+#   SSH_KEY      - private key (PEM) for that user
+#   DEPLOY_PATH  - server directory where `docker-compose.prod.yml` lives and
+#                  where the stack runs (must already exist; scp does not
+#                  create parent directories)
+# Prerequisites on the server:
+#   - logged in to GHCR (`docker login ghcr.io`)
+#   - `DEPLOY_PATH/.env` with `BASE_DOMAIN` (Compose reads `.env` from the
+#     working directory)
+#   - the backend env file; set `BACKEND_ENV_FILE` there to the absolute path
+#     of the backend env on the server (the default `./backend/.env` will not
+#     exist without a clone)
+
+name: Build & Push Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend-app
+            context: backend
+            dockerfile: backend/docker/Dockerfile.app
+            build-args: ""
+          - name: backend-worker
+            context: backend
+            dockerfile: backend/docker/Dockerfile.worker
+            build-args: ""
+          - name: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            build-args: VITE_API_BASE_URL=/api/v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: ${{ secrets.DEPLOY_PATH }}
+          overwrite: true
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          script: |
+            cd "$DEPLOY_PATH"
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f

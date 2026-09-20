@@ -89,17 +89,23 @@ enum CategoryType {
   ARCHIVE
 }
 
+enum ContentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 model Post {
-  id              String         @id @default(uuid())
+  id              String            @id @default(uuid())
   name            String
-  slug            String         @unique
-  status          ContentStatus  @default(DRAFT)
-  publishedAt     DateTime?      @map("published_at")
-  approvedAt      DateTime?      @map("approved_at")
+  slug            String            @unique
+  status          ContentStatus     @default(DRAFT)
+  publishedAt     DateTime?         @map("published_at")
+  approvedAt      DateTime?         @map("approved_at")
   content         String
   thumbnail       String?
-  galleryImageIds String[]       @default([]) @map("gallery_image_ids")
-  createdBy       String?        @map("created_by")
+  galleryImageIds String[]          @default([]) @map("gallery_image_ids")
+  visibility      ContentVisibility @default(PUBLIC)
+  createdBy       String?           @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories      PostCategory[]
   createdAt       DateTime       @default(now()) @map("created_at")
@@ -146,6 +152,7 @@ Catatan:
 - `PostCategory` = relasi N : M ke `Category`; `@@unique([postId, categoryId])` mencegah duplikat link.
 - `Category.type` ∈ `STORY | ARCHIVE`. Halaman story memfilter `type=STORY`.
 - `createdBy` nullable + `onDelete: SetNull`; user dihapus → story tetap ada, `creator` null.
+- `visibility` enum `ContentVisibility` (`PUBLIC`/`PRIVATE`), default `PUBLIC`. Migration `20260920130000_add_content_visibility`.
 
 ### Perubahan schema `Image` (ikut migration `add_posts_categories`)
 
@@ -213,6 +220,7 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
+  visibility: true,
   createdBy: true,
   creator: { select: { id: true, fullName: true } },
   categories: {
@@ -337,7 +345,7 @@ Status validasi gagal = **422** (RULES bab 7). Kontrak 422: `{ statusCode: 422, 
 // libs/src/modules/post/dto/create-post.dto.ts
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
-import { ContentStatus } from '@prisma/client';
+import { ContentStatus, ContentVisibility } from '@prisma/client';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -367,6 +375,10 @@ export class CreatePostDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+
+  @IsOptional()
+  @IsEnum(ContentVisibility)
+  visibility?: ContentVisibility;
 
   // Tanggal publish manual (tombol "Terbitkan" di FE). Bila dikirim → status dipaksa PUBLISHED.
   @IsOptional()
@@ -484,6 +496,7 @@ export class ListCategoriesQueryDto extends ListQueryDto {}
 | `content` | opsional, `@IsString()` | 422 `{ field: 'content', message }` |
 | `thumbnail` | opsional, `@IsString()`, `@MaxLength(2048)`; pada `UpdatePostDto` boleh `null` (hapus) | 422 `{ field: 'thumbnail', message }` |
 | `status` | opsional, `@IsEnum(ContentStatus)` | 422 `{ field: 'status', message }` |
+| `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `organization` | 422 `{ field: 'visibility', message }` |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` ([§6](#6-aturan-status)) | 422 `{ field: 'publishedAt', message }` |
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })` | 422 `{ field: 'categoryIds.0', message }` |
 | `imageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)` | 422 `{ field: 'imageIds.0', message }` |
@@ -568,7 +581,7 @@ async function uniqueSlug(base: string): Promise<string> {
 ## 6. Aturan Status
 
 - Default `status` = `DRAFT` (schema `@default(DRAFT)`).
-- **Tidak ada penjadwalan otomatis.** Tidak ada worker/cron dan **tidak ada endpoint publish terpisah**. Tanggal publish dipilih user dan dikirim di body `POST/PATCH` lewat field opsional `publishedAt`; backend hanya menyimpannya.
+- **Tidak ada penjadwalan otomatis.** Tidak ada worker/cron. Endpoint publish terpisah **ada**: `POST /posts/:id/publish` & `/unpublish` (dan action status lain) — lihat [§6 Action & Transisi](#action--transisi). Tanggal publish juga masih bisa dikirim di body `POST/PATCH` lewat field opsional `publishedAt`; backend hanya menyimpannya.
 - `publishedAt` **opsional** di `CreatePostDto` & `UpdatePostDto` (diwarisi `UpdatePostDto` via `PartialType(OmitType(...))` — tidak ter-omit), tipe `string` ISO 8601, divalidasi `@IsISO8601()` → non-ISO = **422**.
 - **Create:**
   - `publishedAt` dikirim → `publishedAt = new Date(dto.publishedAt)` **dan** paksa `status = PUBLISHED` (tanggal publish menyiratkan terbit; `status` yang dikirim diabaikan).
@@ -596,6 +609,50 @@ if (dto.publishedAt !== undefined) {
   if (dto.status === ContentStatus.APPROVED && !existing.approvedAt) data.approvedAt = new Date();
 }
 ```
+
+### Action & Transisi
+
+Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terdapat endpoint action terpisah yang **hanya** mengubah status sesuai aturan transisi di bawah. Tabel `POST_TRANSITIONS` di `post.service.ts` adalah **sumber tunggal** aturan ini.
+
+| Action | Endpoint | Permission | Dari | Ke |
+| --- | --- | --- | --- | --- |
+| `submit` | `POST /posts/:id/submit` | `story:submit` | `DRAFT` | `REQUEST` |
+| `approve` | `POST /posts/:id/approve` | `story:approve` | `REQUEST` | `APPROVED` |
+| `reject` | `POST /posts/:id/reject` | `story:reject` | `REQUEST` | `DRAFT` |
+| `publish` | `POST /posts/:id/publish` | `story:publish` | `APPROVED` | `PUBLISHED` |
+| `unpublish` | `POST /posts/:id/unpublish` | `story:unpublish` | `PUBLISHED` | `DRAFT` |
+
+- Request: **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery>, message }`.
+- Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
+- `approve` mengisi `approvedAt = now` bila masih `null` (re-approve tidak menimpa). `publish` mengisi `publishedAt = now` bila masih `null` (re-publish tidak mengubah waktu publish pertama). Action lain tidak menyentuh `approvedAt`/`publishedAt`.
+- **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish` memakai `if (!existing.publishedAt)`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama). `reject` (`REQUEST`→`DRAFT`) menyisakan `approvedAt`. Ini sengaja, konsisten dengan perilaku `PATCH` existing (re-publish memakai tanggal publish pertama).
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (admin) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk role `organization` (dan scope lain), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` hanya bisa transisi sampai `REQUEST` (`story:submit`); approve/publish tidak dimilikinya. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
+
+### Scoping Baca & Tulis
+
+Row-level scoping (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)) membatasi baris `Post` per user lewat `AccessScopeService.resolve(userId)`:
+
+| Scope (`kind`) | `canViewPrivate` | Baca | Tulis |
+| --- | --- | --- | --- |
+| `all` (admin) | ya | Semua status + PRIVATE. | Bebas. |
+| `organization` | ya | Hanya `creator.organizationId === scope.organizationId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
+| `published` (member) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
+| `published` (role lain) | tidak | Sama seperti member **dan** `visibility = PUBLIC`. | **403**. |
+| `none` | tidak | **List kosong**; `findOne` **403**. | **403**. |
+
+- `canViewPrivate` = `role.code ∈ ['admin','member','organization']` (`PRIVATE_READER_ROLES` di `access-scope.service.ts`), independen dari `kind`.
+- **Akses PRIVATE**: hanya user `canViewPrivate`. Role custom (bukan admin/member/organization) **tidak** boleh membaca PRIVATE.
+- **List** (`GET /posts`): scope di-`AND` ke filter — `organization` → `{ creator: { organizationId } }`, `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
+- **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
+- **Tulis**: `organization` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**.
+- **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body. Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
+
+Contoh 403 (detail post milik organisasi lain oleh user `organization`):
+
+```json
+{ "statusCode": 403, "message": "Forbidden resource", "errors": [] }
+```
+
 
 ---
 
@@ -679,7 +736,7 @@ Semua list paginated via `ListQueryDto` shared (`page, limit, sortBy, sortOrder,
 | Item | Nilai |
 | --- | --- |
 | `POST_SEARCHABLE_FIELDS` | `['name', 'slug']` |
-| `POST_SORT_FIELDS` | `['name', 'slug', 'status', 'publishedAt', 'createdAt', 'updatedAt']` |
+| `POST_SORT_FIELDS` | `['name', 'slug', 'status', 'visibility', 'publishedAt', 'createdAt', 'updatedAt']` |
 | `POST_FILTER_FIELDS` | `['status', 'publishedAt', 'createdAt', 'updatedAt']` |
 | `POST_DATE_FIELDS` | `['publishedAt', 'createdAt', 'updatedAt']` (ISO 8601; invalid → 422; `like` ditolak) |
 | `sortOrder` default | `desc` (`sortBy` default `createdAt`) |
@@ -788,7 +845,7 @@ create(
 | --- | --- | --- |
 | `large` | `resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })` | `posts/<uuid>-large.webp` |
 | `medium` | max 1024 (`fit: 'inside'`, `withoutEnlargement: true`) | `posts/<uuid>-medium.webp` |
-| `thumbnail` | `resize({ width: 480, height: 480, fit: 'cover' })` | `posts/<uuid>-thumb.webp` |
+| `thumbnail` | `resize({ width: 1280, height: 720, fit: 'cover' })` | `posts/<uuid>-thumb.webp` |
 
 - **Downscale-only**: `withoutEnlargement: true` → gambar kecil **tidak** diperbesar. Rasio aspek dipertahankan (kecuali `thumbnail` yang `fit: 'cover'`).
 - **Keputusan varian yang tidak lebih kecil dari original**: varian **tetap dibuat** (konsistensi URL), **kecuali** bila output `large` `size >= original.size` → pakai **original** sebagai `large` (tidak ada key `-large.webp`; fallback di service).
@@ -877,7 +934,8 @@ Wajib lewat `@nestjs/config` (RULES bab 8), bukan `process.env` tersebar. Tambah
 | `IMAGE_WEBP_QUALITY` | tidak | `82` | kualitas encode WebP varian |
 | `IMAGE_LARGE_WIDTH` | tidak | `1920` | lebar maks varian `large` |
 | `IMAGE_MEDIUM_WIDTH` | tidak | `1024` | lebar maks varian `medium` |
-| `IMAGE_THUMB_SIZE` | tidak | `480` | sisi varian `thumbnail` (`fit: 'cover'`) |
+| `IMAGE_THUMB_WIDTH` | tidak | `1280` | lebar varian `thumbnail` (`fit: 'cover'`, 16:9) |
+| `IMAGE_THUMB_HEIGHT` | tidak | `720` | tinggi varian `thumbnail` (`fit: 'cover'`, 16:9) |
 
 Contoh Joi (rencana):
 
@@ -892,7 +950,8 @@ UPLOAD_MAX_SIZE_MB: Joi.number().integer().min(1).default(5),
 IMAGE_WEBP_QUALITY: Joi.number().integer().min(1).max(100).default(82),
 IMAGE_LARGE_WIDTH: Joi.number().integer().min(1).default(1920),
 IMAGE_MEDIUM_WIDTH: Joi.number().integer().min(1).default(1024),
-IMAGE_THUMB_SIZE: Joi.number().integer().min(1).default(480),
+IMAGE_THUMB_WIDTH: Joi.number().integer().min(1).default(1280),
+IMAGE_THUMB_HEIGHT: Joi.number().integer().min(1).default(720),
 ```
 
 ---
@@ -903,11 +962,16 @@ Usulan penambahan ke `DEFAULT_PERMISSIONS` di `libs/prisma/seed.ts`:
 
 ```typescript
 const DEFAULT_PERMISSIONS = [
-  // ... 12 code RBAC existing ...
+  // ... (seed existing: user/role/permission 12, story 9, category 4, event 9, organization 4; total 38) ...
   { code: 'story:create', description: 'Membuat story baru' },
   { code: 'story:read', description: 'Melihat daftar/detail story' },
   { code: 'story:update', description: 'Mengubah story' },
   { code: 'story:delete', description: 'Menghapus story' },
+  { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
+  { code: 'story:approve', description: 'Menyetujui story (REQUEST -> APPROVED)' },
+  { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
+  { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
+  { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
   { code: 'category:create', description: 'Membuat kategori baru' },
   { code: 'category:read', description: 'Melihat daftar/detail kategori' },
   { code: 'category:update', description: 'Mengubah kategori' },
@@ -918,6 +982,8 @@ const DEFAULT_PERMISSIONS = [
 - Role **`admin`** otomatis mendapat semuanya: `DEFAULT_ROLES[0].permissions = DEFAULT_PERMISSIONS.map(p => p.code)` (perilaku seed existing, additive, idempoten).
 - Jalankan `pnpm prisma:seed` setelah menambah code.
 - Permission `story:read` juga dipakai `GET /posts`; `category:read` untuk `GET /categories`.
+
+> **Permission action status (`submit/approve/reject/publish/unpublish`) kini DI-ENFORCE** oleh endpoint `POST /posts/:id/<action>` (lihat [§6 Action & Transisi](#action--transisi)) dengan `@Permissions('story:<action>')` masing-masing. `PATCH /posts/:id` (`story:update`) tetap ada untuk update konten + field `status`/`publishedAt` legacy.
 
 ### Keputusan permission upload
 
@@ -956,6 +1022,11 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | GET | `/api/v1/posts/:id` | PERMISSION `story:read` | path `id` UUID | 200 `{ data: <post + gallery>, message }` | 404, 422 UUID invalid, 401/403 |
 | PATCH | `/api/v1/posts/:id` | PERMISSION `story:update` | path `id`, body `UpdatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → timpa + paksa `PUBLISHED`) | 200 `{ data: <post + gallery>, message }` | 404, 409 slug duplikat, 422, 401/403 |
 | DELETE | `/api/v1/posts/:id` | PERMISSION `story:delete` | path `id` (ikut hapus row `images` + objek S3) | 200 `{ data: <post + gallery>, message }` | 404, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/submit` | PERMISSION `story:submit` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/approve` | PERMISSION `story:approve` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/reject` | PERMISSION `story:reject` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/publish` | PERMISSION `story:publish` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/unpublish` | PERMISSION `story:unpublish` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/categories` | PERMISSION `category:create` | body `CreateCategoryDto` | 201 `{ data: <category>, message }` | 422, 401/403 |
 | GET | `/api/v1/categories` | PERMISSION `category:read` | query `ListCategoriesQueryDto` | 200 `{ data: [category], meta, message }` | 422, 401/403 |
 | GET | `/api/v1/categories/:id` | PERMISSION `category:read` | path `id` UUID | 200 `{ data: <category>, message }` | 404, 422 UUID invalid, 401/403 |
@@ -972,6 +1043,7 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | `POST/PATCH /posts` | `ConflictException` | 409 | `slug` duplikat (P2002 / bentrok eksplisit) |
 | `GET/PATCH/DELETE /posts/:id` | `NotFoundException` | 404 | post tidak ditemukan |
 | `GET/PATCH/DELETE /categories/:id` | `NotFoundException` | 404 | kategori tidak ditemukan |
+| `POST /posts/:id/<action>` | `ConflictException` | 409 | transisi tidak valid dari status saat ini (`Cannot <action> post in status <STATUS>`) |
 | semua create/update | `UnprocessableEntityException` | 422 | validasi DTO |
 | `GET /posts`, `GET /categories` | `UnprocessableEntityException` | 422 | `sortBy`/`filter` tak dikenal, enum/tanggal invalid |
 | `POST /images` | `UnprocessableEntityException` | 422 | mime tidak diizinkan / file > `UPLOAD_MAX_SIZE_MB` |
@@ -1010,7 +1082,7 @@ Format error standar: `{ statusCode, message, errors }` (RULES bab 5).
 - **Integrations** `libs/src/integrations/storage/`: `StorageService` (S3, lazy init), `ImageProcessor` (`sharp`), `StorageModule`.
 - **Controllers** `apps/app/src/controllers/{posts,categories,images}.controller.ts`; terdaftar di `apps/app/src/app.module.ts` (+ `LibsModule`).
 - **Env** Joi (`S3_*`, `UPLOAD_MAX_SIZE_MB`, `IMAGE_*`) + `.env.example`. Kredensial S3 `optional` agar boot tanpa S3 tidak crash; guard saat upload.
-- **Seed** 8 permission `story:*` / `category:*` di `libs/prisma/seed.ts` (jalankan `pnpm prisma:seed`).
+- **Seed** 13 permission `story:*` (9: `create,read,update,delete,submit,approve,reject,publish,unpublish`) / `category:*` (4) di `libs/prisma/seed.ts` (jalankan `pnpm prisma:seed`).
 - Build `pnpm build:app` + `pnpm build:worker` hijau.
 
 ### Belum / TODO lanjutan

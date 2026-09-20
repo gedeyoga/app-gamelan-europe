@@ -1,0 +1,51 @@
+{
+  "title": "Subscriptions",
+  "subtitle": "Kelola paket langganan",
+  "add": "Tambah Subscription",
+  "search": {
+    "placeholder": "Cari nama, slug, atau mata uang...",
+    "ariaLabel": "Cari subscription"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data subscription. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data subscription."
+  },
+  "table": {
+    "name": "Nama",
+    "slug": "Slug",
+    "subscriptionType": "Tipe",
+    "currency": "Mata Uang",
+    "created": "Dibuat",
+    "empty": "Belum ada subscription",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "subscriptionTypeOptions": {
+    "MONTHLY": "Bulanan",
+    "YEARLY": "Tahunan"
+  },
+  "form": {
+    "createTitle": "Tambah Subscription",
+    "editTitle": "Edit Subscription",
+    "createDescription": "Buat paket langganan baru.",
+    "editDescription": "Perbarui data paket langganan.",
+    "name": "Nama",
+    "slug": "Slug",
+    "subscriptionType": "Tipe",
+    "currency": "Mata Uang"
+  },
+  "delete": {
+    "title": "Hapus Subscription",
+    "description": "Yakin ingin menghapus subscription {{name}}? Tindakan ini tidak dapat dibatalkan."
+  },
+  "toast": {
+    "created": "Subscription berhasil dibuat",
+    "updated": "Subscription berhasil diperbarui",
+    "deleted": "Subscription berhasil dihapus",
+    "createFailed": "Gagal membuat subscription",
+    "updateFailed": "Gagal memperbarui subscription",
+    "deleteFailed": "Gagal menghapus subscription"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "title": "Subscriptions",
+  "subtitle": "Manage subscription plans",
+  "add": "Add Subscription",
+  "search": {
+    "placeholder": "Search name, slug, or currency...",
+    "ariaLabel": "Search subscriptions"
+  },
+  "errors": {
+    "loadData": "Failed to load subscription data. Please try again.",
+    "forbidden": "You don't have access to view subscription data."
+  },
+  "table": {
+    "name": "Name",
+    "slug": "Slug",
+    "subscriptionType": "Type",
+    "currency": "Currency",
+    "created": "Created",
+    "empty": "No subscriptions yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "subscriptionTypeOptions": {
+    "MONTHLY": "Monthly",
+    "YEARLY": "Yearly"
+  },
+  "form": {
+    "createTitle": "Add Subscription",
+    "editTitle": "Edit Subscription",
+    "createDescription": "Create a new subscription plan.",
+    "editDescription": "Update subscription plan data.",
+    "name": "Name",
+    "slug": "Slug",
+    "subscriptionType": "Type",
+    "currency": "Currency"
+  },
+  "delete": {
+    "title": "Delete Subscription",
+    "description": "Are you sure you want to delete subscription {{name}}? This action cannot be undone."
+  },
+  "toast": {
+    "created": "Subscription created successfully",
+    "updated": "Subscription updated successfully",
+    "deleted": "Subscription deleted successfully",
+    "createFailed": "Failed to create subscription",
+    "updateFailed": "Failed to update subscription",
+    "deleteFailed": "Failed to delete subscription"
+  }
+}

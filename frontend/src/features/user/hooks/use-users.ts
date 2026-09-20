@@ -10,12 +10,14 @@ export interface UseUsersParams {
   search?: string
   sortBy?: string | null
   sortOrder?: ListSortOrder | null
+  enabled?: boolean
 }
 
-export function useUsers({ page, limit, search, sortBy, sortOrder }: UseUsersParams) {
+export function useUsers({ page, limit, search, sortBy, sortOrder, enabled }: UseUsersParams) {
   return useQuery({
     queryKey: ['users', { page, limit, search: (search ?? '').trim(), sortBy, sortOrder }],
     queryFn: () => listUsers({ page, limit, search, sortBy, sortOrder }),
     placeholderData: keepPreviousData,
+    enabled,
   })
 }

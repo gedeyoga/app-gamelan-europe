@@ -25,6 +25,7 @@
     "thumbnail": "Thumbnail",
     "author": "Penulis",
     "status": "Status",
+    "visibility": "Visibilitas",
     "categories": "Kategori",
     "publishedAt": "Diterbitkan",
     "empty": "Belum ada story",
@@ -34,13 +35,18 @@
     "delete": "Hapus"
   },
   "card": {
-    "noThumbnail": "Tanpa thumbnail"
+    "noThumbnail": "Tanpa thumbnail",
+    "memberOnly": "Khusus Member"
   },
   "statusOptions": {
     "DRAFT": "Draft",
     "REQUEST": "Diajukan",
     "APPROVED": "Disetujui",
     "PUBLISHED": "Terbit"
+  },
+  "visibilityOptions": {
+    "PUBLIC": "Publik",
+    "PRIVATE": "Privat"
   },
   "form": {
     "createTitle": "Tambah Story",
@@ -55,6 +61,7 @@
     "hideSettings": "Sembunyikan pengaturan",
     "showSettings": "Tampilkan pengaturan",
     "thumbnail": "Thumbnail",
+    "visibility": "Visibilitas",
     "categories": "Kategori",
     "categoryPlaceholder": "Pilih kategori",
     "categorySearch": "Cari atau tambah kategori...",
@@ -138,6 +145,14 @@
     "previous": "Sebelumnya",
     "next": "Berikutnya",
     "counter": "{{current}} / {{total}}"
+  },
+  "detail": {
+    "back": "Kembali ke story",
+    "open": "Lihat detail \"{{name}}\"",
+    "notFound": "Story tidak ditemukan.",
+    "authorFallback": "Penulis tidak diketahui",
+    "noContent": "Story ini belum memiliki konten.",
+    "gallery": "Galeri"
   },
   "toast": {
     "created": "Story berhasil dibuat",

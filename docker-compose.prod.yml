@@ -1,0 +1,97 @@
+# Production deploy — server-managed Traefik edge proxy + GHCR images.
+#
+# Required .env keys (repo root or shell env):
+#   BASE_DOMAIN            zone serving the stack, e.g. namadomain.com
+#                          → frontend  app.<BASE_DOMAIN>
+#                          → backend   api.<BASE_DOMAIN>
+# Optional:
+#   IMAGE_PREFIX           default ghcr.io/gedeyoga/app-gamelan-europe
+#   IMAGE_TAG              default latest
+#   TRAEFIK_CERTRESOLVER   default letsencrypt
+#   BACKEND_ENV_FILE       optional, default ./backend/.env
+#
+# Postgres/Redis are server-managed; this file does NOT run them.
+# Ensure DATABASE_URL and REDIS_URL in backend/.env point to them.
+#
+# WARNING: the prod env file must NOT use `localhost` for these keys:
+#   DATABASE_URL, REDIS_URL, S3_ENDPOINT, S3_PUBLIC_BASE_URL
+# (S3_PUBLIC_BASE_URL is browser-facing; the rest are container-facing.)
+#
+# The frontend stays on the `internal` network so its nginx can proxy /api/
+# to backend-app:3001 same-origin; cross-subdomain CORS is therefore unnecessary.
+#
+# Update: docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
+
+name: gamelan-europe
+
+services:
+  backend-app:
+    image: ${IMAGE_PREFIX:-ghcr.io/gedeyoga/app-gamelan-europe}/backend-app:${IMAGE_TAG:-latest}
+    env_file:
+      - ${BACKEND_ENV_FILE:-./backend/.env}
+    restart: unless-stopped
+    expose:
+      - "3001"
+    networks:
+      - internal
+      - traefik
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.gamelan-api.rule=Host(`api.${BASE_DOMAIN:?BASE_DOMAIN is required}`)'
+      - 'traefik.http.routers.gamelan-api.entrypoints=websecure'
+      - 'traefik.http.routers.gamelan-api.tls=true'
+      - 'traefik.http.routers.gamelan-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}'
+      - 'traefik.http.services.gamelan-api.loadbalancer.server.port=3001'
+      # Optional HTTP->HTTPS redirect (Traefik often handles this globally):
+      # - 'traefik.http.routers.gamelan-api.middlewares=gamelan-redirect'
+      # - 'traefik.http.middlewares.gamelan-redirect.redirectscheme.scheme=https'
+
+  backend-worker:
+    image: ${IMAGE_PREFIX:-ghcr.io/gedeyoga/app-gamelan-europe}/backend-worker:${IMAGE_TAG:-latest}
+    env_file:
+      - ${BACKEND_ENV_FILE:-./backend/.env}
+    restart: unless-stopped
+    networks:
+      - internal
+    # No public HTTP endpoint: worker only calls app.listen(3002), exposes no controllers.
+    # Router left ready but disabled; uncomment if a real HTTP API is added.
+    labels:
+      - 'traefik.enable=false'
+    # labels:
+    #   - 'traefik.enable=true'
+    #   - 'traefik.docker.network=traefik'
+    #   - 'traefik.http.routers.gamelan-worker.rule=Host(`worker.${BASE_DOMAIN}`)'
+    #   - 'traefik.http.routers.gamelan-worker.entrypoints=websecure'
+    #   - 'traefik.http.routers.gamelan-worker.tls=true'
+    #   - 'traefik.http.routers.gamelan-worker.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}'
+    #   - 'traefik.http.services.gamelan-worker.loadbalancer.server.port=3002'
+
+  frontend:
+    image: ${IMAGE_PREFIX:-ghcr.io/gedeyoga/app-gamelan-europe}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend-app
+    expose:
+      - "80"
+    networks:
+      - internal
+      - traefik
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.gamelan-web.rule=Host(`app.${BASE_DOMAIN:?BASE_DOMAIN is required}`)'
+      - 'traefik.http.routers.gamelan-web.entrypoints=websecure'
+      - 'traefik.http.routers.gamelan-web.tls=true'
+      - 'traefik.http.routers.gamelan-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}'
+      - 'traefik.http.services.gamelan-web.loadbalancer.server.port=80'
+      # Optional HTTP->HTTPS redirect (Traefik often handles this globally):
+      # - 'traefik.http.routers.gamelan-web.middlewares=gamelan-redirect'
+      # - 'traefik.http.middlewares.gamelan-redirect.redirectscheme.scheme=https'
+
+networks:
+  traefik:
+    external: true
+    name: traefik
+  internal:
+    driver: bridge

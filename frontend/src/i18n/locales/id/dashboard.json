@@ -5,10 +5,17 @@
     "dashboard": "Dashboard",
     "users": "Users",
     "roles": "Roles",
-    "story": "Story"
+    "story": "Story",
+    "event": "Event",
+    "myBilling": "Billing Saya",
+    "organizations": "Organizations",
+    "apiKey": "API Keys",
+    "subscription": "Subscription",
+    "billing": "Billing Management"
   },
   "group": {
-    "dataManagement": "Manajemen Data"
+    "dataManagement": "Manajemen Data",
+    "payment": "Pembayaran"
   },
   "userMenu": {
     "settings": "Pengaturan",

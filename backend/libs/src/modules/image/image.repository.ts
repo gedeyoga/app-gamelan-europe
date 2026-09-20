@@ -16,6 +16,20 @@ export class ImageRepository {
     return this.prisma.image.findMany({ where: { id: { in: ids } }, select: imageSelect });
   }
 
+  // Hanya id gambar yang boleh di-bind: entityType cocok & belum terikat ATAU sudah milik entity ini.
+  async filterBindableIds(ids: string[], entityType: string, entityId: string | null): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.image.findMany({
+      where: {
+        id: { in: ids },
+        entityType,
+        OR: entityId ? [{ entityId: null }, { entityId }] : [{ entityId: null }],
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+
   // Hapus row + kembalikan key S3 original + SEMUA variants[].key untuk cleanup best-effort.
   async deleteByEntity(entityType: string, entityId: string): Promise<string[]> {
     const images = await this.prisma.image.findMany({

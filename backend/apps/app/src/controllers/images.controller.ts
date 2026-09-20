@@ -6,7 +6,7 @@ export class ImagesController {
   constructor(private readonly imageService: ImageService) {}
 
   @Post()
-  @Permissions('story:create', 'story:update') // ANY-of
+  @Permissions('story:create', 'story:update', 'event:create', 'event:update') // ANY-of
   @HttpCode(201)
   @UseInterceptors(MulterUploadInterceptor)
   upload(@UploadedFile() file: Express.Multer.File, @Body() dto: UploadImageDto) {

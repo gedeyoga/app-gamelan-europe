@@ -1,0 +1,43 @@
+{
+  "title": "Billing Saya",
+  "subtitle": "Langganan dan riwayat billing Anda",
+  "currentSubscription": {
+    "title": "Langganan Aktif",
+    "plan": "Paket",
+    "type": "Tipe",
+    "currency": "Mata Uang"
+  },
+  "noSubscription": {
+    "title": "Tidak ada langganan aktif",
+    "description": "Anda belum memiliki paket aktif. Paket yang tersedia ditampilkan di bawah."
+  },
+  "availablePlans": {
+    "title": "Paket Tersedia",
+    "empty": "Belum ada paket tersedia saat ini.",
+    "type": "Tipe",
+    "currency": "Mata Uang"
+  },
+  "billings": {
+    "title": "Riwayat Billing",
+    "empty": "Belum ada data billing",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian"
+  },
+  "table": {
+    "code": "Kode",
+    "subscription": "Subscription",
+    "status": "Status",
+    "total": "Total",
+    "created": "Dibuat"
+  },
+  "search": {
+    "placeholder": "Cari kode atau mata uang...",
+    "ariaLabel": "Cari billing saya"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data billing Anda. Silakan coba lagi.",
+    "loadSubscription": "Gagal memuat langganan Anda. Silakan coba lagi.",
+    "loadPlans": "Gagal memuat paket yang tersedia. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses ke halaman ini."
+  }
+}

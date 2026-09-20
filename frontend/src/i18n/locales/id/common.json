@@ -42,7 +42,8 @@
   },
   "dateTime": {
     "hour": "Jam",
-    "minute": "Menit"
+    "minute": "Menit",
+    "clear": "Hapus jam"
   },
   "forbidden": {
     "code": "403",

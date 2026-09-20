@@ -33,10 +33,15 @@ Struktur nested:
 
 - **SidebarHeader**: brand "trade-app".
 - **SidebarContent** (navigasi):
-  - Nav item **Dashboard** (ikon lucide `Home`) — default active.
-  - Group **Data Management**:
-    - **User** → `/users` (ikon `Users`).
-    - **Roles** → `/roles` (ikon `Shield`).
+  - Grup atas (tanpa label): **Dashboard** (`Home`, `/`), **Story** (`Newspaper`, permission `story:read`), **Event** (`CalendarDays`, permission `event:read`), **My Billing** (`Receipt`, `/billings`, permission `billing:read`).
+  - Group **Data Management** (`t('group.dataManagement')`):
+    - **User** → `/users` (ikon `Users`, permission `user:read`).
+    - **Role** → `/roles` (ikon `Shield`, permission `role:read`).
+    - **Organizations** → `/organizations` (ikon `Building2`, permission `organization:read`).
+  - Group **Payment** (`t('group.payment')`, dirender setelah Data Management):
+    - **Subscription** → `/subscriptions` (ikon `CreditCard`, permission `subscription:read`).
+    - **Billing** (`t('nav.billing')`) → `/billings` (ikon `Receipt`, permission `billing:read`).
+  - **Catatan**: Billing tampil **dobel** (My Billing di grup atas + Billing di grup Payment), keduanya menuju `/billings` — disengaja. Karena `isActive` = `pathname === url`, kedua item aktif bersamaan.
 - **SidebarFooter**: `SidebarUser` — avatar + `fullName` + `email` (data dari `useAuth().user`); dropdown menu berisi entri **Pengaturan** (placeholder) dan **Keluar** (logout).
 - Pada layar mobile sidebar ter-show sebagai sheet (perilaku bawaan komponen `sidebar`).
 

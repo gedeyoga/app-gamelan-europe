@@ -11,12 +11,20 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
 import { CategoryCombobox } from './category-combobox'
 import { GalleryUpload } from './gallery-upload'
-import { ThumbnailUpload } from './thumbnail-upload'
+import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import type { StoryFormValues } from '../lib/schema'
+import { VISIBILITIES } from '../types'
 import type { StoryCategory, UploadedImage } from '../types'
 
 export interface StoryMetaPanelProps {
@@ -126,6 +134,31 @@ export function StoryMetaPanel({
             {slugTouched && (
               <p className="text-xs text-muted-foreground">{t('story:form.slugManualHint')}</p>
             )}
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="visibility"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('story:form.visibility')}</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
+              <FormControl>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {VISIBILITIES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`story:visibilityOptions.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <FormMessage />
           </FormItem>
         )}

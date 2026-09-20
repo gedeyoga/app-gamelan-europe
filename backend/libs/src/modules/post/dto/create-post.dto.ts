@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
-import { ContentStatus } from '@prisma/client';
+import { ContentStatus, ContentVisibility } from '@prisma/client';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -30,6 +30,10 @@ export class CreatePostDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+
+  @IsOptional()
+  @IsEnum(ContentVisibility)
+  visibility?: ContentVisibility;
 
   // Tanggal publish manual (tombol "Terbitkan" di FE). Bila dikirim → status dipaksa PUBLISHED.
   @IsOptional()

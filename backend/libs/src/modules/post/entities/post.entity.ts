@@ -13,8 +13,9 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
+  visibility: true,
   createdBy: true,
-  creator: { select: { id: true, fullName: true } },
+  creator: { select: { id: true, fullName: true, organizationId: true } },
   categories: {
     select: {
       category: { select: { id: true, name: true, type: true } },
@@ -33,8 +34,12 @@ export type PostEntity = Omit<PostRow, 'categories'> & {
   categories: PostCategoryEntity[];
 };
 
+// `creator.organizationId` hanya dipakai internal (scope); tidak pernah keluar ke FE.
+export type CreatorRef = { id: string; fullName: string };
+
 // Kontrak response ke FE: `galleryImageIds` (raw) diganti `gallery` hasil resolusi berurut.
-export type PostResponse = Omit<PostEntity, 'galleryImageIds'> & {
+export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'creator'> & {
+  creator: CreatorRef | null;
   gallery: ImageResponse[];
 };
 

@@ -1,5 +1,6 @@
 import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ import { SortableHeader } from '@/components/shared/sortable-header'
 import type { SortOrder } from '@/components/shared/sortable-header'
 import { formatDateTime } from '@/lib/datetime'
 
-import { STATUS_VARIANT } from './status-variant'
+import { STATUS_VARIANT, VISIBILITY_VARIANT } from './status-variant'
 import type { Story } from '../types'
 
 export interface StoryTableProps {
@@ -54,7 +55,7 @@ export function StoryTable({
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 7 : 6
+  const columnCount = showActions ? 8 : 7
 
   return (
     <div className="rounded-xl border">
@@ -78,6 +79,15 @@ export function StoryTable({
               <SortableHeader
                 label={t('story:table.status')}
                 field="status"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={onSort}
+              />
+            </TableHead>
+            <TableHead>
+              <SortableHeader
+                label={t('story:table.visibility')}
+                field="visibility"
                 sortBy={sortBy}
                 sortOrder={sortOrder}
                 onSort={onSort}
@@ -136,7 +146,17 @@ export function StoryTable({
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell className="font-medium">{story.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    to={`/stories/${story.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('story:detail.open', { name: story.name })}
+                    className="hover:underline"
+                  >
+                    {story.name}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   {story.categories.length === 0 ? (
                     <span className="text-muted-foreground">—</span>
@@ -156,6 +176,13 @@ export function StoryTable({
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[story.status]}>
                     {t(`story:statusOptions.${story.status}`, { defaultValue: story.status })}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={VISIBILITY_VARIANT[story.visibility]}>
+                    {t(`story:visibilityOptions.${story.visibility}`, {
+                      defaultValue: story.visibility,
+                    })}
                   </Badge>
                 </TableCell>
                 <TableCell>{formatDateTime(story.publishedAt)}</TableCell>

@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
-import { CONTENT_STATUSES } from '../types'
+import { CONTENT_STATUSES, VISIBILITIES } from '../types'
 
 export function createStorySchema(t: TFunction) {
   return z.object({
@@ -20,6 +20,7 @@ export function createStorySchema(t: TFunction) {
     content: z.string(),
     thumbnail: z.string().nullable(),
     status: z.enum(CONTENT_STATUSES),
+    visibility: z.enum(VISIBILITIES),
     categoryIds: z.array(z.string()),
     imageIds: z.array(z.string()),
   })

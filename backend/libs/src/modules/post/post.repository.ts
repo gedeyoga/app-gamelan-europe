@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ContentStatus, Prisma } from '@prisma/client';
+import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { mapPost, postSelect, PostEntity } from './entities/post.entity';
 
@@ -9,6 +9,7 @@ export interface CreatePostData {
   content: string;
   thumbnail?: string;
   status?: ContentStatus;
+  visibility: ContentVisibility;
   publishedAt?: Date;
   approvedAt?: Date;
   createdBy?: string;
@@ -23,6 +24,7 @@ export interface UpdatePostData {
   content?: string;
   thumbnail?: string | null;
   status?: ContentStatus;
+  visibility?: ContentVisibility;
   publishedAt?: Date;
   approvedAt?: Date;
   categoryIds?: string[];
@@ -119,6 +121,7 @@ export class PostRepository {
             content: data.content,
             thumbnail: data.thumbnail,
             status: data.status,
+            visibility: data.visibility,
             publishedAt: data.publishedAt,
             approvedAt: data.approvedAt,
             createdBy: data.createdBy,
@@ -138,6 +141,20 @@ export class PostRepository {
     }
   }
 
+  // Update status atomik (conditional). true = tepat 1 row berubah → guard anti-TOCTOU.
+  async updateStatusIf(
+    id: string,
+    from: ContentStatus,
+    to: ContentStatus,
+    extra: { approvedAt?: Date; publishedAt?: Date } = {},
+  ): Promise<boolean> {
+    const res = await this.prisma.post.updateMany({
+      where: { id, status: from },
+      data: { status: to, ...extra },
+    });
+    return res.count === 1;
+  }
+
   async update(id: string, data: UpdatePostData): Promise<PostEntity> {
     const existing = await this.prisma.post.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('Post not found');
@@ -150,6 +167,7 @@ export class PostRepository {
         if (data.content !== undefined) update.content = data.content;
         if (data.thumbnail !== undefined) update.thumbnail = data.thumbnail;
         if (data.status !== undefined) update.status = data.status;
+        if (data.visibility !== undefined) update.visibility = data.visibility;
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
         if (data.galleryImageIds !== undefined) update.galleryImageIds = data.galleryImageIds;

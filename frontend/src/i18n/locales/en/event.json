@@ -1,0 +1,148 @@
+{
+  "title": "Event",
+  "subtitle": "Manage events and schedules",
+  "add": "Add Event",
+  "search": {
+    "placeholder": "Search event name or slug...",
+    "ariaLabel": "Search events"
+  },
+  "view": {
+    "card": "Card view",
+    "list": "List view"
+  },
+  "errors": {
+    "loadData": "Failed to load event data. Please try again.",
+    "forbidden": "You don't have access to view event data.",
+    "loadDetail": "Failed to load event detail.",
+    "uploadFailed": "Failed to upload image. Please try again.",
+    "createEventTypeFailed": "Failed to create event type.",
+    "slugDuplicate": "This slug is already in use. Please choose another.",
+    "noCreatePermission": "You don't have permission to create an event.",
+    "noUpdatePermission": "You don't have permission to edit an event."
+  },
+  "table": {
+    "thumbnail": "Thumbnail",
+    "name": "Name",
+    "eventTypes": "Event Types",
+    "dates": "Dates",
+    "location": "Location",
+    "status": "Status",
+    "visibility": "Visibility",
+    "publishedAt": "Published At",
+    "empty": "No events yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "card": {
+    "noThumbnail": "No thumbnail",
+    "memberOnly": "Members Only"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Request",
+    "APPROVED": "Approved",
+    "PUBLISHED": "Published"
+  },
+  "visibilityOptions": {
+    "PUBLIC": "Public",
+    "PRIVATE": "Private"
+  },
+  "form": {
+    "createTitle": "Add Event",
+    "editTitle": "Edit Event",
+    "titleLabel": "Name",
+    "titlePlaceholder": "Enter event name...",
+    "slugLabel": "Slug",
+    "slugPlaceholder": "event-name",
+    "slugGenerate": "Regenerate slug",
+    "slugManualHint": "Slug edited manually — auto-generation stopped.",
+    "settingsTitle": "Settings",
+    "hideSettings": "Hide settings",
+    "showSettings": "Show settings",
+    "thumbnail": "Thumbnail",
+    "visibility": "Visibility",
+    "eventTypes": "Event Types",
+    "eventTypePlaceholder": "Select event types",
+    "eventTypeSearch": "Search or add event type...",
+    "eventTypeAdd": "Add \"{{name}}\"",
+    "eventTypeCreating": "Adding...",
+    "eventTypeEmpty": "No event type found",
+    "eventDates": "Event Dates",
+    "eventDatesAdd": "Add date",
+    "eventDatesRemove": "Remove date",
+    "eventDatesEmpty": "No dates added yet.",
+    "dayLabel": "Day {{number}}",
+    "eventDatesPlaceholder": "Choose date & time",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "timePlaceholder": "HH:mm",
+    "save": "Save",
+    "saveChanges": "Save changes",
+    "saveAsDraft": "Save as draft",
+    "requestPublish": "Request to publish",
+    "publish": "Publish",
+    "cancel": "Cancel"
+  },
+  "location": {
+    "title": "Location",
+    "nameLabel": "Location name",
+    "namePlaceholder": "Enter location name...",
+    "addressLabel": "Address",
+    "addressPlaceholder": "Enter address...",
+    "mapLabel": "Pick location on map",
+    "clickHint": "Click the map or drag the marker to set coordinates.",
+    "coordinates": "Coordinates: {{latitude}}, {{longitude}}",
+    "searchPlaceholder": "Search address...",
+    "searching": "Searching...",
+    "searchNoResults": "No address found.",
+    "searchHint": "Type at least 3 characters to search by address."
+  },
+  "publishDialog": {
+    "title": "Publish event",
+    "description": "Choose publish date and time.",
+    "dateLabel": "Publish date & time",
+    "datePlaceholder": "Choose date & time",
+    "confirm": "Publish"
+  },
+  "workflow": {
+    "requested": "Awaiting approval",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "confirm": {
+    "title": "Confirm",
+    "description": "Are you sure you want to {{action}}? Changes will be saved.",
+    "submit": "Continue"
+  },
+  "delete": {
+    "title": "Delete Event",
+    "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+  "thumbnail": {
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB."
+  },
+  "detail": {
+    "back": "Back to events",
+    "open": "View details for \"{{name}}\"",
+    "notFound": "Event not found.",
+    "creatorFallback": "Unknown organizer",
+    "noContent": "This event has no content yet.",
+    "dates": "Date & time",
+    "location": "Location",
+    "openInMaps": "Open in Maps",
+    "copyAddress": "Copy address",
+    "addressCopied": "Address copied to clipboard",
+    "addressCopyFailed": "Failed to copy address",
+    "mapAlt": "Event location map"
+  },
+  "toast": {
+    "created": "Event created successfully",
+    "updated": "Event updated successfully",
+    "deleted": "Event deleted successfully",
+    "createFailed": "Failed to create event",
+    "updateFailed": "Failed to update event",
+    "deleteFailed": "Failed to delete event"
+  }
+}
