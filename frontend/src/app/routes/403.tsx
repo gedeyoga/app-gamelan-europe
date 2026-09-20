@@ -1,7 +1,7 @@
 import { ArrowLeft, LogOut, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-
+ 
 import { Button } from '@/components/ui/button'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 

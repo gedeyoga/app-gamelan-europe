@@ -2,7 +2,7 @@
 FROM node:22-alpine AS deps
 RUN corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml nest-cli.json tsconfig.json tsconfig.build.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY libs/prisma/schema.prisma libs/prisma/schema.prisma
 RUN pnpm install --frozen-lockfile
 RUN pnpm prisma:generate
@@ -11,7 +11,7 @@ FROM node:22-alpine AS build
 RUN corepack enable
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml nest-cli.json tsconfig.json tsconfig.build.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY libs ./libs
 COPY apps ./apps
 RUN pnpm run build:app
