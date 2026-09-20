@@ -20,6 +20,10 @@
 # The frontend stays on the `internal` network so its nginx can proxy /api/
 # to backend-app:3001 same-origin; cross-subdomain CORS is therefore unnecessary.
 #
+# pgbouncer is reached over the external `traefik` network, which
+# backend-app and backend-worker join; postgres itself is intentionally
+# not reachable from the app stack (isolation model).
+#
 # Update: docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
 
 name: gamelan-europe
@@ -54,6 +58,7 @@ services:
     restart: unless-stopped
     networks:
       - internal
+      - traefik
     # No public HTTP endpoint: worker only calls app.listen(3002), exposes no controllers.
     # Router left ready but disabled; uncomment if a real HTTP API is added.
     labels:

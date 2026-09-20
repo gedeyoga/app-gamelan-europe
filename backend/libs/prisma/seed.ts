@@ -146,33 +146,25 @@ async function main(): Promise<void> {
     const permissionIdByCode = new Map<string, string>();
 
     for (const perm of DEFAULT_PERMISSIONS) {
-      const existing = await tx.permission.findUnique({
-        where: { code: perm.code },
-        select: { id: true },
-      });
       const saved = await tx.permission.upsert({
         where: { code: perm.code },
         update: { description: perm.description },
         create: { id: randomUUID(), code: perm.code, description: perm.description },
       });
       permissionIdByCode.set(saved.code, saved.id);
-      console.log(`permission ${saved.code}: ${existing ? 'updated' : 'created'}`);
+      console.log(`permission ${saved.code}: upserted`);
     }
 
     const roleIdByName = new Map<string, string>();
 
     for (const role of DEFAULT_ROLES) {
-      const existing = await tx.role.findUnique({
-        where: { name: role.name },
-        select: { id: true },
-      });
       const saved = await tx.role.upsert({
         where: { name: role.name },
         update: { description: role.description, code: toCode(role.name) },
         create: { id: randomUUID(), name: role.name, code: toCode(role.name), description: role.description },
       });
       roleIdByName.set(saved.name, saved.id);
-      console.log(`role ${saved.name}: ${existing ? 'updated' : 'created'}`);
+      console.log(`role ${saved.name}: upserted`);
     }
 
     // ADDITIVE: hanya upsert relasi yang kurang, tidak pernah deleteMany.
@@ -186,16 +178,12 @@ async function main(): Promise<void> {
         if (!permissionId) {
           throw new Error(`Permission "${code}" tidak ditemukan setelah upsert.`);
         }
-        const existing = await tx.rolePermission.findUnique({
-          where: { roleId_permissionId: { roleId, permissionId } },
-          select: { roleId: true },
-        });
         await tx.rolePermission.upsert({
           where: { roleId_permissionId: { roleId, permissionId } },
           update: {},
           create: { roleId, permissionId },
         });
-        console.log(`role-permission ${role.name} -> ${code}: ${existing ? 'kept' : 'created'}`);
+        console.log(`role-permission ${role.name} -> ${code}: upserted`);
       }
     }
 
@@ -204,10 +192,6 @@ async function main(): Promise<void> {
       throw new Error('Role "admin" wajib ada di DEFAULT_ROLES.');
     }
 
-    const existingUser = await tx.user.findUnique({
-      where: { email: ADMIN_EMAIL },
-      select: { id: true },
-    });
     await tx.user.upsert({
       where: { email: ADMIN_EMAIL },
       update: {
@@ -224,8 +208,8 @@ async function main(): Promise<void> {
         status: 'ACTIVE',
       },
     });
-    console.log(`user ${ADMIN_EMAIL}: ${existingUser ? 'updated (password di-reset)' : 'created'}`);
-  });
+    console.log(`user ${ADMIN_EMAIL}: upserted (password di-reset)`);
+  }, { timeout: 120_000, maxWait: 10_000 });
 
   console.log('Seed RBAC selesai (idempoten, additive).');
 }
