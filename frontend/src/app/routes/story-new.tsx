@@ -38,6 +38,9 @@ export function StoryNewPage() {
   const canCreate = can('story:create')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canPublishStory = can('story:publish')
+  const canApproveStory = can('story:approve')
+  const canRejectStory = can('story:reject')
 
   const categoriesQuery = useCategories(canReadCategories)
   const createStory = useCreateStory()
@@ -100,6 +103,9 @@ export function StoryNewPage() {
         isLoadingCategories={categoriesQuery.isPending}
         canReadCategories={canReadCategories}
         canCreateCategory={canCreateCategory}
+        canPublishStory={canPublishStory}
+        canApproveStory={canApproveStory}
+        canRejectStory={canRejectStory}
         onCreateCategory={handleCreateCategory}
         onUploadImage={uploadImage.mutateAsync}
         onUploadError={handleUploadError}

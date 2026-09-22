@@ -16,6 +16,7 @@ export interface CreatePostData {
   categoryIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
+  flyerImageIds?: string[];
 }
 
 export interface UpdatePostData {
@@ -30,7 +31,9 @@ export interface UpdatePostData {
   categoryIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
+  flyerImageIds?: string[];
   removedGalleryImageIds?: string[];
+  removedFlyerImageIds?: string[];
 }
 
 @Injectable()
@@ -126,12 +129,21 @@ export class PostRepository {
             approvedAt: data.approvedAt,
             createdBy: data.createdBy,
             galleryImageIds: data.galleryImageIds,
+            flyerImageIds: data.flyerImageIds,
           },
           select: { id: true },
         });
         if (data.categoryIds !== undefined) await this.setCategories(tx, post.id, data.categoryIds);
-        if (data.imageIds !== undefined || data.galleryImageIds !== undefined) {
-          await this.bindImages(tx, post.id, [...(data.imageIds ?? []), ...(data.galleryImageIds ?? [])]);
+        if (
+          data.imageIds !== undefined ||
+          data.galleryImageIds !== undefined ||
+          data.flyerImageIds !== undefined
+        ) {
+          await this.bindImages(tx, post.id, [
+            ...(data.imageIds ?? []),
+            ...(data.galleryImageIds ?? []),
+            ...(data.flyerImageIds ?? []),
+          ]);
         }
         return mapPost(await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: postSelect }));
       });
@@ -171,15 +183,27 @@ export class PostRepository {
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
         if (data.galleryImageIds !== undefined) update.galleryImageIds = data.galleryImageIds;
+        if (data.flyerImageIds !== undefined) update.flyerImageIds = data.flyerImageIds;
         if (Object.keys(update).length > 0) {
           await tx.post.update({ where: { id }, data: update });
         }
         if (data.categoryIds !== undefined) await this.setCategories(tx, id, data.categoryIds);
-        if (data.imageIds !== undefined || data.galleryImageIds !== undefined) {
-          await this.bindImages(tx, id, [...(data.imageIds ?? []), ...(data.galleryImageIds ?? [])]);
+        if (
+          data.imageIds !== undefined ||
+          data.galleryImageIds !== undefined ||
+          data.flyerImageIds !== undefined
+        ) {
+          await this.bindImages(tx, id, [
+            ...(data.imageIds ?? []),
+            ...(data.galleryImageIds ?? []),
+            ...(data.flyerImageIds ?? []),
+          ]);
         }
         if (data.removedGalleryImageIds !== undefined) {
           await this.unbindImages(tx, id, data.removedGalleryImageIds);
+        }
+        if (data.removedFlyerImageIds !== undefined) {
+          await this.unbindImages(tx, id, data.removedFlyerImageIds);
         }
         return mapPost(await tx.post.findUniqueOrThrow({ where: { id }, select: postSelect }));
       });

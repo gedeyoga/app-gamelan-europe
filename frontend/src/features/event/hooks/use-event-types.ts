@@ -4,7 +4,7 @@ import { listEventTypes } from '../api/event-types'
 
 /**
  * Opsi tipe event. `enabled` di-inject container dari permission
- * `event:read` (hook tidak tahu auth).
+ * `event-type:read` (hook tidak tahu auth).
  */
 export function useEventTypes(enabled = true) {
   return useQuery({

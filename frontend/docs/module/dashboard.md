@@ -31,9 +31,9 @@ Struktur nested:
 
 ## 4. Sidebar (AppSidebar)
 
-- **SidebarHeader**: brand "trade-app".
+- **SidebarHeader**: brand "European Gamelan Society".
 - **SidebarContent** (navigasi):
-  - Grup atas (tanpa label): **Dashboard** (`Home`, `/`), **Story** (`Newspaper`, permission `story:read`), **Event** (`CalendarDays`, permission `event:read`), **My Billing** (`Receipt`, `/billings`, permission `billing:read`).
+  - Grup atas (tanpa label): **Dashboard** (`Home`, `/`), **Story** (`Newspaper`, permission `admin:access` — menu admin-only), **Event** (`CalendarDays`, permission `event:read`), **My Billing** (`Receipt`, `/billings`, permission `billing:read`).
   - Group **Data Management** (`t('group.dataManagement')`):
     - **User** → `/users` (ikon `Users`, permission `user:read`).
     - **Role** → `/roles` (ikon `Shield`, permission `role:read`).
@@ -99,10 +99,44 @@ src/features/dashboard/
 - `cn()` dari `@/lib/utils` untuk className + override.
 - Tanpa import lintas domain (`src/features/dashboard/` hanya boleh impor `components/ui`, `components/shared`, `lib`).
 
+## 10a. Konten Dashboard (member/org)
+
+Dashboard home (`/`, `src/app/routes/dashboard-home.tsx`) diisi konten untuk user **member** & **organization**: hero, kartu statistik, event akan datang, dan story terbaru.
+
+### Routing & data source
+
+- Route: `index` `/` (protected) → `DashboardHomePage`.
+- `const { user } = useAuth()`; `roleName = user?.role?.name ?? ''` untuk badge role.
+- Page **boleh** import hook lintas domain; `features/dashboard/` tetap tanpa import event/story — data dipetakan ke view type lokal `features/dashboard/types.ts` lalu dipass sebagai props.
+
+| Data | Query (query key domain) | Endpoint |
+| --- | --- | --- |
+| Event akan datang | `useEvents({ page: 1, limit: 50, filter: { status: 'PUBLISHED' }, upcoming: true, sortBy: 'publishedAt', sortOrder: 'desc' })` | `GET /events?page=1&limit=50&filter[status]=PUBLISHED&upcoming=true&sortBy=publishedAt&sortOrder=desc` |
+| Story terbaru | `useStories({ page: 1, limit: 6, filter: { status: 'PUBLISHED' }, sortBy: 'publishedAt', sortOrder: 'desc' })` | `GET /posts?page=1&limit=6&filter[status]=PUBLISHED&sortBy=publishedAt&sortOrder=desc` |
+
+- Serialisasi `filter` = `search.set(\`filter[${key}]\`, value)` (parser Express `extended`). `upcoming=true` → `search.set('upcoming','true')`.
+- Mapping event: pilih tanggal **terdekat ≥ sekarang** (`new Date(iso).getTime()`), buang event tanpa tanggal mendatang, urut naik, ambil 6. Mapping story: `categories[].name`, `creator.fullName`, `publishedAt`.
+- Kartu statistik: `eventsQuery.data.total` (Event Akan Datang) + `storiesQuery.data.total` (Story Terbit). Tanpa kartu ketiga (data tidak tersedia → tidak mengarang).
+- Loading → skeleton; error/empty → empty-state muted (tanpa teks error mentah).
+
+### Komponen Baru (`src/features/dashboard/components/`)
+
+- `dashboard-hero.tsx` — banner gradient (`from-primary/10 via-primary/5 to-transparent`), greeting `welcome` + badge role.
+- `dashboard-stat-card.tsx` — `icon: LucideIcon` + label + value besar + `hint?`.
+- `dashboard-section.tsx` — wrapper section (title/subtitle/`viewAllTo`+`viewAllLabel`/`empty`/children).
+- `dashboard-event-card.tsx` — thumbnail (fallback `ImageOff`), judul, tanggal+jam, lokasi, badge tipe; link `/events/{id}`, hover lift.
+- `dashboard-story-card.tsx` — thumbnail, judul, badge kategori, author, tanggal; link `/stories/{id}`.
+- `dashboard-skeletons.tsx` — `DashboardCardSkeleton`.
+
+### i18n (namespace `dashboard`, `en`/`id`)
+
+`welcome`, `subtitle`, `role.{member,organization}`, `stats.{upcomingEvents,publishedStories}`, `section.upcomingEvents.{title,subtitle,viewAll,empty}`, `section.stories.{title,subtitle,viewAll,empty}`, `card.{noThumbnail,noDate,noLocation,openEvent,openStory}`. Key lama (`nav.*`, `group.*`, `userMenu.*`, `title`, `empty`) tetap.
+
 ## 11. Status & Catatan
 
 - **Iterasi-1** (brief ini): shell + navigasi + tema + logout; halaman dashboard/user/roles kosongan. ✅ Selesai.
-- **TODO iterasi-2**: statistik dashboard (kartu, chart Recharts lewat `pnpm dlx shadcn@latest add chart`), halaman CRUD User & Roles — menunggu kontrak endpoint backend.
+- **Iterasi konten dashboard** (§10a): home diisi hero + statistik + event akan datang + story terbaru (member/org); API list event/story ditambah param `upcoming` + `filter` (backward compatible). ✅ Selesai.
+- **TODO iterasi berikutnya**: chart Recharts lewat `pnpm dlx shadcn@latest add chart` bila dibutuhkan (data belum tersedia).
 - **Catatan implementasi**:
   - Komponen `sidebar`, `dropdown-menu`, `avatar`, `breadcrumb`, `separator`, `skeleton`, `tooltip` (+ `sheet` dan `src/hooks/use-mobile.ts` sebagai dependensi) dibuat via CLI `pnpm dlx shadcn@latest add sidebar dropdown-menu avatar breadcrumb separator skeleton tooltip`.
   - `src/hooks/use-mobile.ts` (hasil generate CLI) di-tuning ringan: `setState` sinkron di dalam `useEffect` diganti lazy initializer agar lolos rule lint `react-hooks/set-state-in-effect`; perilaku tidak berubah.

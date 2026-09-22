@@ -3,11 +3,17 @@ import { appendListParams, type ListParams } from '@/lib/list-params'
 
 import type { CreateStoryInput, Story, UpdateStoryInput } from '../types'
 
-export type ListPostsParams = ListParams
+export interface ListPostsParams extends ListParams {
+  /** Filter generik `filter[<key>]=<value>` (mis. `{ status: 'PUBLISHED' }`). */
+  filter?: Record<string, string>
+}
 
 export function listPosts(params: ListPostsParams): Promise<ListResult<Story>> {
   const search = new URLSearchParams()
   appendListParams(search, params)
+  for (const [key, value] of Object.entries(params.filter ?? {})) {
+    search.set(`filter[${key}]`, value)
+  }
   return requestList<Story>(`/posts?${search.toString()}`)
 }
 

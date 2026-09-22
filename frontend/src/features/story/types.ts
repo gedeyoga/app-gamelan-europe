@@ -31,6 +31,8 @@ export interface Story {
   creator: Creator | null
   /** Galeri gambar berurut (kontrak `GET /posts/:id`). */
   gallery: UploadedImage[]
+  /** Flyer gambar berurut (kontrak `GET /posts/:id`). */
+  flyer: UploadedImage[]
   createdAt: string
   updatedAt: string
 }
@@ -46,6 +48,8 @@ export interface CreateStoryInput {
   imageIds?: string[]
   /** Galeri gambar berurut (id `Image`); bila dikirim = replace seluruh galeri. */
   galleryImageIds?: string[]
+  /** Flyer gambar berurut (id `Image`); bila dikirim = replace seluruh flyer. */
+  flyerImageIds?: string[]
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
 }

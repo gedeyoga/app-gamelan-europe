@@ -190,8 +190,10 @@ export function StoriesPage() {
               onResetSearch={handleResetSearch}
               onEdit={(story) => navigate(`/stories/${story.id}/edit`)}
               onDelete={setDeletingStory}
+              onCreate={() => navigate('/stories/new')}
               canUpdate={can('story:update')}
               canDelete={can('story:delete')}
+              canCreate={canCreateStory}
             />
           ) : (
             <StoryTable
@@ -203,8 +205,10 @@ export function StoriesPage() {
               onResetSearch={handleResetSearch}
               onEdit={(story) => navigate(`/stories/${story.id}/edit`)}
               onDelete={setDeletingStory}
+              onCreate={() => navigate('/stories/new')}
               canUpdate={can('story:update')}
               canDelete={can('story:delete')}
+              canCreate={canCreateStory}
             />
           )}
 

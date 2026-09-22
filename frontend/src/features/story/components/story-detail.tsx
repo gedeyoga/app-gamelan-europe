@@ -106,6 +106,13 @@ export function StoryDetail({ story, className }: StoryDetailProps) {
             <StoryGallery images={story.gallery ?? []} />
           </section>
         )}
+
+        {(story.flyer ?? []).length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">{t('story:detail.flyer')}</h2>
+            <StoryGallery images={story.flyer ?? []} />
+          </section>
+        )}
       </div>
     </article>
   )

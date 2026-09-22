@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -34,10 +34,14 @@ export interface EventTableProps {
   onResetSearch?: () => void
   onEdit: (event: Event) => void
   onDelete: (event: Event) => void
+  /** Dipanggil saat CTA "Tambah" di empty state diklik. */
+  onCreate?: () => void
   /** Gate `event:update` — tombol Edit disembunyikan bila `false`. Default `true`. */
   canUpdate?: boolean
   /** Gate `event:delete` — tombol Hapus disembunyikan bila `false`. Default `true`. */
   canDelete?: boolean
+  /** Gate `event:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
+  canCreate?: boolean
 }
 
 export function EventTable({
@@ -49,8 +53,10 @@ export function EventTable({
   onResetSearch,
   onEdit,
   onDelete,
+  onCreate,
   canUpdate = true,
   canDelete = true,
+  canCreate = true,
 }: EventTableProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
@@ -129,7 +135,15 @@ export function EventTable({
                     )}
                   </>
                 ) : (
-                  t('event:table.empty')
+                  <div className="flex flex-col items-center gap-2">
+                    {t('event:table.empty')}
+                    {canCreate && onCreate && (
+                      <Button className="mt-4" onClick={onCreate}>
+                        <Plus className="size-4" data-icon="inline-start" />
+                        {t('event:add')}
+                      </Button>
+                    )}
+                  </div>
                 )}
               </TableCell>
             </TableRow>

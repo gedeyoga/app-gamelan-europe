@@ -44,6 +44,11 @@ export interface StoryMetaPanelProps {
   onUploadGalleryImage: (file: File) => void
   isUploadingGallery: boolean
   galleryError: string | null
+  flyerImages: UploadedImage[]
+  onChangeFlyer: (next: UploadedImage[]) => void
+  onUploadFlyerImage: (file: File) => void
+  isUploadingFlyer: boolean
+  flyerError: string | null
   categories: StoryCategory[]
   isLoadingCategories: boolean
   canReadCategories: boolean
@@ -70,6 +75,11 @@ export function StoryMetaPanel({
   onUploadGalleryImage,
   isUploadingGallery,
   galleryError,
+  flyerImages,
+  onChangeFlyer,
+  onUploadFlyerImage,
+  isUploadingFlyer,
+  flyerError,
   categories,
   isLoadingCategories,
   canReadCategories,
@@ -212,6 +222,19 @@ export function StoryMetaPanel({
           onUpload={onUploadGalleryImage}
           isUploading={isUploadingGallery}
           error={galleryError}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium">{t('story:flyer.title')}</label>
+        <GalleryUpload
+          i18nPrefix="flyer"
+          value={flyerImages}
+          onChange={onChangeFlyer}
+          onUpload={onUploadFlyerImage}
+          isUploading={isUploadingFlyer}
+          error={flyerError}
           disabled={disabled}
         />
       </div>

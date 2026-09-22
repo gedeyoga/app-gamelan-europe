@@ -12,14 +12,14 @@ export class EventTypesController {
 
   // Idempoten: name sama (case-insensitive) → kembalikan existing.
   @Post()
-  @Permissions('event:create')
+  @Permissions('event-type:create')
   @HttpCode(201)
   create(@Body() dto: CreateEventTypeDto) {
     return this.eventTypeService.create(dto);
   }
 
   @Get()
-  @Permissions('event:read')
+  @Permissions('event-type:read')
   async list(@Query() query: ListQueryDto) {
     const { items, total } = await this.eventTypeService.list(query);
     return {

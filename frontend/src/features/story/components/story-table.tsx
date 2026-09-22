@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -34,10 +34,14 @@ export interface StoryTableProps {
   onResetSearch?: () => void
   onEdit: (story: Story) => void
   onDelete: (story: Story) => void
+  /** Dipanggil saat CTA "Tambah" di empty state diklik. */
+  onCreate?: () => void
   /** Gate `story:update` — tombol Edit disembunyikan bila `false`. Default `true`. */
   canUpdate?: boolean
   /** Gate `story:delete` — tombol Hapus disembunyikan bila `false`. Default `true`. */
   canDelete?: boolean
+  /** Gate `story:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
+  canCreate?: boolean
 }
 
 export function StoryTable({
@@ -49,8 +53,10 @@ export function StoryTable({
   onResetSearch,
   onEdit,
   onDelete,
+  onCreate,
   canUpdate = true,
   canDelete = true,
+  canCreate = true,
 }: StoryTableProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
@@ -128,7 +134,15 @@ export function StoryTable({
                     )}
                   </>
                 ) : (
-                  t('story:table.empty')
+                  <div className="flex flex-col items-center gap-2">
+                    {t('story:table.empty')}
+                    {canCreate && onCreate && (
+                      <Button className="mt-4" onClick={onCreate}>
+                        <Plus className="size-4" data-icon="inline-start" />
+                        {t('story:add')}
+                      </Button>
+                    )}
+                  </div>
                 )}
               </TableCell>
             </TableRow>

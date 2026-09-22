@@ -163,6 +163,7 @@ Format: **lowercase** `resource:action`.
 | apikey | read | `apikey:read` |
 | apikey | update | `apikey:update` |
 | apikey | delete | `apikey:delete` |
+| admin | access | `admin:access` (khusus gerbang manajemen user/role) |
 
 Selain CRUD, resource konten (`story`, `event`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (REQUEST→APPROVED), `reject` (REQUEST→DRAFT), `publish` (APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
 
@@ -348,13 +349,13 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 
 | Konstanta | Isi |
 | --- | --- |
-| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 50 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9 (`create,read,update,delete,submit,approve,reject,publish,unpublish`), `category:*` 4, `event:*` 9 (`create,read,update,delete,submit,approve,reject,publish,unpublish`), `organization:*` 4 (`create,read,update,delete`), `subscription:*` 4, `billing:*` 4, `apikey:*` 4 (`create,read,update,delete`). Format lowercase `resource:action`. |
-| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `organization` (story/event create·read·update·delete + `story:submit`/`event:submit`, `category:read`, `user:create`, `user:read`), `member` (read-only: `story:read`, `event:read`, `category:read`). Struktur array siap tambah role baru. |
+| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 53 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 2 (`create,read`), `organization:*` 4, `subscription:*` 4, `billing:*` 4, `apikey:*` 4, `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
+| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `organization` (`story:read`; event create·read·update·delete + `event:submit`; `event-type:read`, `category:read`, `user:create`, `user:read` — **tanpa story write**), `member` (`story:read`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `category:read` — tanpa story write). Struktur array siap tambah role baru. |
 | User admin | Dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` → role `admin`, status `ACTIVE`. |
 
 ### Matriks role → permission
 
-50 permission dibagi ke 3 role. `admin` = seluruh 50 code; `organization` = 13 code; `member` = 3 code.
+53 permission dibagi ke 3 role. `admin` = seluruh 53 code; `organization` = 10 code; `member` = 7 code.
 
 | Resource | Code | admin | organization | member |
 | --- | --- | :---: | :---: | :---: |
@@ -364,51 +365,59 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | user | `user:delete` | ✅ | — | — |
 | role | `role:create/read/update/delete` (4) | ✅ | — | — |
 | permission | `permission:create/read/update/delete` (4) | ✅ | — | — |
-| story | `story:create` | ✅ | ✅ | — |
+| story | `story:create` | ✅ | — | — |
 | story | `story:read` | ✅ | ✅ | ✅ |
-| story | `story:update` | ✅ | ✅ | — |
-| story | `story:delete` | ✅ | ✅ | — |
-| story | `story:submit` | ✅ | ✅ | — |
+| story | `story:update` | ✅ | — | — |
+| story | `story:delete` | ✅ | — | — |
+| story | `story:submit` | ✅ | — | — |
 | story | `story:approve` | ✅ | — | — |
 | story | `story:reject` | ✅ | — | — |
 | story | `story:publish` | ✅ | — | — |
 | story | `story:unpublish` | ✅ | — | — |
-| event | `event:create` | ✅ | ✅ | — |
+| event | `event:create` | ✅ | ✅ | ✅ |
 | event | `event:read` | ✅ | ✅ | ✅ |
-| event | `event:update` | ✅ | ✅ | — |
+| event | `event:update` | ✅ | ✅ | ✅ |
 | event | `event:delete` | ✅ | ✅ | — |
-| event | `event:submit` | ✅ | ✅ | — |
+| event | `event:submit` | ✅ | ✅ | ✅ |
 | event | `event:approve` | ✅ | — | — |
 | event | `event:reject` | ✅ | — | — |
 | event | `event:publish` | ✅ | — | — |
 | event | `event:unpublish` | ✅ | — | — |
+| event-type | `event-type:create` | ✅ | — | — |
+| event-type | `event-type:read` | ✅ | ✅ | ✅ |
 | category | `category:create` | ✅ | — | — |
 | category | `category:read` | ✅ | ✅ | ✅ |
 | category | `category:update` | ✅ | — | — |
 | category | `category:delete` | ✅ | — | — |
 | organization | `organization:create/read/update/delete` (4) | ✅ | — | — |
+| subscription | `subscription:create/read/update/delete` (4) | ✅ | — | — |
+| billing | `billing:create/read/update/delete` (4) | ✅ | — | — |
 | apikey | `apikey:create/read/update/delete` (4) | ✅ | — | — |
+| admin | `admin:access` | ✅ | — | — |
 
-> `organization` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`). Row-level scoping (konten milik organisasinya) dijelaskan di [§10](#10-row-level-scoping).
+> `organization` & `member` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`). Keduanya **tidak** punya story write. Row-level scoping (konten milik organisasi/creator) dijelaskan di [§10](#10-row-level-scoping).
 
 
 ```typescript
 // libs/prisma/seed.ts (ringkas) — deklaratif + upsert dalam satu $transaction
 const DEFAULT_PERMISSIONS = [
   { code: 'user:create', description: 'Membuat user baru' },
-  // ... 38 code: RBAC 12 + story 9 + category 4 + event 9 + organization 4
+  // ... 53 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 2 + organization 4 + subscription 4 + billing 4 + apikey 4 + admin:access 1
 ];
 
 const DEFAULT_ROLES = [
   { name: 'admin', description: 'Admin dengan akses penuh RBAC',
     permissions: DEFAULT_PERMISSIONS.map((p) => p.code) },
-  { name: 'organization', description: 'Pengelola story/event milik anggota organisasinya',
-    permissions: ['story:create', 'story:read', 'story:update', 'story:delete', 'story:submit',
+  { name: 'organization', description: 'Pengelola event milik anggota organisasinya (tanpa story write)',
+    permissions: ['story:read',
       'event:create', 'event:read', 'event:update', 'event:delete', 'event:submit',
-      'category:read', 'user:create', 'user:read'] },
-  { name: 'member', description: 'Anggota organisasi — hanya melihat konten terbit',
-    permissions: ['story:read', 'event:read', 'category:read'] },
+      'event-type:read', 'category:read', 'user:create', 'user:read'] },
+  { name: 'member', description: 'Anggota organisasi — mengelola event (sampai REQUEST), tanpa story write',
+    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read'] },
 ];
+
+// Targeted delete (bukan deleteMany global): copot story-write dari role `organization` saja.
+const ORGANIZATION_REMOVED_PERMISSION_CODES = ['story:create', 'story:update', 'story:delete', 'story:submit'];
 
 await prisma.$transaction(async (tx) => {
   for (const perm of DEFAULT_PERMISSIONS) {
@@ -427,7 +436,7 @@ await prisma.$transaction(async (tx) => {
     });
   }
 
-  // ADDITIVE: hanya tambah yang kurang, tidak pernah hapus relasi.
+  // ADDITIVE: hanya tambah yang kurang.
   for (const role of DEFAULT_ROLES) {
     for (const code of role.permissions) {
       await tx.rolePermission.upsert({
@@ -437,6 +446,14 @@ await prisma.$transaction(async (tx) => {
       });
     }
   }
+
+  // Targeted delete: hapus story-write dari role `organization` saja (custom role aman).
+  await tx.rolePermission.deleteMany({
+    where: {
+      roleId: roleIdByName.get('organization'),
+      permission: { code: { in: ORGANIZATION_REMOVED_PERMISSION_CODES } },
+    },
+  });
 
   // Password selalu di-reset dari env (re-hash argon2id) tiap re-seed.
   await tx.user.upsert({
@@ -456,7 +473,9 @@ pnpm prisma:seed
 Catatan:
 
 - **Idempoten**: seed 2x tidak `P2002`; `description` ikut ter-update via `upsert`.
-- **Additive**: permission baru yang ditambah ke `DEFAULT_PERMISSIONS` + `permissions` role otomatis ter-link ke `admin` tanpa menghapus relasi lama.
+- **Additive**: permission baru yang ditambah ke `DEFAULT_PERMISSIONS` + `permissions` role otomatis ter-link ke role terkait tanpa menghapus relasi lama.
+- **Targeted delete**: `ORGANIZATION_REMOVED_PERMISSION_CODES` (`story:create/update/delete/submit`) di-`deleteMany` hanya untuk role `organization` → penghapusan benar-benar berlaku tanpa menghapus relasi custom role (`story:read` tetap).
+- **`admin:access`**: hanya `admin` (dari `DEFAULT_PERMISSIONS.map`). Gerbang `user.service` list/create/update/delete/assignRole; bukan permission konten.
 - **Reset password**: tiap re-seed me-re-hash `ADMIN_PASSWORD` (argon2id) dan meng-update `passwordHash` user admin. Secret hanya dari env, tidak di-commit dan tidak di-log.
 
 ---
@@ -491,6 +510,8 @@ Semua path memakai prefix **`/api/v1`**. Semua respon sukses `{ data, message }`
 | PATCH | `/api/v1/users/:id` | Update user | PERMISSION: `user:update` |
 | PATCH | `/api/v1/users/:id/role` | Ubah role user | PERMISSION: `user:update` |
 | DELETE | `/api/v1/users/:id` | Hapus user | PERMISSION: `user:delete` |
+
+> **Dua lapis:** guard `@Permissions('user:*')` (deny-by-default) **dan** gerbang eksplisit permission `admin:access` di `user.service` (list/create/findOne/update/delete/assignRole). Role custom dengan permission konten apa pun **tetap 403**.
 
 ### Roles (sinkron dengan [role.md](./role.md#7-endpoint))
 
@@ -560,7 +581,7 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 
 > **Permission action story (`story:submit`, `story:approve`, `story:reject`, `story:publish`, `story:unpublish`) kini di-enforce** oleh endpoint `POST /api/v1/posts/:id/<action>` (lihat [story.md](./story.md#action--transisi)). Transisi status tak valid → **409**. `PATCH /api/v1/posts/:id` (`story:update`) tetap untuk update konten.
 >
-> ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (admin) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `organization`/`member`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
+> ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (permission moderator) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `organization`/`own`/`published`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
 
 ### Organization (sinkron dengan [organization.md](./organization.md))
 
@@ -623,45 +644,45 @@ Detail exception per endpoint ada di tiap file module: [user.md](./user.md#8-err
 
 ## 10. Row-Level Scoping
 
-Selain RBAC (permission per endpoint), konten `Post`/`Event` dan `User` dibatasi **per baris** berdasarkan role + organisasi pemilik. Sumber tunggal: `AccessScopeService.resolve(userId)` → `libs/src/core/auth/access-scope.service.ts` (provider global `LibsModule`).
+Selain RBAC (permission per endpoint), konten `Post`/`Event` dibatasi **per baris** berdasarkan permission + organisasi/creator pemilik. Sumber tunggal: `AccessScopeService.resolve(userId, resource)` → `libs/src/core/auth/access-scope.service.ts` (provider global `LibsModule`). `User`/`Role`/`Permission` **tidak** memakai scoping ini — gerbang manajemen user/role = permission eksplisit `admin:access` (lihat §7).
 
 ### Resolusi scope
 
+Penentuan scope **berbasis permission** (`role.permissions[].code`) + `organizationId`, **per-resource** (`resolve(userId, resource)` dengan `resource ∈ {'story','event'}`) — **tidak** memakai `role.code`/nama role, dan **bukan** penentu hak manajemen user/role (lihat `admin:access` di §7).
+
 ```typescript
-// Role (role.code) yang boleh membaca konten ber-visibility PRIVATE.
-export const PRIVATE_READER_ROLES = ['admin', 'member', 'organization'] as const;
+export type ContentResource = 'story' | 'event';
+export const CONTENT_MODERATOR_ACTIONS = ['approve', 'publish', 'reject', 'unpublish'] as const; // M6
+export const CONTENT_WRITE_ACTIONS = ['create', 'update', 'submit'] as const;
 
 export type AccessScope =
-  | { kind: 'all'; canViewPrivate: boolean }                   // admin
+  | { kind: 'all'; canViewPrivate: boolean }                   // status-manager konten (resource ini)
   | { kind: 'organization'; organizationId: string; userId: string; canViewPrivate: boolean }
+  | { kind: 'own'; userId: string; canViewPrivate: boolean }   // penulis konten tanpa organisasi
   | { kind: 'published'; canViewPrivate: boolean }
   | { kind: 'none'; canViewPrivate: boolean };
 
-async resolve(userId: string): Promise<AccessScope> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { organizationId: true, role: { select: { code: true } } },
-  });
-  const code = user?.role?.code;
-  const canViewPrivate = (PRIVATE_READER_ROLES as readonly string[]).includes(code ?? '');
-  if (code === 'admin') return { kind: 'all', canViewPrivate };
-  if (code === 'organization') {
-    return user?.organizationId
-      ? { kind: 'organization', organizationId: user.organizationId, userId, canViewPrivate }
-      : { kind: 'none', canViewPrivate };                      // organization tanpa org → none
-  }
-  return { kind: 'published', canViewPrivate };                // role lain (termasuk member)
+async resolve(userId: string, resource: ContentResource): Promise<AccessScope> {
+  const codes = /* role.permissions[].code milik user */;
+  const canViewPrivate = canViewPrivateFromCodes(codes); // hanya tulis/status-manager (H1)
+  const isWriter = hasActions(codes, resource, CONTENT_WRITE_ACTIONS); // M2: per-resource
+  if (hasActions(codes, resource, CONTENT_MODERATOR_ACTIONS)) return { kind: 'all', canViewPrivate };
+  if (user?.organizationId && isWriter)
+    return { kind: 'organization', organizationId: user.organizationId, userId, canViewPrivate };
+  if (isWriter) return { kind: 'own', userId, canViewPrivate };
+  return { kind: 'published', canViewPrivate };
 }
 ```
 
-| `kind` | Pemicu | Arti |
+| `kind` | Pemicu (permission, bukan nama role) | Arti |
 | --- | --- | --- |
-| `all` | role `admin` | Tanpa pembatasan baris. |
-| `organization` | role `organization` **dan** punya `organizationId` | Hanya konten yang `creator.organizationId === organizationId`. |
-| `published` | role selain admin/organization (mis. `member`) | Baca hanya konten **yang sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now`; tidak punya hak tulis. Scheduled publish (publishedAt di masa depan) belum terlihat. |
-| `none` | role `organization` **tanpa** `organizationId` | Tidak boleh apa-apa. |
+| `all` | salah satu `<resource>:approve\|publish\|reject\|unpublish` untuk resource terkait | Tanpa pembatasan baris. |
+| `organization` | punya `organizationId` **dan** permission tulis resource terkait (`<resource>` × `create`/`update`/`submit`) | Hanya konten yang `creator.organizationId === organizationId`. |
+| `own` | permission tulis resource terkait **tanpa** `organizationId` | Baca: konten miliknya **atau** konten terbit (M5). Tulis: hanya konten miliknya. |
+| `published` | selain di atas | Baca hanya konten **yang sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now`; tidak punya hak tulis. Scheduled publish (publishedAt di masa depan) belum terlihat. |
+| `none` | — | Tidak boleh apa-apa (dipertahankan untuk kompatibilitas; saat ini tak terpicu). |
 
-Tiap varian membawa `canViewPrivate` (boolean, **independen** dari `kind`) yang dihitung dari `PRIVATE_READER_ROLES`. Dengan begitu role custom non-all/non-org tetap tidak bocor meski punya permission baca.
+`canViewPrivate` (boolean, **independen** dari `kind`) = punya permission **tulis** (`create`/`update`/`submit`) atau **status** (`approve`/`publish`/`reject`/`unpublish`) pada `story`/`event` — **bukan** sekadar `*:read` (H1). `admin`/`member`/`organization` lama punya tulis konten → tetap `true`; role custom read-only → `false` (tidak boleh baca PRIVATE).
 
 > Scope **ortogonal** dengan permission: guard RBAC tetap jalan lebih dulu. Scoping hanya mempersempit baris yang boleh diakses setelah permission lolos. Role `published` (member) memang tak punya permission tulis, scoping hanya jaring pengaman tambahan.
 
@@ -673,10 +694,11 @@ Scope digabung (AND) ke filter list:
 | --- | --- |
 | `all` | Tanpa tambahan. |
 | `organization` | `{ creator: { organizationId } }` (post/event) / `{ organizationId }` (user) di-`AND` dengan filter. |
+| `own` | `OR: [{ createdBy: userId }, <published-visible>]` (M5) di-`AND` dengan filter. |
 | `published` | `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }` di-`AND` dengan filter; **non-reader** (`!canViewPrivate`) ditambah `{ visibility: PUBLIC }`. Scheduled publish (masa depan) tak ikut. |
 | `none` | **List kosong** `{ items: [], total: 0 }` (bukan 403). |
 
-Parenthesis: untuk `Post`/`Event` scope di-`AND` ke `filterWhere`; untuk `User` scope di-`AND` ke `{ organizationId }` (field langsung). Khusus `User`, `published` → **403** (bukan list kosong), `none` → list kosong.
+Parenthesis: scope hanya berlaku untuk `Post`/`Event` (di-`AND` ke `filterWhere`). `User` **tidak** memakai `AccessScope` lagi — `user.service` murni digerbang permission `admin:access`; `Role`/`Permission` memakai `@Permissions('role:*'/'permission:*')` (tanpa `AccessScope`).
 
 ### Baca (`findOne`) — 403 vs list kosong
 
@@ -684,6 +706,7 @@ Parenthesis: untuk `Post`/`Event` scope di-`AND` ke `filterWhere`; untuk `User` 
 | --- | --- |
 | `all` | Bebas. |
 | `organization` | `creator.organizationId !== scope.organizationId` → **403** `ForbiddenException('Forbidden resource')`. |
+| `own` | `createdBy !== scope.userId` **dan** baris bukan konten terbit → **403** (M5). |
 | `published` | `status !== PUBLISHED` **atau** `publishedAt == null` **atau** `publishedAt > now` → **403**. |
 | `none` | **403**. |
 
@@ -695,6 +718,7 @@ Kontras: `list` menyembunyikan baris (hasil kosong), `findOne` menolak eksplisit
 | --- | --- |
 | `all` | Bebas. |
 | `organization` | `create` diizinkan (konten baru milik creator di org-nya); `update`/`remove`/`transition` hanya bila baris `creator.organizationId === scope.organizationId`, selain itu **403**. |
+| `own` | `create` diizinkan (konten baru milik `createdBy = userId`); `update`/`remove`/`transition` hanya bila baris `createdBy === scope.userId`, selain itu **403**. |
 | `published` | **403** (defensif; guard permission umumnya sudah memblok lebih dulu). |
 | `none` | **403**. |
 
@@ -705,14 +729,15 @@ Untuk scope `!= all`, field `status`/`publishedAt` dari body **diabaikan**:
 - `create` → paksa `status = DRAFT`, `publishedAt = undefined` (dan `approvedAt` tidak diisi).
 - `update` → blok `status`/`publishedAt` dilewati; hanya konten yang berubah.
 
-Akibatnya role `organization` tidak bisa memaksa `PUBLISHED`/`APPROVED` lewat `POST`/`PATCH` — harus lewat endpoint action (`story:publish`/`event:publish`, yang tidak dimilikinya). Admin (`all`) tetap bisa (backward-compat FE).
+Akibatnya role `organization` tidak bisa memaksa `PUBLISHED`/`APPROVED` lewat `POST`/`PATCH` — harus lewat endpoint action (`story:publish`/`event:publish`, yang tidak dimilikinya). Scope `all` (status-manager) tetap bisa (backward-compat FE).
 
 ### Cakupan
 
 | Domain | Scoping | Catatan |
 | --- | --- | --- |
-| `Post` (`post.service.ts`) | ✅ | `creator.organizationId`; list/findOne/create/update/remove/transition. |
-| `Event` (`event.service.ts`) | ✅ | Idem post. |
-| `User` (`user.service.ts`) | ✅ | `organizationId`; `organization` hanya anggota org-nya & dipaksa role `member` saat create; non-admin `update`/`remove`/`assignRole` → 403. |
+| `Post` (`post.service.ts`) | ✅ | `resolve(userId, 'story')`; `creator.organizationId`; list/findOne/create/update/remove/transition. |
+| `Event` (`event.service.ts`) | ✅ | `resolve(userId, 'event')`; idem post. |
+| `User` (`user.service.ts`) | ✗ (ganti) | **Tidak** pakai `AccessScope`; gerbang permission eksplisit `admin:access` untuk list/findOne/create/update/delete/assignRole. |
+| `Role`/`Permission` | ✗ | Gerbang `@Permissions('role:*'/'permission:*')`; tanpa `AccessScope`. |
 | `Organization` | ✗ | Admin-only via permission `organization:*`; tanpa scoping baris. |
 | `Category` | ✗ | Taksonomi global; `organization` hanya punya `category:read`. |

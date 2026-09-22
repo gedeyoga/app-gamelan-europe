@@ -27,7 +27,8 @@ export class ImageRepository {
       },
       select: { id: true },
     });
-    return rows.map((r) => r.id);
+    const bindable = new Set(rows.map((r) => r.id));
+    return [...new Set(ids)].filter((id) => bindable.has(id));
   }
 
   // Hapus row + kembalikan key S3 original + SEMUA variants[].key untuk cleanup best-effort.

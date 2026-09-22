@@ -66,6 +66,7 @@
     "eventTypes": "Tipe Event",
     "eventTypePlaceholder": "Pilih tipe event",
     "eventTypeSearch": "Cari atau tambah tipe event...",
+    "eventTypeSearchOnly": "Cari tipe event...",
     "eventTypeAdd": "Tambah \"{{name}}\"",
     "eventTypeCreating": "Menambahkan...",
     "eventTypeEmpty": "Tipe event tidak ditemukan",
@@ -136,6 +137,19 @@
     "addressCopied": "Alamat disalin ke clipboard",
     "addressCopyFailed": "Gagal menyalin alamat",
     "mapAlt": "Peta lokasi event"
+  },
+  "org": {
+    "monthTitle": "Event bulan ini",
+    "prevMonth": "Bulan sebelumnya",
+    "nextMonth": "Bulan berikutnya",
+    "emptyMonth": "Tidak ada event bulan ini",
+    "viewEvent": "Lihat Event",
+    "myTitle": "My Event",
+    "emptyList": "Belum ada event",
+    "columnDate": "Tanggal",
+    "columnEventName": "Nama Event",
+    "columnCategory": "Kategori",
+    "detail": "Detail"
   },
   "toast": {
     "created": "Event berhasil dibuat",

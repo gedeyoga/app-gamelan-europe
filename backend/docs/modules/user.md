@@ -543,22 +543,22 @@ Keputusan akses user (eksplisit):
 | `PATCH /users/:id`, `/users/:id/role` | `user:update` | update & assign role |
 | `DELETE /users/:id` | `user:delete` | delete |
 
-### Row-level scoping (role `organization`/`member`)
+### Gerbang admin (`admin:access`, permission-based)
 
-Selain permission, `UserService` menerapkan row-level scoping via `AccessScopeService` (detail [rbac.md §10](./rbac.md#10-row-level-scoping)). Role `organization` hanya mengelola anggota organisasinya; `member` read-only.
+`UserService` **tidak** memakai `AccessScopeService` (scope konten) untuk hak user/role. Gerbang eksplisit: `hasAdminAccess(codes)` — user wajib punya permission **`admin:access`** (hanya role `admin` di seed). Ini mencegah eskalasi: role custom ber-permission konten (`event:publish`, dst.) **selalu 403** di endpoint user.
 
-| Endpoint | `all` (admin) | `organization` | `member`/`published` | `none` |
-| --- | --- | --- | --- | --- |
-| `POST /users` | `roleId`/`organizationId` dari body diteruskan apa adanya | `organizationId` **dipaksa** org sendiri; `roleId` **dipaksa** role `member`; `roleId`/`organizationId` body **diabaikan** | 403 | 403 |
-| `GET /users` | semua user | hanya `organizationId === scope.organizationId` (di-`AND` ke filter) | 403 (defensif) | list kosong `{ items: [], total: 0 }` |
-| `GET /users/:id` | bebas | hanya anggota org sendiri, lain → **403** | 403 | 403 |
-| `PATCH /users/:id` | ✅ | 403 | 403 | 403 |
-| `PATCH /users/:id/role` | ✅ | 403 | 403 | 403 |
-| `DELETE /users/:id` | ✅ | 403 | 403 | 403 |
+| Endpoint | `admin:access` | Non-admin (termasuk `organization`/`member`/role custom konten) |
+| --- | --- | --- |
+| `POST /users` | `roleId`/`organizationId` dari body diteruskan apa adanya | 403 |
+| `GET /users` | semua user | 403 |
+| `GET /users/:id` | bebas | 403 |
+| `PATCH /users/:id` | ✅ | 403 |
+| `PATCH /users/:id/role` | ✅ | 403 |
+| `DELETE /users/:id` | ✅ | 403 |
 
-- **Create sebagai `organization`:** user baru selalu masuk organisasi si pembuat dan ber-role `member`. Bila role `member` belum ada di DB → **500** `InternalServerErrorException('Member role not configured')` (jalankan `pnpm prisma:seed`).
-- **Update/remove/assignRole admin-only:** ditegakkan `assertAdminScope` → non-admin **403**, terlepas dari scope barisnya.
+- **Dua lapis:** guard `@Permissions('user:*')` **dan** gerbang `admin:access` di service. `organization` masih punya `user:create`/`user:read` di seed tetapi tetap **403** di service (permission itu kini tidak efektif untuk endpoint user).
 - `UpdateUserDto` mewarisi `roleId`/`organizationId` dari `CreateUserDto`, tetapi `update()` **belum** menerapkannya (hanya `email`/`fullName`/`status`/`countryId`/`password`); pindah role lewat `PATCH /users/:id/role`.
+- Assign `roleId` (create/assignRole) hanya oleh pemegang `admin:access`.
 
 ```json
 // 403 — user organization mengakses anggota org lain

@@ -47,8 +47,15 @@ export function getEventDateParts({ date, startTime, endTime }: EventDate): Even
   }
 }
 
-/** Tanggal event (tanpa jam insidental) + rentang jam "HH:mm–HH:mm" bila ada. */
-export function formatEventDate({ date, startTime, endTime }: EventDate): string {
+export interface EventDateLines {
+  /** Teks tanggal, mis. `"Sen, 15 Jan 2026"`. */
+  date: string
+  /** `"HH:mm–HH:mm"` bila ada, `''` bila tidak. */
+  time: string
+}
+
+/** Tanggal dan jam terpisah agar bisa ditumpuk (tanggal <br/> jam) di UI. */
+export function formatEventDateLines({ date, startTime, endTime }: EventDate): EventDateLines {
   const [year, month, day] = toDateOnly(date).split('-').map(Number)
   // Date lokal tengah hari agar hari yang ditampilkan tidak bergeser.
   const display =
@@ -64,5 +71,11 @@ export function formatEventDate({ date, startTime, endTime }: EventDate): string
       : DATETIME_FALLBACK
   // `||` (bukan `??`) agar string kosong dianggap absen, bukan menutupi sisi lain.
   const range = startTime && endTime ? `${startTime}–${endTime}` : startTime || endTime || ''
-  return range ? `${display} · ${range}` : display
+  return { date: display, time: range }
+}
+
+/** Tanggal event (tanpa jam insidental) + rentang jam "HH:mm–HH:mm" bila ada. */
+export function formatEventDate(eventDate: EventDate): string {
+  const { date, time } = formatEventDateLines(eventDate)
+  return time ? `${date} · ${time}` : date
 }

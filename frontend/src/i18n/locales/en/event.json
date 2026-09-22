@@ -66,6 +66,7 @@
     "eventTypes": "Event Types",
     "eventTypePlaceholder": "Select event types",
     "eventTypeSearch": "Search or add event type...",
+    "eventTypeSearchOnly": "Search event type...",
     "eventTypeAdd": "Add \"{{name}}\"",
     "eventTypeCreating": "Adding...",
     "eventTypeEmpty": "No event type found",
@@ -136,6 +137,19 @@
     "addressCopied": "Address copied to clipboard",
     "addressCopyFailed": "Failed to copy address",
     "mapAlt": "Event location map"
+  },
+  "org": {
+    "monthTitle": "Events this month",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "emptyMonth": "No events this month",
+    "viewEvent": "View Event",
+    "myTitle": "My Event",
+    "emptyList": "No events yet",
+    "columnDate": "Date",
+    "columnEventName": "Event Name",
+    "columnCategory": "Category",
+    "detail": "Detail"
   },
   "toast": {
     "created": "Event created successfully",

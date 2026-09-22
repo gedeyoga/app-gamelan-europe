@@ -1,6 +1,39 @@
 {
   "title": "Dashboard",
   "empty": "No data yet",
+  "welcome": "Welcome, {{name}}",
+  "subtitle": "Keep up with the latest events and stories from the gamelan community.",
+  "role": {
+    "member": "Member",
+    "organization": "Organization"
+  },
+  "stats": {
+    "upcomingEvents": "Upcoming Events",
+    "publishedStories": "Published Stories"
+  },
+  "section": {
+    "upcomingEvents": {
+      "title": "Upcoming Events",
+      "subtitle": "Published events with the nearest dates.",
+      "viewAll": "View all",
+      "empty": "No upcoming events yet.",
+      "error": "Failed to load data."
+    },
+    "stories": {
+      "title": "Latest Stories",
+      "subtitle": "Recently published stories.",
+      "viewAll": "View all",
+      "empty": "No published stories yet.",
+      "error": "Failed to load data."
+    }
+  },
+  "card": {
+    "noThumbnail": "No thumbnail",
+    "noDate": "Date not available",
+    "noLocation": "Location not available",
+    "openEvent": "Open event {{name}}",
+    "openStory": "Open story {{name}}"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",

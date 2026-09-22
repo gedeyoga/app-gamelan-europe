@@ -57,4 +57,11 @@ export class CreatePostDto {
   @IsUUID('4', { each: true })
   @ArrayMaxSize(100)
   galleryImageIds?: string[];
+
+  // Urutan flyer = urutan array ini. Diganti seluruhnya bila dikirim saat update.
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  flyerImageIds?: string[];
 }

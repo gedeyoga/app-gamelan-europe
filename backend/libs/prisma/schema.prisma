@@ -305,6 +305,7 @@ model Post {
   content         String
   thumbnail       String?
   galleryImageIds String[]       @default([]) @map("gallery_image_ids")
+  flyerImageIds   String[]       @default([]) @map("flyer_image_ids")
   visibility      ContentVisibility @default(PUBLIC)
   createdBy       String?        @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)

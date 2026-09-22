@@ -63,7 +63,7 @@ export function AppSidebar({
                   <Home />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">trade-app</span>
+                  <span className="truncate font-semibold">European Gamelan Society</span>
                 </div>
               </NavLink>
             </SidebarMenuButton>

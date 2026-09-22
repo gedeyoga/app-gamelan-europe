@@ -2,7 +2,8 @@ import { ForbiddenException, Injectable, InternalServerErrorException } from '@n
 import { ConfigService } from '@nestjs/config';
 import { hash as argon2Hash } from '@node-rs/argon2';
 import { Prisma } from '@prisma/client';
-import { AccessScopeService } from '@app/libs/core/auth/access-scope.service';
+import { hasAdminAccess } from '@app/libs/modules/permission/permission.constants';
+import { PermissionService } from '@app/libs/modules/permission/permission.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 import { UserRepository } from './user.repository';
@@ -26,15 +27,15 @@ export class UserService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly config: ConfigService,
-    private readonly accessScope: AccessScopeService,
+    private readonly permissionService: PermissionService,
     private readonly roleRepository: RoleRepository,
   ) {}
 
-  // update/remove/assignRole tetap admin-only (org/member tak punya `user:update`/`user:delete`).
-  private async assertAdminScope(userId: string): Promise<void> {
-    if ((await this.accessScope.resolve(userId)).kind !== 'all') {
-      throw new ForbiddenException('Forbidden resource');
-    }
+  // Gerbang manajemen user berbasis permission eksplisit `admin:access` — BUKAN scope konten
+  // (cegah eskalasi: role dengan `event:publish`/`user:create` bukan admin).
+  private async assertAdmin(userId: string): Promise<void> {
+    const codes = await this.permissionService.getPermissionCodesByUserId(userId);
+    if (!hasAdminAccess(codes)) throw new ForbiddenException('Forbidden resource');
   }
 
   private argon2Options() {
@@ -66,25 +67,7 @@ export class UserService {
   }
 
   async create(dto: CreateUserDto, userId: string): Promise<UserEntity> {
-    const scope = await this.accessScope.resolve(userId);
-    let roleId: string | undefined;
-    let organizationId: string | undefined;
-
-    if (scope.kind === 'all') {
-      // Admin: teruskan apa adanya.
-      roleId = dto.roleId;
-      organizationId = dto.organizationId;
-    } else if (scope.kind === 'organization') {
-      // Org: paksa member + organisasinya sendiri (abaikan roleId/organizationId dari body).
-      organizationId = scope.organizationId;
-      const member = await this.roleRepository.findByCode('member');
-      if (!member) throw new InternalServerErrorException('Member role not configured');
-      roleId = member.id;
-    } else {
-      // none/published tidak boleh membuat user.
-      throw new ForbiddenException('Forbidden resource');
-    }
-
+    await this.assertAdmin(userId);
     const passwordHash = await argon2Hash(dto.password, this.argon2Options());
     return this.userRepository.create({
       email: dto.email,
@@ -92,27 +75,23 @@ export class UserService {
       passwordHash,
       status: dto.status,
       countryId: dto.countryId,
-      roleId,
-      organizationId,
+      roleId: dto.roleId,
+      organizationId: dto.organizationId,
     });
   }
 
   async list(query: ListQueryDto, userId: string): Promise<{ items: UserEntity[]; total: number }> {
+    await this.assertAdmin(userId);
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
     assertAllowedSort(query.sortBy, USER_SORT_FIELDS);
-    const scope = await this.accessScope.resolve(userId);
-    if (scope.kind === 'none') return { items: [], total: 0 };
-    if (scope.kind === 'published') throw new ForbiddenException('Forbidden resource');
     const filterWhere = buildWhere<Prisma.UserWhereInput>(query.filter, USER_FILTER_FIELDS, {
       enumFields: { status: ['ACTIVE', 'INACTIVE', 'BLOCKED'] },
       dateFields: USER_DATE_FIELDS,
     });
     const searchWhere = buildSearch<Prisma.UserWhereInput>(query.search, USER_SEARCHABLE_FIELDS);
-    const sw = scope.kind === 'organization' ? { organizationId: scope.organizationId } : undefined;
-    const scopedFilter = sw ? { AND: [sw, filterWhere] } : filterWhere;
     const where = combineWhere<Prisma.UserWhereInput>(
-      scopedFilter as unknown as Record<string, unknown>,
+      filterWhere as unknown as Record<string, unknown>,
       searchWhere as unknown as Record<string, unknown> | undefined,
     );
     return this.userRepository.findMany({
@@ -128,17 +107,12 @@ export class UserService {
   }
 
   async findOne(id: string, userId: string): Promise<UserEntity> {
-    const [user, scope] = await Promise.all([
-      this.userRepository.findById(id),
-      this.accessScope.resolve(userId),
-    ]);
-    if (scope.kind === 'all') return user;
-    if (scope.kind === 'organization' && user.organizationId === scope.organizationId) return user;
-    throw new ForbiddenException('Forbidden resource');
+    await this.assertAdmin(userId);
+    return this.userRepository.findById(id);
   }
 
   async update(id: string, dto: UpdateUserDto, userId: string): Promise<UserEntity> {
-    await this.assertAdminScope(userId);
+    await this.assertAdmin(userId);
     const data: Prisma.UserUncheckedUpdateInput = {};
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
@@ -154,12 +128,12 @@ export class UserService {
   }
 
   async assignRole(id: string, roleId: string, userId: string): Promise<UserEntity> {
-    await this.assertAdminScope(userId);
+    await this.assertAdmin(userId);
     return this.userRepository.updateRole(id, roleId);
   }
 
   async remove(id: string, userId: string): Promise<UserEntity> {
-    await this.assertAdminScope(userId);
+    await this.assertAdmin(userId);
     return this.userRepository.remove(id);
   }
 }

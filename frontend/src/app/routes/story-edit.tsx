@@ -44,6 +44,9 @@ export function StoryEditPage() {
   const canUpdate = can('story:update')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canPublishStory = can('story:publish')
+  const canApproveStory = can('story:approve')
+  const canRejectStory = can('story:reject')
 
   const storyQuery = useStory(id)
   const categoriesQuery = useCategories(canReadCategories)
@@ -131,6 +134,7 @@ export function StoryEditPage() {
           initialValues={toFormValues(storyQuery.data)}
           initialPublishedAt={storyQuery.data.publishedAt}
           initialGallery={storyQuery.data.gallery ?? []}
+          initialFlyer={storyQuery.data.flyer ?? []}
           isPending={updateStory.isPending}
           submissionError={updateStory.error}
           onSubmit={handleSubmit}
@@ -139,6 +143,9 @@ export function StoryEditPage() {
           isLoadingCategories={categoriesQuery.isPending}
           canReadCategories={canReadCategories}
           canCreateCategory={canCreateCategory}
+          canPublishStory={canPublishStory}
+          canApproveStory={canApproveStory}
+          canRejectStory={canRejectStory}
           onCreateCategory={handleCreateCategory}
           onUploadImage={uploadImage.mutateAsync}
           onUploadError={handleUploadError}

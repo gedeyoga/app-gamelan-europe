@@ -146,13 +146,30 @@
     "next": "Berikutnya",
     "counter": "{{current}} / {{total}}"
   },
+  "flyer": {
+    "title": "Flyer",
+    "add": "Tambah flyer",
+    "empty": "Belum ada flyer.",
+    "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
+    "uploading": "Mengunggah...",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB.",
+    "remove": "Hapus",
+    "moveUp": "Naikkan",
+    "moveDown": "Turunkan",
+    "preview": "Pratinjau",
+    "previewTitle": "Pratinjau gambar",
+    "previous": "Sebelumnya",
+    "next": "Berikutnya",
+    "counter": "{{current}} / {{total}}"
+  },
   "detail": {
     "back": "Kembali ke story",
     "open": "Lihat detail \"{{name}}\"",
     "notFound": "Story tidak ditemukan.",
     "authorFallback": "Penulis tidak diketahui",
     "noContent": "Story ini belum memiliki konten.",
-    "gallery": "Galeri"
+    "gallery": "Galeri",
+    "flyer": "Flyer"
   },
   "toast": {
     "created": "Story berhasil dibuat",

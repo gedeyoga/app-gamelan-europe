@@ -5,6 +5,7 @@ import {
   MapPin,
   MoreHorizontal,
   Pencil,
+  Plus,
   RotateCcw,
   Trash2,
 } from 'lucide-react'
@@ -32,10 +33,14 @@ export interface EventCardProps {
   onResetSearch?: () => void
   onEdit: (event: Event) => void
   onDelete: (event: Event) => void
+  /** Dipanggil saat CTA "Tambah" di empty state diklik. */
+  onCreate?: () => void
   /** Gate `event:update` — tombol Edit disembunyikan bila `false`. Default `true`. */
   canUpdate?: boolean
   /** Gate `event:delete` — tombol Hapus disembunyikan bila `false`. Default `true`. */
   canDelete?: boolean
+  /** Gate `event:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
+  canCreate?: boolean
 }
 
 export function EventCard({
@@ -44,8 +49,10 @@ export function EventCard({
   onResetSearch,
   onEdit,
   onDelete,
+  onCreate,
   canUpdate = true,
   canDelete = true,
+  canCreate = true,
 }: EventCardProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
@@ -69,7 +76,15 @@ export function EventCard({
               )}
             </>
           ) : (
-            t('event:table.empty')
+            <div className="flex flex-col items-center gap-2">
+              {t('event:table.empty')}
+              {canCreate && onCreate && (
+                <Button className="mt-4" onClick={onCreate}>
+                  <Plus className="size-4" data-icon="inline-start" />
+                  {t('event:add')}
+                </Button>
+              )}
+            </div>
           )}
         </div>
       ) : (

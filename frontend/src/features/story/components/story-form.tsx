@@ -6,7 +6,6 @@ import {
   CalendarCheck,
   CalendarClock,
   Check,
-  ChevronDown,
   PanelRightClose,
   PanelRightOpen,
   Save,
@@ -33,12 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { FormField, FormItem, FormMessage, Form } from '@/components/ui/form'
 import { DateTimePicker } from '@/components/shared/date-time-picker'
 import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
@@ -56,6 +49,7 @@ export interface StoryFormProps {
   initialValues: StoryFormValues
   initialPublishedAt?: string | null
   initialGallery?: UploadedImage[]
+  initialFlyer?: UploadedImage[]
   isPending: boolean
   submissionError: Error | null
   onSubmit: (payload: CreateStoryInput) => void
@@ -64,6 +58,9 @@ export interface StoryFormProps {
   isLoadingCategories: boolean
   canReadCategories: boolean
   canCreateCategory: boolean
+  canPublishStory: boolean
+  canApproveStory: boolean
+  canRejectStory: boolean
   onCreateCategory: (name: string) => Promise<StoryCategory | undefined>
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
@@ -74,6 +71,7 @@ export function StoryForm({
   initialValues,
   initialPublishedAt,
   initialGallery,
+  initialFlyer,
   isPending,
   submissionError,
   onSubmit,
@@ -82,6 +80,9 @@ export function StoryForm({
   isLoadingCategories,
   canReadCategories,
   canCreateCategory,
+  canPublishStory,
+  canApproveStory,
+  canRejectStory,
   onCreateCategory,
   onUploadImage,
   onUploadError,
@@ -106,6 +107,9 @@ export function StoryForm({
   const [galleryImages, setGalleryImages] = useState<UploadedImage[]>(initialGallery ?? [])
   const [isUploadingGallery, setIsUploadingGallery] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
+  const [flyerImages, setFlyerImages] = useState<UploadedImage[]>(initialFlyer ?? [])
+  const [isUploadingFlyer, setIsUploadingFlyer] = useState(false)
+  const [flyerError, setFlyerError] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
@@ -199,6 +203,23 @@ export function StoryForm({
     }
   }
 
+  async function handleFlyerUpload(file: File) {
+    setFlyerError(null)
+    setIsUploadingFlyer(true)
+    try {
+      const image = await onUploadImage(file)
+      setFlyerImages((prev) => [...prev, image])
+    } catch (error) {
+      if (isValidationError(error)) {
+        setFlyerError(t('story:flyer.uploadInvalid'))
+      } else {
+        onUploadError(error)
+      }
+    } finally {
+      setIsUploadingFlyer(false)
+    }
+  }
+
   function handleSubmit(values: StoryFormValues & { publishedAt?: string }) {
     const name = values.name.trim()
     const slug = values.slug.trim()
@@ -220,6 +241,9 @@ export function StoryForm({
     // Galeri terpisah dari `imageIds` (hindari dobel); edit selalu kirim agar bisa dikosongkan.
     const galleryImageIds = galleryImages.map((image) => image.id)
     if (mode === 'edit' || galleryImageIds.length > 0) payload.galleryImageIds = galleryImageIds
+    // Flyer terpisah dari `imageIds`; edit selalu kirim agar bisa dikosongkan.
+    const flyerImageIds = flyerImages.map((image) => image.id)
+    if (mode === 'edit' || flyerImageIds.length > 0) payload.flyerImageIds = flyerImageIds
     // Hanya kirim `thumbnail` bila berubah: hapus → `null`, ganti → url baru.
     if (thumbnail !== initialThumbnail) payload.thumbnail = thumbnail
     onSubmit(payload)
@@ -227,6 +251,10 @@ export function StoryForm({
 
   function submitWithStatus(next: ContentStatus, publishedAt?: string) {
     void form.handleSubmit((values) => handleSubmit({ ...values, status: next, publishedAt }))()
+  }
+
+  function submitCurrent() {
+    void form.handleSubmit(handleSubmit)()
   }
 
   async function openPublishDialog() {
@@ -256,55 +284,38 @@ export function StoryForm({
     </Button>
   )
 
-  const saveButton = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" size="sm" disabled={isPending}>
+  const actions = (
+    <>
+      {status === 'REQUEST' || status === 'PUBLISHED' ? (
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={submitCurrent}>
           <Save className="size-4" data-icon="inline-start" />
-          {isPending ? t('common:actions.saving') : t('story:form.save')}
-          <ChevronDown className="size-4" data-icon="inline-end" />
+          {t('story:form.save')}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto min-w-56 p-1.5">
-        {(status === 'APPROVED' || status === 'PUBLISHED') && (
-          <DropdownMenuItem
-            className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
-            disabled={isPending}
-            onSelect={() => void requestStatusChange(status, t('story:form.saveChanges'))}
-          >
-            {t('story:form.saveChanges')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={isPending}
-          onSelect={() => void requestStatusChange('DRAFT', t('story:form.saveAsDraft'))}
+          onClick={() => void requestStatusChange('DRAFT', t('story:form.saveAsDraft'))}
         >
+          <Save className="size-4" data-icon="inline-start" />
           {t('story:form.saveAsDraft')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
+        </Button>
+      )}
+      {canPublishStory && status !== 'REQUEST' && status !== 'PUBLISHED' && (
+        <Button
+          type="button"
+          size="sm"
           disabled={isPending}
-          onSelect={() => void requestStatusChange('REQUEST', t('story:form.requestPublish'))}
+          onClick={() => void openPublishDialog()}
         >
-          {t('story:form.requestPublish')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <CalendarClock className="size-4" data-icon="inline-start" />
+          {t('story:form.publish')}
+        </Button>
+      )}
+    </>
   )
-
-  const publishButton =
-    status === 'APPROVED' || status === 'PUBLISHED' ? (
-      <Button
-        type="button"
-        size="sm"
-        disabled={isPending}
-        onClick={() => void openPublishDialog()}
-      >
-        <CalendarClock className="size-4" data-icon="inline-start" />
-        {t('story:form.publish')}
-      </Button>
-    ) : null
 
   return (
     <Form {...form}>
@@ -321,27 +332,33 @@ export function StoryForm({
         {status === 'REQUEST' && (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border bg-card px-4 py-2">
             <span className="text-sm text-muted-foreground">{t('story:workflow.requested')}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() => void requestStatusChange('DRAFT', t('story:workflow.reject'))}
-              >
-                <X className="size-4" data-icon="inline-start" />
-                {t('story:workflow.reject')}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isPending}
-                onClick={() => void requestStatusChange('APPROVED', t('story:workflow.approve'))}
-              >
-                <Check className="size-4" data-icon="inline-start" />
-                {t('story:workflow.approve')}
-              </Button>
-            </div>
+            {(canApproveStory || canRejectStory) && (
+              <div className="flex items-center gap-2">
+                {canRejectStory && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => void requestStatusChange('DRAFT', t('story:workflow.reject'))}
+                  >
+                    <X className="size-4" data-icon="inline-start" />
+                    {t('story:workflow.reject')}
+                  </Button>
+                )}
+                {canApproveStory && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => void openPublishDialog()}
+                  >
+                    <Check className="size-4" data-icon="inline-start" />
+                    {t('story:workflow.approve')}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -353,8 +370,7 @@ export function StoryForm({
         >
           {!showSettings && (
             <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
-              {publishButton}
-              {saveButton}
+              {actions}
               <Button
                 type="button"
                 variant="outline"
@@ -396,8 +412,7 @@ export function StoryForm({
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
                   <h2 className="text-sm font-semibold">{t('story:form.settingsTitle')}</h2>
                   <div className="flex items-center gap-2">
-                    {publishButton}
-                    {saveButton}
+                    {actions}
                     <Button
                       type="button"
                       variant="ghost"
@@ -429,6 +444,11 @@ export function StoryForm({
                     onUploadGalleryImage={(file) => void handleGalleryUpload(file)}
                     isUploadingGallery={isUploadingGallery}
                     galleryError={galleryError}
+                    flyerImages={flyerImages}
+                    onChangeFlyer={setFlyerImages}
+                    onUploadFlyerImage={(file) => void handleFlyerUpload(file)}
+                    isUploadingFlyer={isUploadingFlyer}
+                    flyerError={flyerError}
                     categories={categories}
                     isLoadingCategories={isLoadingCategories}
                     canReadCategories={canReadCategories}

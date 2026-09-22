@@ -1,8 +1,8 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
-import { AccessScope, AccessScopeService } from '@app/libs/core/auth/access-scope.service';
+import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
-import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
+import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { EventRepository, CreateEventData, UpdateEventData } from './event.repository';
 import { EventEntity, EventResponse } from './entities/event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -39,6 +39,8 @@ export class EventService {
         return undefined;
       case 'organization':
         return { creator: { organizationId: scope.organizationId } };
+      case 'own':
+        return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.EventWhereInput;
       case 'published': {
         // Terbit berdasarkan `publishedAt`: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future tersembunyi).
         const base: Prisma.EventWhereInput = {
@@ -52,6 +54,40 @@ export class EventService {
     }
   }
 
+  // Filter bulan kalender UTC "YYYY-MM": event dengan minimal satu EventDate.date di
+  // [awal bulan, awal bulan berikutnya). `eventMonth` sudah lolos regex DTO.
+  private monthWhere(eventMonth?: string): Prisma.EventWhereInput | undefined {
+    if (!eventMonth) return undefined;
+    const [year, month] = eventMonth.split('-').map(Number);
+    return {
+      dates: {
+        some: {
+          date: {
+            gte: new Date(Date.UTC(year, month - 1, 1)),
+            lt: new Date(Date.UTC(year, month, 1)),
+          },
+        },
+      },
+    };
+  }
+
+  // "Upcoming": event dengan minimal satu EventDate.date pada hari ini atau setelahnya (UTC).
+  private upcomingWhere(upcoming?: string): Prisma.EventWhereInput | undefined {
+    if (upcoming !== 'true') return undefined;
+    const now = new Date();
+    const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return { dates: { some: { date: { gte: startOfUtcDay } } } };
+  }
+
+  // "My Event": organisasi → event satu organisasi; selain itu → event buatan user sendiri.
+  // Di-AND dengan scopeWhere (bukan mengganti) supaya scoping tetap aman.
+  private mineWhere(scope: AccessScope, userId: string): Prisma.EventWhereInput {
+    if (scope.kind === 'organization') {
+      return { creator: { organizationId: scope.organizationId } };
+    }
+    return { createdBy: userId };
+  }
+
   // Baca: org hanya konten organisasinya; published hanya status PUBLISHED; none tolak.
   private assertReadable(event: EventEntity, scope: AccessScope): void {
     if (scope.kind === 'none') throw new ForbiddenException('Forbidden resource');
@@ -60,6 +96,18 @@ export class EventService {
     }
     if (scope.kind === 'organization' && event.creator?.organizationId !== scope.organizationId) {
       throw new ForbiddenException('Forbidden resource');
+    }
+    if (scope.kind === 'own') {
+      if (event.createdBy === scope.userId) return; // pemilik bebas
+      // Bukan pemilik → baca konten terbit saja (M5).
+      if (
+        event.status !== ContentStatus.PUBLISHED ||
+        !event.publishedAt ||
+        event.publishedAt.getTime() > Date.now()
+      ) {
+        throw new ForbiddenException('Forbidden resource');
+      }
+      return;
     }
     if (scope.kind === 'published') {
       // Sudah terbit: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future → 403).
@@ -78,6 +126,12 @@ export class EventService {
   private assertWritable(event: EventEntity, scope: AccessScope): void {
     if (scope.kind === 'organization') {
       if (event.creator?.organizationId !== scope.organizationId) {
+        throw new ForbiddenException('Forbidden resource');
+      }
+      return;
+    }
+    if (scope.kind === 'own') {
+      if (event.createdBy !== scope.userId) {
         throw new ForbiddenException('Forbidden resource');
       }
       return;
@@ -110,21 +164,28 @@ export class EventService {
     return slug;
   }
 
-  async list(query: ListQueryDto, userId: string): Promise<{ items: EventResponse[]; total: number }> {
+  async list(query: ListEventsQueryDto, userId: string): Promise<{ items: EventResponse[]; total: number }> {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
     assertAllowedSort(query.sortBy, EVENT_SORT_FIELDS);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'event');
     if (scope.kind === 'none') return { items: [], total: 0 };
     const filterWhere = buildWhere<Prisma.EventWhereInput>(query.filter, EVENT_FILTER_FIELDS, {
       enumFields: { status: ['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED'] },
       dateFields: EVENT_DATE_FIELDS,
     });
     const searchWhere = buildSearch<Prisma.EventWhereInput>(query.search, EVENT_SEARCHABLE_FIELDS);
-    const sw = this.scopeWhere(scope);
-    const scopedFilter = sw ? { AND: [sw, filterWhere] } : (filterWhere as unknown as Record<string, unknown>);
+    // Susun AND: scope + filter + eventMonth + upcoming + mine, lalu AND dengan search (combineWhere). Bagian kosong dibuang.
+    const clauses = [
+      this.scopeWhere(scope),
+      filterWhere,
+      this.monthWhere(query.eventMonth),
+      this.upcomingWhere(query.upcoming),
+      query.mine === 'true' ? this.mineWhere(scope, userId) : undefined,
+    ].filter((w): w is Prisma.EventWhereInput => !!w && Object.keys(w).length > 0);
+    const combined = clauses.length === 1 ? clauses[0] : { AND: clauses };
     const where = combineWhere<Prisma.EventWhereInput>(
-      scopedFilter as unknown as Record<string, unknown>,
+      combined as unknown as Record<string, unknown>,
       searchWhere as unknown as Record<string, unknown> | undefined,
     );
     const { items, total } = await this.eventRepository.findMany({
@@ -139,7 +200,7 @@ export class EventService {
   async findOne(id: string, userId: string): Promise<EventResponse> {
     const [event, scope] = await Promise.all([
       this.eventRepository.findById(id),
-      this.accessScope.resolve(userId),
+      this.accessScope.resolve(userId, 'event'),
     ]);
     this.assertReadable(event, scope); // cek scope pakai entity mentah (punya organizationId)
     return this.toResponse(event);
@@ -170,8 +231,8 @@ export class EventService {
   }
 
   async create(dto: CreateEventDto, userId: string): Promise<EventResponse> {
-    const scope = await this.accessScope.resolve(userId);
-    if (scope.kind !== 'all' && scope.kind !== 'organization') {
+    const scope = await this.accessScope.resolve(userId, 'event');
+    if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
       throw new ForbiddenException('Forbidden resource');
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
@@ -199,7 +260,7 @@ export class EventService {
 
   async update(id: string, dto: UpdateEventDto, userId: string): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
     const data: UpdateEventData = {};
 
@@ -233,7 +294,7 @@ export class EventService {
   // Transisi status terkontrol; `PATCH /events/:id` tetap untuk update konten.
   async transition(id: string, action: EventAction, userId: string): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id); // 404 bila tak ada
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
     const rule = EVENT_TRANSITIONS[action];
     if (existing.status !== rule.from) {
@@ -253,7 +314,7 @@ export class EventService {
 
   async remove(id: string, userId: string): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
     return this.toResponse(await this.eventRepository.delete(id));
   }

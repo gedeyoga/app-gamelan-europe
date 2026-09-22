@@ -146,13 +146,30 @@
     "next": "Next",
     "counter": "{{current}} / {{total}}"
   },
+  "flyer": {
+    "title": "Flyer",
+    "add": "Add flyers",
+    "empty": "No flyers yet.",
+    "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
+    "uploading": "Uploading...",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB.",
+    "remove": "Remove",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "preview": "Preview",
+    "previewTitle": "Image preview",
+    "previous": "Previous",
+    "next": "Next",
+    "counter": "{{current}} / {{total}}"
+  },
   "detail": {
     "back": "Back to stories",
     "open": "View details for \"{{name}}\"",
     "notFound": "Story not found.",
     "authorFallback": "Unknown author",
     "noContent": "This story has no content yet.",
-    "gallery": "Gallery"
+    "gallery": "Gallery",
+    "flyer": "Flyer"
   },
   "toast": {
     "created": "Story created successfully",

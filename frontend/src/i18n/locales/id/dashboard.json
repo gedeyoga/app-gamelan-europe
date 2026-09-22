@@ -1,6 +1,39 @@
 {
   "title": "Dashboard",
   "empty": "Belum ada data",
+  "welcome": "Selamat datang, {{name}}",
+  "subtitle": "Pantau event dan cerita terbaru dari komunitas gamelan.",
+  "role": {
+    "member": "Member",
+    "organization": "Organisasi"
+  },
+  "stats": {
+    "upcomingEvents": "Event Akan Datang",
+    "publishedStories": "Story Terbit"
+  },
+  "section": {
+    "upcomingEvents": {
+      "title": "Event Akan Datang",
+      "subtitle": "Event terbit dengan jadwal terdekat.",
+      "viewAll": "Lihat semua",
+      "empty": "Belum ada event akan datang.",
+      "error": "Gagal memuat data."
+    },
+    "stories": {
+      "title": "Story Terbaru",
+      "subtitle": "Cerita terbaru yang sudah diterbitkan.",
+      "viewAll": "Lihat semua",
+      "empty": "Belum ada story terbit.",
+      "error": "Gagal memuat data."
+    }
+  },
+  "card": {
+    "noThumbnail": "Tanpa thumbnail",
+    "noDate": "Tanggal belum tersedia",
+    "noLocation": "Lokasi belum tersedia",
+    "openEvent": "Buka event {{name}}",
+    "openStory": "Buka story {{name}}"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",

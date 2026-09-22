@@ -23,7 +23,7 @@ export interface EventTypeComboboxProps {
   onChange: (ids: string[]) => void
   isLoading?: boolean
   disabled?: boolean
-  /** Gate `event:create` — input tambah tipe event disembunyikan bila `false`. */
+  /** Gate `event-type:create` — input tambah tipe event disembunyikan bila `false`. */
   canCreate?: boolean
   onCreate: (name: string) => Promise<EventType | undefined>
   className?: string
@@ -105,7 +105,9 @@ export function EventTypeCombobox({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder={t('event:form.eventTypeSearch')}
+            placeholder={
+              canCreate ? t('event:form.eventTypeSearch') : t('event:form.eventTypeSearchOnly')
+            }
           />
           <CommandList>
             <CommandEmpty>

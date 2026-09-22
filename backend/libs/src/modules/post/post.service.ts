@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
-import { AccessScope, AccessScopeService } from '@app/libs/core/auth/access-scope.service';
+import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
@@ -47,6 +47,8 @@ export class PostService {
         return undefined;
       case 'organization':
         return { creator: { organizationId: scope.organizationId } };
+      case 'own':
+        return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.PostWhereInput;
       case 'published': {
         // Terbit berdasarkan `publishedAt`: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future tersembunyi).
         const base: Prisma.PostWhereInput = {
@@ -69,6 +71,18 @@ export class PostService {
     if (scope.kind === 'organization' && post.creator?.organizationId !== scope.organizationId) {
       throw new ForbiddenException('Forbidden resource');
     }
+    if (scope.kind === 'own') {
+      if (post.createdBy === scope.userId) return; // pemilik bebas
+      // Bukan pemilik → baca konten terbit saja (M5).
+      if (
+        post.status !== ContentStatus.PUBLISHED ||
+        !post.publishedAt ||
+        post.publishedAt.getTime() > Date.now()
+      ) {
+        throw new ForbiddenException('Forbidden resource');
+      }
+      return;
+    }
     if (scope.kind === 'published') {
       // Sudah terbit: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future → 403).
       if (
@@ -90,39 +104,53 @@ export class PostService {
       }
       return;
     }
+    if (scope.kind === 'own') {
+      if (post.createdBy !== scope.userId) {
+        throw new ForbiddenException('Forbidden resource');
+      }
+      return;
+    }
     if (scope.kind !== 'all') throw new ForbiddenException('Forbidden resource');
   }
 
-  // Resolve `galleryImageIds` → `gallery: ImageResponse[]` berurut; `galleryImageIds` tidak dibocorkan ke FE.
+  // Resolve `galleryImageIds`/`flyerImageIds` → `gallery`/`flyer: ImageResponse[]` berurut; id mentah tidak dibocorkan ke FE.
   private async hydrate(posts: PostEntity[]): Promise<PostResponse[]> {
-    const ids = [...new Set(posts.flatMap((post) => post.galleryImageIds))];
+    const ids = [
+      ...new Set(posts.flatMap((post) => [...post.galleryImageIds, ...post.flyerImageIds])),
+    ];
     const images = await this.imageRepository.findByIds(ids);
     const byId = new Map(images.map((image) => [image.id, image]));
-    return posts.map(({ galleryImageIds, creator, ...post }) => ({
+    const resolve = (imageIds: string[]) =>
+      imageIds
+        .map((id) => byId.get(id))
+        .filter((image): image is NonNullable<typeof image> => Boolean(image))
+        .map((image) => this.imageService.toImageResponse(image));
+    return posts.map(({ galleryImageIds, flyerImageIds, creator, ...post }) => ({
       ...post,
       // Buang `creator.organizationId` (tenancy internal) dari response.
       creator: creator ? { id: creator.id, fullName: creator.fullName } : null,
-      gallery: galleryImageIds
-        .map((id) => byId.get(id))
-        .filter((image): image is NonNullable<typeof image> => Boolean(image))
-        .map((image) => this.imageService.toImageResponse(image)),
+      gallery: resolve(galleryImageIds),
+      flyer: resolve(flyerImageIds),
     }));
   }
 
   // Buang id gambar asing (entityType beda / milik entity lain) sebelum di-bind.
   private async sanitizeImageIds(
-    dto: { imageIds?: string[]; galleryImageIds?: string[] },
+    dto: { imageIds?: string[]; galleryImageIds?: string[]; flyerImageIds?: string[] },
     entityId: string | null,
-  ): Promise<{ imageIds?: string[]; galleryImageIds?: string[] }> {
-    const [imageIds, galleryImageIds] = await Promise.all([
+  ): Promise<{ imageIds?: string[]; galleryImageIds?: string[]; flyerImageIds?: string[] }> {
+    const [imageIds, galleryImageIds, flyerImageIds] = await Promise.all([
       dto.imageIds === undefined
         ? undefined
         : this.imageRepository.filterBindableIds(dto.imageIds, 'post', entityId),
       dto.galleryImageIds === undefined
         ? undefined
         : this.imageRepository.filterBindableIds(dto.galleryImageIds, 'post', entityId),
+      dto.flyerImageIds === undefined
+        ? undefined
+        : this.imageRepository.filterBindableIds(dto.flyerImageIds, 'post', entityId),
     ]);
-    return { imageIds, galleryImageIds };
+    return { imageIds, galleryImageIds, flyerImageIds };
   }
 
   private async uniqueSlug(base: string): Promise<string> {
@@ -137,7 +165,7 @@ export class PostService {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
     assertAllowedSort(query.sortBy, POST_SORT_FIELDS);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'story');
     if (scope.kind === 'none') return { items: [], total: 0 };
     const filterWhere = buildWhere<Prisma.PostWhereInput>(query.filter, POST_FILTER_FIELDS, {
       enumFields: { status: ['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED'] },
@@ -162,7 +190,7 @@ export class PostService {
   async findOne(id: string, userId: string): Promise<PostResponse> {
     const [post, scope] = await Promise.all([
       this.postRepository.findById(id),
-      this.accessScope.resolve(userId),
+      this.accessScope.resolve(userId, 'story'),
     ]);
     this.assertReadable(post, scope);
     return (await this.hydrate([post]))[0];
@@ -189,12 +217,13 @@ export class PostService {
       categoryIds: dto.categoryIds,
       imageIds: dto.imageIds,
       galleryImageIds: dto.galleryImageIds,
+      flyerImageIds: dto.flyerImageIds,
     };
   }
 
   async create(dto: CreatePostDto, userId: string): Promise<PostResponse> {
-    const scope = await this.accessScope.resolve(userId);
-    if (scope.kind !== 'all' && scope.kind !== 'organization') {
+    const scope = await this.accessScope.resolve(userId, 'story');
+    if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
       throw new ForbiddenException('Forbidden resource');
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
@@ -226,7 +255,7 @@ export class PostService {
 
   async update(id: string, dto: UpdatePostDto, userId: string): Promise<PostResponse> {
     const existing = await this.postRepository.findById(id);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(existing, scope);
     const data: UpdatePostData = {};
 
@@ -236,13 +265,20 @@ export class PostService {
     if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail;
     if (dto.categoryIds !== undefined) data.categoryIds = dto.categoryIds;
     // Sanitasi id gambar: buang milik entity lain (IDOR). entityId = post ini.
-    const { imageIds, galleryImageIds } = await this.sanitizeImageIds(dto, id);
+    const { imageIds, galleryImageIds, flyerImageIds } = await this.sanitizeImageIds(dto, id);
     if (imageIds !== undefined) data.imageIds = imageIds;
     if (galleryImageIds !== undefined) {
       data.galleryImageIds = galleryImageIds;
       // Lepas binding gambar yang dikeluarkan dari galeri (thumbnail/inline lama jangan disentuh).
       data.removedGalleryImageIds = existing.galleryImageIds.filter(
         (imageId) => !galleryImageIds.includes(imageId),
+      );
+    }
+    if (flyerImageIds !== undefined) {
+      data.flyerImageIds = flyerImageIds;
+      // Lepas binding gambar yang dikeluarkan dari flyer (thumbnail/inline lama jangan disentuh).
+      data.removedFlyerImageIds = existing.flyerImageIds.filter(
+        (imageId) => !flyerImageIds.includes(imageId),
       );
     }
     // Visibility boleh diubah scope `all` maupun `organization` (assertWritable sudah membatasi).
@@ -268,7 +304,7 @@ export class PostService {
   // Transisi status terkontrol; `PATCH /posts/:id` tetap untuk update konten.
   async transition(id: string, action: PostAction, userId: string): Promise<PostResponse> {
     const existing = await this.postRepository.findById(id); // 404 bila tak ada
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(existing, scope);
     const rule = POST_TRANSITIONS[action];
     if (existing.status !== rule.from) {
@@ -289,7 +325,7 @@ export class PostService {
   // DB dulu (sumber kebenaran); objek S3 dihapus best-effort.
   async remove(id: string, userId: string): Promise<PostResponse> {
     const post = await this.postRepository.findById(id);
-    const scope = await this.accessScope.resolve(userId);
+    const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(post, scope);
     // Resolve galeri sebelum row images dihapus.
     const response = (await this.hydrate([post]))[0];

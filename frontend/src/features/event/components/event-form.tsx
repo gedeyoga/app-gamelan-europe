@@ -6,10 +6,10 @@ import {
   CalendarCheck,
   CalendarClock,
   Check,
-  ChevronDown,
   PanelRightClose,
   PanelRightOpen,
   Save,
+  Send,
   X,
 } from 'lucide-react'
 
@@ -34,12 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { FormField, FormItem, FormMessage, Form } from '@/components/ui/form'
 import { DateTimePicker } from '@/components/shared/date-time-picker'
 import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
@@ -70,6 +64,10 @@ export interface EventFormProps {
   isLoadingEventTypes: boolean
   canReadEventTypes: boolean
   canCreateEventType: boolean
+  canPublishEvent: boolean
+  canSubmitEvent: boolean
+  canApproveEvent: boolean
+  canRejectEvent: boolean
   onCreateEventType: (name: string) => Promise<EventType | undefined>
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
@@ -98,6 +96,10 @@ export function EventForm({
   isLoadingEventTypes,
   canReadEventTypes,
   canCreateEventType,
+  canPublishEvent,
+  canSubmitEvent,
+  canApproveEvent,
+  canRejectEvent,
   onCreateEventType,
   onUploadImage,
   onUploadError,
@@ -223,6 +225,10 @@ export function EventForm({
     void form.handleSubmit((values) => handleSubmit({ ...values, status: next, publishedAt }))()
   }
 
+  function submitCurrent() {
+    void form.handleSubmit(handleSubmit)()
+  }
+
   async function openPublishDialog() {
     const valid = await form.trigger()
     if (!valid) return
@@ -250,55 +256,48 @@ export function EventForm({
     </Button>
   )
 
-  const saveButton = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" size="sm" disabled={isPending}>
+  const actions = (
+    <>
+      {status === 'REQUEST' || status === 'PUBLISHED' ? (
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={submitCurrent}>
           <Save className="size-4" data-icon="inline-start" />
-          {isPending ? t('common:actions.saving') : t('event:form.save')}
-          <ChevronDown className="size-4" data-icon="inline-end" />
+          {t('event:form.save')}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto min-w-56 p-1.5">
-        {(status === 'APPROVED' || status === 'PUBLISHED') && (
-          <DropdownMenuItem
-            className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
-            disabled={isPending}
-            onSelect={() => void requestStatusChange(status, t('event:form.saveChanges'))}
-          >
-            {t('event:form.saveChanges')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={isPending}
-          onSelect={() => void requestStatusChange('DRAFT', t('event:form.saveAsDraft'))}
+          onClick={() => void requestStatusChange('DRAFT', t('event:form.saveAsDraft'))}
         >
+          <Save className="size-4" data-icon="inline-start" />
           {t('event:form.saveAsDraft')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="gap-2 py-2.5 pr-3 text-sm whitespace-nowrap"
+        </Button>
+      )}
+      {status !== 'REQUEST' && status !== 'PUBLISHED' && canPublishEvent ? (
+        <Button
+          type="button"
+          size="sm"
           disabled={isPending}
-          onSelect={() => void requestStatusChange('REQUEST', t('event:form.requestPublish'))}
+          onClick={() => void openPublishDialog()}
         >
+          <CalendarClock className="size-4" data-icon="inline-start" />
+          {t('event:form.publish')}
+        </Button>
+      ) : status !== 'REQUEST' && status !== 'PUBLISHED' && canSubmitEvent ? (
+        <Button
+          type="button"
+          size="sm"
+          disabled={isPending}
+          onClick={() => void requestStatusChange('REQUEST', t('event:form.requestPublish'))}
+        >
+          <Send className="size-4" data-icon="inline-start" />
           {t('event:form.requestPublish')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </Button>
+      ) : null}
+    </>
   )
-
-  const publishButton =
-    status === 'APPROVED' || status === 'PUBLISHED' ? (
-      <Button
-        type="button"
-        size="sm"
-        disabled={isPending}
-        onClick={() => void openPublishDialog()}
-      >
-        <CalendarClock className="size-4" data-icon="inline-start" />
-        {t('event:form.publish')}
-      </Button>
-    ) : null
 
   return (
     <Form {...form}>
@@ -315,27 +314,33 @@ export function EventForm({
         {status === 'REQUEST' && (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border bg-card px-4 py-2">
             <span className="text-sm text-muted-foreground">{t('event:workflow.requested')}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() => void requestStatusChange('DRAFT', t('event:workflow.reject'))}
-              >
-                <X className="size-4" data-icon="inline-start" />
-                {t('event:workflow.reject')}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isPending}
-                onClick={() => void requestStatusChange('APPROVED', t('event:workflow.approve'))}
-              >
-                <Check className="size-4" data-icon="inline-start" />
-                {t('event:workflow.approve')}
-              </Button>
-            </div>
+            {(canApproveEvent || canRejectEvent) && (
+              <div className="flex items-center gap-2">
+                {canRejectEvent && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => void requestStatusChange('DRAFT', t('event:workflow.reject'))}
+                  >
+                    <X className="size-4" data-icon="inline-start" />
+                    {t('event:workflow.reject')}
+                  </Button>
+                )}
+                {canApproveEvent && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => void openPublishDialog()}
+                  >
+                    <Check className="size-4" data-icon="inline-start" />
+                    {t('event:workflow.approve')}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -347,8 +352,7 @@ export function EventForm({
         >
           {!showSettings && (
             <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
-              {publishButton}
-              {saveButton}
+              {actions}
               <Button
                 type="button"
                 variant="outline"
@@ -390,8 +394,7 @@ export function EventForm({
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
                   <h2 className="text-sm font-semibold">{t('event:form.settingsTitle')}</h2>
                   <div className="flex items-center gap-2">
-                    {publishButton}
-                    {saveButton}
+                    {actions}
                     <Button
                       type="button"
                       variant="ghost"

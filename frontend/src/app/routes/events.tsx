@@ -30,6 +30,8 @@ import { useDeleteEvent } from '@/features/event/hooks/use-delete-event'
 import { useEvents } from '@/features/event/hooks/use-events'
 import type { Event } from '@/features/event/types'
 
+import { OrgEventsPage } from './events-org'
+
 const PAGE_LIMIT = 10
 
 type ViewMode = 'card' | 'list'
@@ -58,7 +60,7 @@ function EventsCardSkeleton() {
   )
 }
 
-export function EventsPage() {
+function AdminEventsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { can } = useAuthPermissions()
@@ -190,8 +192,10 @@ export function EventsPage() {
               onResetSearch={handleResetSearch}
               onEdit={(event) => navigate(`/events/${event.id}/edit`)}
               onDelete={setDeletingEvent}
+              onCreate={() => navigate('/events/new')}
               canUpdate={can('event:update')}
               canDelete={can('event:delete')}
+              canCreate={canCreateEvent}
             />
           ) : (
             <EventTable
@@ -203,8 +207,10 @@ export function EventsPage() {
               onResetSearch={handleResetSearch}
               onEdit={(event) => navigate(`/events/${event.id}/edit`)}
               onDelete={setDeletingEvent}
+              onCreate={() => navigate('/events/new')}
               canUpdate={can('event:update')}
               canDelete={can('event:delete')}
+              canCreate={canCreateEvent}
             />
           )}
 
@@ -254,5 +260,23 @@ export function EventsPage() {
         </AlertDialog>
       )}
     </div>
+  )
+}
+
+/**
+ * Dispatcher dua view berbasis permission (tanpa nama role).
+ * Admin = scope `all` backend: salah satu dari `event:approve|publish|reject|unpublish`; role org/member tidak.
+ */
+export function EventsPage() {
+  const { canAny } = useAuthPermissions()
+  return canAny([
+    'event:approve',
+    'event:publish',
+    'event:reject',
+    'event:unpublish',
+  ]) ? (
+    <AdminEventsPage />
+  ) : (
+    <OrgEventsPage />
   )
 }

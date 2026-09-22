@@ -16,6 +16,8 @@ Didaftarkan di `src/app/routes/index.tsx` sebagai child `DashboardLayout`.
 └── /events/:id         → detail read-only     — gate event:read di komponen (pola story-detail)
 ```
 
+- `/events` menjalankan **dispatcher** `EventsPage` (`events.tsx`): `AdminEventsPage` (punya `event:approve` **atau** `event:publish`) atau `OrgEventsPage` (`events-org.tsx`) — lihat §11.
+
 - Route **detail** (`/events/:id`) menyembunyikan sidebar lewat branch `isEventDetail` di `app-shell.tsx` (`/^\/events\/(?!new$)[^/]+$/`) → `<Outlet />` polos (tanpa sidebar/header). Regex tidak menangkap `/events/:id/edit` (`[^/]+$`) maupun `/events/new` (lookahead).
 
 - Route **editor** menyembunyikan sidebar lewat branch `isEventEditor` di `app-shell.tsx` (`pathname === '/events/new' || /^\/events\/[^/]+\/edit$/`) → header ringkas + breadcrumb `Dashboard / Event / judul`, full-height desktop.
@@ -40,13 +42,14 @@ src/features/event/
 │   ├── use-event.ts              # query ['event', {id}]
 │   ├── use-create-event.ts       # mutation → invalidate ['event']
 │   ├── use-update-event.ts       # mutation → invalidate ['event'] + ['event', {id}]
+│   ├── use-submit-event.ts       # mutation POST /events/:id/submit → invalidate ['event'] + ['event', {id}]
 │   ├── use-delete-event.ts       # mutation → invalidate ['event']
 │   ├── use-event-types.ts        # query ['event-types'], staleTime ≥ 60s
 │   ├── use-create-event-type.ts  # mutation POST /event-types → invalidate ['event-types']
 │   └── use-upload-image.ts       # mutation POST /images (thumbnail & inline editor; tanpa invalidate list)
 ├── lib/
 │   ├── schema.ts        # createEventSchema (zod) + EventFormValues + EMPTY_EVENT_VALUES
-│   ├── format.ts        # formatEventDate (tanggal + rentang jam)
+│   ├── format.ts        # formatEventDateLines (tanggal + jam terpisah) + formatEventDate (tanggal · jam)
 │   └── slug.ts          # slugify (cermin utils backend, fallback 'event')
 ├── components/
 │   ├── event-form.tsx             # form editor dipakai create & edit
@@ -81,9 +84,10 @@ Envelope: sukses `{ data, message }`; list `{ data, message, meta: { page, limit
 | GET | `/events/:id` | — | detail termasuk `content`, `approvedAt` |
 | POST | `/events` | `{ name, slug?, content?, thumbnail?, publishedAt?, status?, visibility?, eventTypeIds?, dates?, location }` | 201; 409 slug duplikat; 422 validasi. `location` **wajib**; `visibility` ∈ `PUBLIC\|PRIVATE` (default `PUBLIC`) |
 | PATCH | `/events/:id` | partial | `eventTypeIds`/`dates`/`location` bila dikirim = replace-all |
+| POST | `/events/:id/submit` | — | ajukan terbit (`event:submit`); backend mengabaikan `status` PATCH bagi non-admin |
 | DELETE | `/events/:id` | — | 200 |
-| GET | `/event-types?limit=100` | — | opsi tipe event (`event:read`) |
-| POST | `/event-types` | `{ name }` | inline create (`event:create`), idempotent |
+| GET | `/event-types?limit=100` | — | opsi tipe event (`event-type:read`) |
+| POST | `/event-types` | `{ name }` | inline create (`event-type:create`), idempotent |
 | POST | `/images` | multipart `file` + `entityType='event'` | 201 `{ id, url, variants[] }`; `url` absolut |
 
 Item tanggal: response `{ date: string /* ISO datetime UTC midnight */, startTime: string \| null /* "HH:mm" */, endTime: string \| null }`; payload `{ date: string /* "YYYY-MM-DD" */, startTime?: string /* "HH:mm" */, endTime?: string /* "HH:mm" */ }` (start/end di-drop bila kosong).
@@ -105,14 +109,14 @@ Container `src/app/routes/events.tsx`. Dua mode tampilan (default **card**) via 
 
 ## 6. Editor (`/events/new` & `/events/:id/edit`)
 
-Satu komponen `EventForm` dipakai ulang; container memuat data (`useEvent(id)`) dan menyerahkan `initialValues`. Layout identik story: grid 70/30 (editor konten + panel settings), toggle settings, dropdown Simpan + alur status (`DRAFT`/`REQUEST`/`APPROVED`/`PUBLISHED`) dan dialog Terbitkan (`publishedAt`) via `DateTimePicker` shared.
+Satu komponen `EventForm` dipakai ulang; container memuat data (`useEvent(id)`) dan menyerahkan `initialValues`. Layout identik story: grid 70/30 (editor konten + panel settings), toggle settings, **tepat 2 tombol aksi** di header settings **dan** toolbar saat settings disembunyikan: **Simpan sebagai Draft** (selalu, `requestStatusChange('DRAFT', …)`) + **Terbitkan** bila `canPublishEvent` (`event:publish`, `openPublishDialog()` → dialog `DateTimePicker` → `submitWithStatus('PUBLISHED', publishAt)`) **atau** **Ajukan untuk Terbit** bila hanya `canSubmitEvent` (`event:submit`, `requestStatusChange('REQUEST', …)`). Dropdown lama (Simpan perubahan/request) dihapus. Banner `status === 'REQUEST'`: **Setujui** hanya bila `canApproveEvent` (`event:approve`), **Tolak** hanya bila `canRejectEvent` (`event:reject`), selain itu hanya teks menunggu tanpa tombol. Semua aksi status lewat `AlertDialog` konfirmasi (validasi `form.trigger()` dulu).
 
 **Urutan field settings** (create & edit): `name → slug → visibility → thumbnail → eventTypes → eventDates → location`. Gallery & `categoryIds` **tidak ada** (bukan kolom event). Dialog Terbitkan (`publishedAt`) memakai `components/shared/date-time-picker.tsx` (butuh tanggal + jam); baris tanggal event memakai `components/shared/date-picker.tsx` (tanggal saja) + `time-picker.tsx`.
 
 - `name`/`slug`: input teks; auto-slug saat create, berhenti setelah slug disentuh; 409 slug → per-field.
 - `visibility`: `Select` shadcn (bukan input native) — opsi `PUBLIC`/`PRIVATE` dari `VISIBILITIES`, label `event:visibilityOptions.*`, default `PUBLIC`; ikut payload create/update.
 - `thumbnail`: `ThumbnailUpload` shared (upload `POST /images`, preview, hapus, dropzone).
-- `eventTypes`: `EventTypeCombobox` multi-select + tambah inline (`POST /event-types`); gate `event:create`.
+- `eventTypes`: `EventTypeCombobox` multi-select + tambah inline (`POST /event-types`); gate `event-type:create`.
 - `eventDates`: `EventDatesField` — tiap baris header `Day N` + tombol hapus, `DatePicker` (tanggal saja `"YYYY-MM-DD"`, satu baris penuh) + `TimePicker` (jam mulai & selesai, opsional, grid 2 kolom); tambah/hapus baris menambah/menghapusnya; nilai tanggal date-only, jam `"HH:mm"` ('' bila kosong).
 - `location`: `EventLocationField` → `name` (wajib), `address` (opsional), `LocationMapPicker` (klik map / geser marker → lat/lng, plus pencarian alamat Nominatim).
 - Validasi RHF + zod (`createEventSchema`), pesan dari `t('validation:*')`; 422/409 dipetakan per-field via `mapApiFieldErrors`; banner hanya non-422.
@@ -139,8 +143,12 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 | Tombol Tambah | `event:create` |
 | Aksi Edit | `event:update` |
 | Aksi Hapus + `DELETE` | `event:delete` |
-| `GET /event-types` | `event:read` |
-| `POST /event-types` | `event:create` |
+| `GET /event-types` | `event-type:read` |
+| `POST /event-types` | `event-type:create` |
+| Tombol Terbitkan / `submitWithStatus('PUBLISHED')` | `event:publish` |
+| Tombol Ajukan untuk Terbit / `POST /events/:id/submit` | `event:submit` |
+| Banner Setujui (`status=APPROVED`) | `event:approve` |
+| Banner Tolak (`status=DRAFT`) | `event:reject` |
 | Menu sidebar Event | `event:read` |
 
 ## 8. i18n
@@ -169,4 +177,34 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 - **Iterasi tanggal date-only**: baris tanggal event jadi tanggal saja (`"YYYY-MM-DD"`) via `components/shared/date-picker.tsx`; jam tetap di `TimePicker` terpisah. Backend `EventDateDto.date` (`@IsISO8601()`) menerima `"YYYY-MM-DD"`, menyimpan UTC midnight, dan mengembalikan ISO datetime — FE mengubahnya balik ke date-only lewat `toDateOnly` (`features/event/lib/format.ts`, baca komponen UTC) di `event-edit.tsx:toFormValues`. Submit `event-form.tsx` mengirim `date` apa adanya `"YYYY-MM-DD"` dan tetap drop `startTime`/`endTime` kosong (edit boleh `dates: []`). `formatEventDate` membangun Date lokal tengah hari dari bagian `"YYYY-MM-DD"` agar hari tidak bergeser timezone. `schema.ts` tetap `date: z.string()`.
 - **Iterasi badge card**: badge status dipindah dari `CardContent` ke **overlay pojok kiri-atas thumbnail** (`absolute left-2 top-2 z-10`, `shadow-sm`) di `event-card.tsx`; badge `memberOnly` (`variant="secondary"`, `shadow-sm`) muncul bila `visibility === 'PRIVATE'`. Key i18n baru `event:card.memberOnly` (`Khusus Member`/`Members Only`). Blok tanggal (`CalendarDays` + daftar) kini langsung sebagai child `CardContent` (pembungkus `flex items-start justify-between` + badge dihapus). `VISIBILITY_VARIANT` tidak diimpor di card (hanya `STATUS_VARIANT`). Tanpa perubahan query/payload.
 - **Iterasi grid card responsif**: string grid tetap `gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` di `event-card.tsx` + `EventsCardSkeleton` diganti `CARD_GRID_CLASS` dari `components/shared/card-grid.ts` (`grid gap-4 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]`) — jumlah kolom mengikuti lebar layar native (CSS Grid `auto-fill`), konstanta sama dipakai modul story. Tanpa JS, tanpa dependency baru; `auto-fill` (bukan `auto-fit`) menjaga lebar kartu saat item sedikit.
+- **Iterasi gate aksi workflow + endpoint submit**: tombol aksi `EventForm` jadi 2 `Button` berbasis permission (tanpa nama role) — lihat §6. `event-new.tsx`: bila `payload.status === 'REQUEST'` create dulu sebagai `DRAFT` lalu `submitEvent.mutateAsync(created.id)`; `event-edit.tsx`: setelah update, bila `payload.status === 'REQUEST'` dan `updated.status === 'DRAFT'` → `submitEvent.mutateAsync(id)`. `submissionError` hanya dari `create/updateEvent.error` (error `submitEvent` di-toast terpisah, tidak ke form — cegah 409 submit salah jadi error `slug`); create + submit gagal → navigate `/events/:id/edit` agar tidak submit ulang/duplikat. `isPending` gabungan. Komponen tetap presentational (props boolean `canPublishEvent/canSubmitEvent/canApproveEvent/canRejectEvent`).
 - **Iterasi creator card**: kartu tidak lagi menampilkan tanggal publish (`formatDateTime(event.publishedAt)` dihapus dari `CardContent`, import `formatDateTime` dibuang). Posisinya diganti baris creator (ikon `Building2` + teks, pola sama baris lokasi): `event.creator?.organization?.name ?? event.creator?.fullName ?? '—'`. Type `EventCreator { id, fullName, organization: { id, name } | null }` + field `creator: EventCreator | null` ditambahkan di `types.ts` (kontrak API baru). Tanpa key i18n baru (nilai = data). Kolom `publishedAt` di `event-table.tsx` tetap.
+
+## 11. Dual View `/events` (Admin vs Non-Admin)
+
+Dispatcher `EventsPage` (`app/routes/events.tsx`) memilih view **hanya dari permission** (tanpa nama role): `canAny(['event:approve', 'event:publish', 'event:reject', 'event:unpublish'])` via `useAuthPermissions()` — sepadan scope `all` backend (`access-scope.service.ts`); role org/member tidak memilikinya.
+
+- **Admin** → `AdminEventsPage` (internal, JSX/behavior tidak berubah): toggle card/tabel, search, sort, pagination, dialog hapus.
+- **Non-admin** → `OrgEventsPage` (`app/routes/events-org.tsx`): header dengan tombol "Tambah" (gate `event:create`) + dua seksi bertumpuk. Empty state tiap seksi juga menampilkan CTA "Tambah" bila `event:create`.
+- Error ditangani **per-seksi** (tidak saling menyembunyikan): tiap section punya `isPending`/`errorMessage` sendiri; 403 → `event:errors.forbidden`, selain itu `event:errors.loadData`.
+
+### Seksi 1 — "Event bulan ini"
+- `EventMonthSection` (`features/event/components/event-month-section.tsx`), grid horizontal `CARD_GRID_CLASS`.
+- State bulan di container (default bulan berjalan, tanggal 1 lokal); tombol prev/next. Label bulan locale browser lewat `formatDate(month, undefined, { dateStyle: undefined, month: 'long', year: 'numeric' })` — tanpa formatter lokal baru.
+- Kartu: nama, lokasi (`event.location?.name`), tanggal (`formatEventDate`), badge `event.eventTypes`, tombol "Lihat Event" → `/events/{id}`. Empty state bila tidak ada.
+
+### Seksi 2 — "My Event"
+- `MyEventList` (`features/event/components/my-event-list.tsx`) — `Table` dengan kolom Date, Event Name (thumbnail + title), Location (name + address), Category (`eventTypes` badges), Status (`STATUS_VARIANT` + `event:statusOptions.*`), Actions.
+- Kolom Date memakai `formatEventDateLines` (`lib/format.ts`): tiap `EventDate` dirender **tanggal dulu, lalu `<br/>`, lalu jam** (jam hilang → hanya tanggal, tanpa `<br/>`). Antar tanggal ditumpuk **vertikal** dalam `<div className="flex flex-col gap-2">` sehingga `gap-2` memberi jarak vertical antar hari (tanpa separator `<br />` antar entri). `formatEventDate` (tanggal + ` · ` + jam dalam satu string) tetap dipakai `event-card`/`event-table`/`event-month-section` — perilaku tak berubah (kini delegasi ke `formatEventDateLines`).
+- Actions: tombol "Detail" → `/events/{id}`, dropdown `MoreHorizontal`: Edit (`Pencil`, gate `event:update`) + Delete (`Trash2`, gate `event:delete`) — item disembunyikan bila gate false.
+- Delete memakai `useDeleteEvent` + `AlertDialog` + pola toast yang sama dengan `events.tsx`.
+
+### Sumber data, `mine` & `eventMonth`
+- `GET /events` menerima `mine=true`: event seorganisasi bila user punya organisasi, selain itu hanya event milik user. Seksi "My Event" memakai `useEvents({ page: 1, limit: 100, mine: true })`; seksi "Event bulan ini" tetap scoped tanpa `mine`. Tanpa endpoint "mine" baru.
+- `GET /events` menerima `eventMonth=YYYY-MM` (backend paralel: event dengan ≥1 tanggal di bulan UTC tsb).
+- `ListEventsParams` (`api/events.ts`) extends `ListParams` + `eventMonth?` + `mine?` (serialisasi `mine=true`); `useEvents` menerima keduanya, meneruskan ke `listEvents`, dan memasukkannya ke queryKey. `keepPreviousData` + `staleTime` tetap.
+- Query: seksi bulan `useEvents({ page: 1, limit: 100, eventMonth })`; seksi list `useEvents({ page: 1, limit: 100, mine: true })`. Ponytail: tanpa pagination — tambah bila bisa >100.
+
+### i18n (`event:org.*`, `en`/`id`)
+`monthTitle`, `prevMonth`, `nextMonth`, `emptyMonth`, `viewEvent`, `myTitle` ("My Event" en/id), `emptyList`, `columnDate`, `columnEventName`, `columnCategory`, `detail`. Reuse: `event:add`, `event:table.location`, `event:table.status`, `event:table.edit`, `event:table.delete`, `event:errors.loadData`, `event:errors.forbidden`, `common:table.actions`, `common:table.actionsFor`, `event:statusOptions.*`, `event:delete.*`, `event:toast.*`.
+

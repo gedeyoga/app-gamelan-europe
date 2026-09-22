@@ -13,6 +13,7 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
+  flyerImageIds: true,
   visibility: true,
   createdBy: true,
   creator: { select: { id: true, fullName: true, organizationId: true } },
@@ -37,10 +38,11 @@ export type PostEntity = Omit<PostRow, 'categories'> & {
 // `creator.organizationId` hanya dipakai internal (scope); tidak pernah keluar ke FE.
 export type CreatorRef = { id: string; fullName: string };
 
-// Kontrak response ke FE: `galleryImageIds` (raw) diganti `gallery` hasil resolusi berurut.
-export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'creator'> & {
+// Kontrak response ke FE: `galleryImageIds`/`flyerImageIds` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
+export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerImageIds' | 'creator'> & {
   creator: CreatorRef | null;
   gallery: ImageResponse[];
+  flyer: ImageResponse[];
 };
 
 export function mapPost(row: PostRow): PostEntity {

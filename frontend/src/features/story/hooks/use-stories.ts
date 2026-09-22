@@ -10,12 +10,17 @@ export interface UseStoriesParams {
   search?: string
   sortBy?: string | null
   sortOrder?: ListSortOrder | null
+  /** Filter generik `filter[<key>]=<value>` (diteruskan ke `GET /posts`). */
+  filter?: Record<string, string>
 }
 
-export function useStories({ page, limit, search, sortBy, sortOrder }: UseStoriesParams) {
+export function useStories({ page, limit, search, sortBy, sortOrder, filter }: UseStoriesParams) {
   return useQuery({
-    queryKey: ['story', { page, limit, search: (search ?? '').trim(), sortBy, sortOrder }],
-    queryFn: () => listPosts({ page, limit, search, sortBy, sortOrder }),
+    queryKey: [
+      'story',
+      { page, limit, search: (search ?? '').trim(), sortBy, sortOrder, filter },
+    ],
+    queryFn: () => listPosts({ page, limit, search, sortBy, sortOrder, filter }),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   })

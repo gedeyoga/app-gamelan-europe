@@ -63,7 +63,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const dashboardNavItems: NavItem[] = useMemo(
     () => [
       { title: t('nav.dashboard'), url: '/', icon: Home },
-      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'story:read' },
+      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'admin:access' },
       { title: t('nav.event'), url: '/events', icon: CalendarDays, permission: 'event:read' },
       { title: t('nav.myBilling'), url: '/my-billings', icon: Receipt },
     ],

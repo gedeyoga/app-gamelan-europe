@@ -1,17 +1,11 @@
-import { ImageOff, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { ImageOff, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { formatDateTime } from '@/lib/datetime'
 
 import { STATUS_VARIANT } from './status-variant'
@@ -23,10 +17,14 @@ export interface StoryCardProps {
   onResetSearch?: () => void
   onEdit: (story: Story) => void
   onDelete: (story: Story) => void
+  /** Dipanggil saat CTA "Tambah" di empty state diklik. */
+  onCreate?: () => void
   /** Gate `story:update` — tombol Edit disembunyikan bila `false`. Default `true`. */
   canUpdate?: boolean
   /** Gate `story:delete` — tombol Hapus disembunyikan bila `false`. Default `true`. */
   canDelete?: boolean
+  /** Gate `story:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
+  canCreate?: boolean
 }
 
 export function StoryCard({
@@ -35,8 +33,10 @@ export function StoryCard({
   onResetSearch,
   onEdit,
   onDelete,
+  onCreate,
   canUpdate = true,
   canDelete = true,
+  canCreate = true,
 }: StoryCardProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
@@ -60,7 +60,15 @@ export function StoryCard({
               )}
             </>
           ) : (
-            t('story:table.empty')
+            <div className="flex flex-col items-center gap-2">
+              {t('story:table.empty')}
+              {canCreate && onCreate && (
+                <Button className="mt-4" onClick={onCreate}>
+                  <Plus className="size-4" data-icon="inline-start" />
+                  {t('story:add')}
+                </Button>
+              )}
+            </div>
           )}
         </div>
       ) : (
@@ -108,35 +116,6 @@ export function StoryCard({
                   {story.name}
                 </Link>
               </CardTitle>
-              {showActions && (
-                <CardAction>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('common:table.actionsFor', { name: story.name })}
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canUpdate && (
-                        <DropdownMenuItem onClick={() => onEdit(story)}>
-                          <Pencil />
-                          {t('story:table.edit')}
-                        </DropdownMenuItem>
-                      )}
-                      {canDelete && (
-                        <DropdownMenuItem variant="destructive" onClick={() => onDelete(story)}>
-                          <Trash2 />
-                          {t('story:table.delete')}
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardAction>
-              )}
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {story.categories.length === 0 ? (
@@ -156,6 +135,22 @@ export function StoryCard({
               <span className="text-xs text-muted-foreground">
                 {formatDateTime(story.publishedAt)}
               </span>
+              {showActions && (
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {canUpdate && (
+                    <Button variant="outline" onClick={() => onEdit(story)}>
+                      <Pencil className="size-4" data-icon="inline-start" />
+                      {t('story:table.edit')}
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button variant="destructive" onClick={() => onDelete(story)}>
+                      <Trash2 className="size-4" data-icon="inline-start" />
+                      {t('story:table.delete')}
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))

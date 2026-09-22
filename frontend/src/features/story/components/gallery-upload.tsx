@@ -36,6 +36,8 @@ export interface GalleryUploadProps {
   /** Pesan error API non-422 dari parent. */
   error?: string | null
   disabled?: boolean
+  /** Namespace i18n (`story:<prefix>.X`); default galeri. */
+  i18nPrefix?: 'gallery' | 'flyer'
   className?: string
 }
 
@@ -46,6 +48,7 @@ export function GalleryUpload({
   isUploading = false,
   error,
   disabled = false,
+  i18nPrefix = 'gallery',
   className,
 }: GalleryUploadProps) {
   const { t } = useTranslation()
@@ -77,7 +80,7 @@ export function GalleryUpload({
     const valid = files.filter(
       (file) => ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_SIZE_BYTES,
     )
-    setInvalidMessage(valid.length === files.length ? null : t('story:gallery.uploadInvalid'))
+    setInvalidMessage(valid.length === files.length ? null : t(`story:${i18nPrefix}.uploadInvalid`))
     for (const file of valid) onUpload(file)
   }
 
@@ -109,7 +112,7 @@ export function GalleryUpload({
 
       {value.length === 0 ? (
         <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
-          {t('story:gallery.empty')}
+          {t(`story:${i18nPrefix}.empty`)}
         </div>
       ) : (
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -149,8 +152,8 @@ export function GalleryUpload({
                 type="button"
                 className="block w-full cursor-zoom-in"
                 onClick={() => setPreviewIndex(index)}
-                aria-label={t('story:gallery.preview')}
-                title={t('story:gallery.preview')}
+                aria-label={t(`story:${i18nPrefix}.preview`)}
+                title={t(`story:${i18nPrefix}.preview`)}
               >
                 <img
                   src={
@@ -175,8 +178,8 @@ export function GalleryUpload({
                   className="size-7"
                   disabled={disabled || isUploading || index === 0}
                   onClick={() => move(index, index - 1)}
-                  aria-label={t('story:gallery.moveUp')}
-                  title={t('story:gallery.moveUp')}
+                  aria-label={t(`story:${i18nPrefix}.moveUp`)}
+                  title={t(`story:${i18nPrefix}.moveUp`)}
                 >
                   <ArrowUp className="size-3.5" />
                 </Button>
@@ -187,8 +190,8 @@ export function GalleryUpload({
                   className="size-7"
                   disabled={disabled || isUploading || index === value.length - 1}
                   onClick={() => move(index, index + 1)}
-                  aria-label={t('story:gallery.moveDown')}
-                  title={t('story:gallery.moveDown')}
+                  aria-label={t(`story:${i18nPrefix}.moveDown`)}
+                  title={t(`story:${i18nPrefix}.moveDown`)}
                 >
                   <ArrowDown className="size-3.5" />
                 </Button>
@@ -199,8 +202,8 @@ export function GalleryUpload({
                   className="size-7"
                   disabled={disabled || isUploading}
                   onClick={() => onChange(value.filter((item) => item.id !== image.id))}
-                  aria-label={t('story:gallery.remove')}
-                  title={t('story:gallery.remove')}
+                  aria-label={t(`story:${i18nPrefix}.remove`)}
+                  title={t(`story:${i18nPrefix}.remove`)}
                 >
                   <Trash2 className="size-3.5" />
                 </Button>
@@ -219,11 +222,11 @@ export function GalleryUpload({
           onClick={() => inputRef.current?.click()}
         >
           <ImageUp className="size-4" data-icon="inline-start" />
-          {isUploading ? t('story:gallery.uploading') : t('story:gallery.add')}
+          {isUploading ? t(`story:${i18nPrefix}.uploading`) : t(`story:${i18nPrefix}.add`)}
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground">{t('story:gallery.formats')}</p>
+      <p className="text-xs text-muted-foreground">{t(`story:${i18nPrefix}.formats`)}</p>
 
       {message && <p className="text-xs text-destructive">{message}</p>}
 
@@ -248,10 +251,10 @@ export function GalleryUpload({
           {previewIndex !== null && value[previewIndex] && (
             <>
               <DialogHeader>
-                <DialogTitle>{t('story:gallery.previewTitle')}</DialogTitle>
+                <DialogTitle>{t(`story:${i18nPrefix}.previewTitle`)}</DialogTitle>
                 <DialogDescription>
                   {value[previewIndex].filename} ·{' '}
-                  {t('story:gallery.counter', {
+                  {t(`story:${i18nPrefix}.counter`, {
                     current: previewIndex + 1,
                     total: value.length,
                   })}
@@ -263,8 +266,8 @@ export function GalleryUpload({
                   variant="ghost"
                   size="icon"
                   onClick={() => go(-1)}
-                  aria-label={t('story:gallery.previous')}
-                  title={t('story:gallery.previous')}
+                  aria-label={t(`story:${i18nPrefix}.previous`)}
+                  title={t(`story:${i18nPrefix}.previous`)}
                 >
                   <ChevronLeft className="size-4" />
                 </Button>
@@ -281,8 +284,8 @@ export function GalleryUpload({
                   variant="ghost"
                   size="icon"
                   onClick={() => go(1)}
-                  aria-label={t('story:gallery.next')}
-                  title={t('story:gallery.next')}
+                  aria-label={t(`story:${i18nPrefix}.next`)}
+                  title={t(`story:${i18nPrefix}.next`)}
                 >
                   <ChevronRight className="size-4" />
                 </Button>

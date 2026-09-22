@@ -23,8 +23,9 @@ function toCode(name: string): string {
 //   (format lowercase `resource:action`) + cantumkan code-nya di permissions
 //   role yang relevan, lalu `pnpm prisma:seed`.
 // - Tambah role baru: push { name, description, permissions } ke DEFAULT_ROLES.
-//   Relasi role -> permission bersifat ADDITIVE (hanya upsert yang kurang,
-//   seeder tidak pernah menghapus relasi).
+//   Relasi role -> permission bersifat ADDITIVE (hanya upsert yang kurang), KECUALI
+//   daftar ORGANIZATION_REMOVED_PERMISSION_CODES yang di-delete targeted dari role
+//   `organization` saja (lihat konstanta di bawah).
 // ---------------------------------------------------------------------------
 const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'user:create', description: 'Membuat user baru' },
@@ -61,6 +62,8 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'event:reject', description: 'Menolak event (REQUEST -> DRAFT)' },
   { code: 'event:publish', description: 'Menerbitkan event (APPROVED -> PUBLISHED)' },
   { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
+  { code: 'event-type:create', description: 'Membuat tipe event baru' },
+  { code: 'event-type:read', description: 'Melihat daftar/detail tipe event' },
   { code: 'organization:create', description: 'Membuat organization baru' },
   { code: 'organization:read', description: 'Melihat daftar/detail organization' },
   { code: 'organization:update', description: 'Mengubah organization' },
@@ -77,11 +80,13 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'apikey:read', description: 'Melihat daftar/detail API key' },
   { code: 'apikey:update', description: 'Mengubah nama/permission API key' },
   { code: 'apikey:delete', description: 'Menghapus API key' },
+  // Gerbang manajemen user/role — HANYA role `admin` (dipetakan otomatis dari DEFAULT_PERMISSIONS).
+  { code: 'admin:access', description: 'Akses penuh manajemen user/role (admin)' },
 ];
 
 // Role default (idempoten, additive). `admin` = semua permission;
-// `organization` = pengelola konten organisasi (transisi maksimal sampai REQUEST);
-// `member` = read-only.
+// `organization` = pengelola event milik anggota organisasinya (transisi maksimal sampai REQUEST);
+// `member` = mengelola event sendiri sampai REQUEST (bukan read-only).
 const DEFAULT_ROLES: DefaultRole[] = [
   {
     name: 'admin',
@@ -90,18 +95,15 @@ const DEFAULT_ROLES: DefaultRole[] = [
   },
   {
     name: 'organization',
-    description: 'Pengelola story/event milik anggota organisasinya',
+    description: 'Pengelola event milik anggota organisasinya (tanpa story write)',
     permissions: [
-      'story:create',
       'story:read',
-      'story:update',
-      'story:delete',
-      'story:submit',
       'event:create',
       'event:read',
       'event:update',
       'event:delete',
       'event:submit',
+      'event-type:read',
       'category:read',
       'user:create',
       'user:read',
@@ -109,10 +111,15 @@ const DEFAULT_ROLES: DefaultRole[] = [
   },
   {
     name: 'member',
-    description: 'Anggota organisasi — hanya melihat konten terbit',
-    permissions: ['story:read', 'event:read', 'category:read'],
+    description: 'Anggota organisasi — mengelola event (sampai REQUEST), tanpa story write',
+    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read'],
   },
 ];
+
+// Relasi role-permission yang SENGAJA dihapus dari role `organization` (seeder otherwise
+// additive). Targeted: hanya role `organization`, tidak menyentuh custom role / relasi lain.
+// `story:read` TIDAK dihapus (lihat DEFAULT_ROLES).
+const ORGANIZATION_REMOVED_PERMISSION_CODES = ['story:create', 'story:update', 'story:delete', 'story:submit'];
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim();
 const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME?.trim();
@@ -167,7 +174,7 @@ async function main(): Promise<void> {
       console.log(`role ${saved.name}: upserted`);
     }
 
-    // ADDITIVE: hanya upsert relasi yang kurang, tidak pernah deleteMany.
+    // ADDITIVE: hanya upsert relasi yang kurang (pengecualian: targeted delete di bawah).
     for (const role of DEFAULT_ROLES) {
       const roleId = roleIdByName.get(role.name);
       if (!roleId) {
@@ -185,6 +192,22 @@ async function main(): Promise<void> {
         });
         console.log(`role-permission ${role.name} -> ${code}: upserted`);
       }
+    }
+
+    // Targeted delete: copot story-write dari role `organization` (bukan deleteMany global —
+    // custom role & relasi role lain tidak tersentuh). Perubahan permission yang di-*tambah*
+    // tetap additive lewat loop di atas.
+    const organizationRoleId = roleIdByName.get('organization');
+    if (organizationRoleId) {
+      const removed = await tx.rolePermission.deleteMany({
+        where: {
+          roleId: organizationRoleId,
+          permission: { code: { in: ORGANIZATION_REMOVED_PERMISSION_CODES } },
+        },
+      });
+      console.log(
+        `role-permission organization -> removed ${removed.count} story-write relation(s): targeted`,
+      );
     }
 
     const adminRoleId = roleIdByName.get('admin');

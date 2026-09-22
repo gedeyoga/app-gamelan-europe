@@ -249,6 +249,40 @@ export class UpdateEventDto extends PartialType(OmitType(CreateEventDto, ['thumb
 | `EVENT_FILTER_FIELDS` | `['status', 'publishedAt', 'createdAt', 'updatedAt']` |
 | `EVENT_DATE_FIELDS` | `['publishedAt', 'createdAt', 'updatedAt']` |
 
+**Filter bulan kalender (`eventMonth`)** — opsional, format `YYYY-MM` (contoh `2026-09`). Bila ada, hanya event dengan **minimal satu** `EventDate.date` di bulan tsb yang dikembalikan:
+
+```typescript
+// EventService.monthWhere — batas UTC (tanggal tersimpan = UTC midnight)
+dates: { some: { date: { gte: Date.UTC(Y, M-1, 1), lt: Date.UTC(Y, M, 1) } } }
+```
+
+- Di-AND dengan `scopeWhere`, `filter`, dan `search` yang ada — **tidak** mengubah admin scoping.
+- Format invalid → **422** (`Matches(/^\d{4}-(0[1-9]|1[0-2])$/`). Absen → perilaku list lama.
+
+**Filter "My Event" (`mine`)** — opsional, string `true`/`false` (query param). `mine=true` menyaring section "My Event" non-admin:
+
+```typescript
+// EventService.mineWhere — selalu di-AND dengan scopeWhere (scope tidak diganti)
+scope.kind === 'organization'
+  ? { creator: { organizationId: scope.organizationId } } // (a) satu organisasi
+  : { createdBy: userId }; // (b) tanpa organisasi → hanya buatan sendiri
+```
+
+- Menggantikan perilaku scope `own` (`ownReadWhere`, M5) yang memunculkan konten PUBLISHED milik orang lain; `mine=true` hanya event user sendiri (atau satu organisasi bila ber-`organizationId`).
+- Komposisi penuh: `scopeWhere ∧ filter ∧ eventMonth ∧ upcoming ∧ mine ∧ search`. Nilai selain `true`/`false` → **422**.
+
+**Filter "Upcoming" (`upcoming`)** — opsional, string `true`/`false` (query param). `upcoming=true` menyaring event yang punya **minimal satu** `EventDate.date` pada hari ini atau setelahnya (UTC, batas = awal hari UTC sekarang):
+
+```typescript
+// EventService.upcomingWhere — selalu di-AND dengan scopeWhere
+const now = new Date();
+const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+{ dates: { some: { date: { gte: startOfUtcDay } } } }
+```
+
+- Cocok untuk section dashboard "Event Mendatang". Absen → perilaku list lama; `true` → hanya event dengan tanggal hari ini/ke depan; `false` → list lama; nilai lain → **422**.
+
+
 ### `GET /api/v1/event-types`
 
 | Item | Nilai |
@@ -266,6 +300,9 @@ Respons list `{ data, meta: { page, limit, total }, message }`.
 - `GET /api/v1/events?search=gamelan&sortBy=name&sortOrder=asc`
 - `GET /api/v1/events?sortBy=visibility&sortOrder=asc` (server-side sort field `visibility`)
 - `GET /api/v1/events?filter[createdAt][gte]=2026-09-01T00:00:00Z`
+- `GET /api/v1/events?eventMonth=2026-09&sortBy=name&sortOrder=asc` (events yang punya tanggal di September 2026; navigasi prev/next bulan lewat FE)
+- `GET /api/v1/events?mine=true&eventMonth=2026-09` (section "My Event": organisasi/user sendiri + filter bulan)
+- `GET /api/v1/events?filter[status]=PUBLISHED&upcoming=true` (dashboard: event terbit dengan >=1 tanggal di masa depan; AND dengan scope)
 - `GET /api/v1/event-types?search=workshop&sortBy=name&sortOrder=asc&limit=100`
 
 ---
@@ -286,8 +323,8 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | POST | `/api/v1/events/:id/reject` | PERMISSION `event:reject` | `id` UUID (tanpa body) | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/publish` | PERMISSION `event:publish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/unpublish` | PERMISSION `event:unpublish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
-| POST | `/api/v1/event-types` | PERMISSION `event:create` | `CreateEventTypeDto` (idempoten) | 201 `{ data, message }` |
-| GET | `/api/v1/event-types` | PERMISSION `event:read` | `ListQueryDto` | 200 `{ data, meta, message }` |
+| POST | `/api/v1/event-types` | PERMISSION `event-type:create` | `CreateEventTypeDto` (idempoten) | 201 `{ data, message }` |
+| GET | `/api/v1/event-types` | PERMISSION `event-type:read` | `ListQueryDto` | 200 `{ data, meta, message }` |
 | POST | `/api/v1/images` | PERMISSION `story:create`/`story:update`/`event:create`/`event:update` (ANY-of) | multipart `file`, `entityType=event` | 201 `{ data, message }` |
 
 Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin` otomatis mendapat semuanya.
@@ -307,25 +344,26 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 - Request **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `approve` mengisi `approvedAt = now` bila masih `null`; `publish` mengisi `publishedAt = now` bila masih `null` (re-publish tidak mengubah waktu publish pertama). `unpublish`/`reject` **menyisakan** `publishedAt`/`approvedAt` (disengaja, konsisten `PATCH`).
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (admin) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; role `organization` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` hanya punya `event:submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `organization`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
 
 ### Scoping Baca & Tulis
 
-Row-level scoping (`AccessScopeService.resolve(userId)`, lihat [rbac.md §10](./rbac.md#10-row-level-scoping)) membatasi baris `Event`:
+Row-level scoping (`AccessScopeService.resolve(userId, 'event')`, per-resource; lihat [rbac.md §10](./rbac.md#10-row-level-scoping)) membatasi baris `Event`:
 
 | Scope (`kind`) | `canViewPrivate` | Baca | Tulis |
 | --- | --- | --- | --- |
-| `all` (admin) | ya | Semua status + PRIVATE. | Bebas. |
+| `all` (status-manager: `<event>:approve\|publish\|reject\|unpublish`) | ya | Semua status + PRIVATE. | Bebas. |
 | `organization` | ya | Hanya `creator.organizationId === scope.organizationId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
-| `published` (member) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
-| `published` (role lain) | tidak | Sama seperti member **dan** `visibility = PUBLIC`. | **403**. |
+| `own` | ya | Miliknya (`createdBy === scope.userId`) **atau** konten terbit (M5). | create diizinkan; update/remove/transition hanya konten miliknya. |
+| `published` (punya tulis/status event) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
+| `published` (tanpa tulis) | tidak | Sama di atas **dan** `visibility = PUBLIC`. | **403**. |
 | `none` | tidak | **List kosong**; `findOne` **403**. | **403**. |
 
-- `canViewPrivate` = `role.code ∈ ['admin','member','organization']` (`PRIVATE_READER_ROLES` di `access-scope.service.ts`), independen dari `kind`.
-- **Akses PRIVATE**: hanya user `canViewPrivate`. Role custom (bukan admin/member/organization) **tidak** boleh membaca PRIVATE.
-- **List** (`GET /events`): `organization` → `{ creator: { organizationId } }`, `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
-- **Detail**: row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
-- **Tulis**: `organization` bukan pemilik → **403** `ForbiddenException('Forbidden resource')`; `none`/`published` → **403**.
+- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `organizationId` — **bukan** nama/`role.code` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)). `all` = salah satu `event:approve/publish/reject/unpublish`; `organization` = `organizationId` + `event:create/update/submit`; `own` = tulis event tanpa `organizationId`. **`story:*` tidak memberi scope event** (M2).
+- `canViewPrivate` = punya permission **tulis** (`event:create/update/submit`) atau **status** (`event:approve/publish/reject/unpublish`) pada event/story — **bukan** sekadar `*:read` (H1). `admin`/`organization`/`member` lama punya tulis konten → tetap boleh baca PRIVATE.
+- **List** (`GET /events`): `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
+- **Detail**: row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
+- **Tulis**: `organization`/`own` bukan pemilik → **403** `ForbiddenException('Forbidden resource')`; `none`/`published` → **403**.
 - **Bypass ditutup**: scope `!= all` → create paksa `DRAFT` (buang `publishedAt`); update/transition mengabaikan `status`/`publishedAt`. Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya.
 
 ```json

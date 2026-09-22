@@ -104,6 +104,7 @@ model Post {
   content         String
   thumbnail       String?
   galleryImageIds String[]          @default([]) @map("gallery_image_ids")
+  flyerImageIds   String[]          @default([]) @map("flyer_image_ids")
   visibility      ContentVisibility @default(PUBLIC)
   createdBy       String?           @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
@@ -149,6 +150,7 @@ Catatan:
 - `Post.content` menyimpan **HTML rich text** (hasil editor WYSIWYG, sudah disanitasi di FE).
 - `Post.thumbnail` menyimpan **URL gambar absolut S3** (mis. `https://cdn.example.com/posts/<uuid>.webp`). FE tetap mengirim id `Image` terkait lewat `imageIds` agar baris `images` ter-bind ke post ([§4](#4-dto)).
 - `Post.galleryImageIds` = daftar id `Image` **berurut** (array Postgres `TEXT[]`, default `[]`). Urutan array = urutan galeri. Diganti **seluruhnya** bila `galleryImageIds` dikirim saat update. Response detail/list tidak mengembalikan field ini mentah — di-resolve jadi `gallery: ImageResponse[]` berurut ([§3](#3-entity-payload-type), [§9](#9-upload-gambar-s3--tabel-images)).
+- `Post.flyerImageIds` = daftar id `Image` **berurut** (array Postgres `TEXT[]`, default `[]`). Urutan array = urutan flyer. Diganti **seluruhnya** bila `flyerImageIds` dikirim saat update. Response detail/list tidak mengembalikan field ini mentah — di-resolve jadi `flyer: ImageResponse[]` berurut ([§3](#3-entity-payload-type), [§9](#9-upload-gambar-s3--tabel-images)).
 - `PostCategory` = relasi N : M ke `Category`; `@@unique([postId, categoryId])` mencegah duplikat link.
 - `Category.type` ∈ `STORY | ARCHIVE`. Halaman story memfilter `type=STORY`.
 - `createdBy` nullable + `onDelete: SetNull`; user dihapus → story tetap ada, `creator` null.
@@ -190,11 +192,13 @@ Catatan: `url` **tidak** ada di `Image` (tidak disimpan di DB) — dihitung saat
 
 ### Kebutuhan migration
 
-Tabel `Post`, `Category`, `PostCategory`, `Image` sudah ada dari migration init repo + `add_posts_categories` (tweak `Image`). Kolom `galleryImageIds` ditambahkan lewat migration terpisah (lihat juga [§9](#9-upload-gambar-s3--tabel-images)):
+Tabel `Post`, `Category`, `PostCategory`, `Image` sudah ada dari migration init repo + `add_posts_categories` (tweak `Image`). Kolom `galleryImageIds`/`flyerImageIds` ditambahkan lewat migration terpisah (lihat juga [§9](#9-upload-gambar-s3--tabel-images)):
 
 ```bash
 # sudah dibuat: libs/prisma/migrations/20260920120000_add_post_gallery_image_ids/migration.sql
 # ALTER TABLE "posts" ADD COLUMN "gallery_image_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+# sudah dibuat: libs/prisma/migrations/20260923120000_add_post_flyer_image_ids/migration.sql
+# ALTER TABLE "posts" ADD COLUMN "flyer_image_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 pnpm prisma:generate
 ```
 
@@ -220,6 +224,7 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
+  flyerImageIds: true,
   visibility: true,
   createdBy: true,
   creator: { select: { id: true, fullName: true } },
@@ -239,8 +244,11 @@ export type PostCategoryEntity = { id: string; name: string; type: CategoryType 
 // Kontrak response API: `categories` flat (bukan `[{ category }]`).
 export type PostEntity = Omit<PostRow, 'categories'> & { categories: PostCategoryEntity[] };
 
-// Kontrak response ke FE: `galleryImageIds` (raw) diganti `gallery` hasil resolusi berurut.
-export type PostResponse = Omit<PostEntity, 'galleryImageIds'> & { gallery: ImageResponse[] };
+// Kontrak response ke FE: `galleryImageIds`/`flyerImageIds` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
+export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerImageIds'> & {
+  gallery: ImageResponse[];
+  flyer: ImageResponse[];
+};
 
 export function mapPost(row: PostRow): PostEntity {
   return { ...row, categories: row.categories.map((link) => link.category) };
@@ -250,6 +258,8 @@ export function mapPost(row: PostRow): PostEntity {
 > **Flatten `categories`.** Repository selalu mengembalikan `PostEntity` (flat): `row.categories.map(c => c.category)` via `mapPost()`. Join shape `[{ category }]` tidak boleh bocor ke service/controller. Diterapkan konsisten di `findAll`, `findById`, `create`, `update`, `delete`.
 
 > **Resolve `gallery`.** `PostService.hydrate()` mengubah `PostEntity.galleryImageIds` → `PostResponse.gallery: ImageResponse[]` lewat `ImageRepository.findByIds` + `ImageService.toImageResponse` (jangan duplikasi logika URL/variants). Urutan `gallery` = urutan `galleryImageIds`; id yang tidak ditemukan di-skip. `galleryImageIds` **tidak** dikembalikan ke FE.
+
+> **Resolve `flyer`.** Sama seperti `gallery`: `PostService.hydrate()` mengubah `PostEntity.flyerImageIds` → `PostResponse.flyer: ImageResponse[]` berurut (satu lookup `findByIds` untuk gabungan galeri + flyer). `flyerImageIds` **tidak** dikembalikan ke FE.
 
 
 ```typescript
@@ -402,6 +412,13 @@ export class CreatePostDto {
   @IsUUID('4', { each: true })
   @ArrayMaxSize(100)
   galleryImageIds?: string[];
+
+  // Urutan flyer = urutan array ini. Diganti seluruhnya bila dikirim saat update.
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  flyerImageIds?: string[];
 }
 ```
 
@@ -501,6 +518,7 @@ export class ListCategoriesQueryDto extends ListQueryDto {}
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })` | 422 `{ field: 'categoryIds.0', message }` |
 | `imageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)` | 422 `{ field: 'imageIds.0', message }` |
 | `galleryImageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)`; urutan = urutan galeri; update = replace seluruh array | 422 `{ field: 'galleryImageIds.0', message }` |
+| `flyerImageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)`; urutan = urutan flyer; update = replace seluruh array | 422 `{ field: 'flyerImageIds.0', message }` |
 | `name` (category) | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(100)` | 422 `{ field: 'name', message }` |
 | `type` (category) | `@IsEnum(CategoryType)` | 422 `{ field: 'type', message }` |
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
@@ -590,7 +608,7 @@ async function uniqueSlug(base: string): Promise<string> {
   - `publishedAt` dikirim → `publishedAt = new Date(dto.publishedAt)` (**menimpa** nilai lama — untuk ubah/backdate jadwal terbit) **dan** `status = PUBLISHED`. `publishedAt` menang atas `status` bila keduanya dikirim.
   - `publishedAt` tidak dikirim → perilaku lama: menaikkan `status` ke `PUBLISHED` mengisi `publishedAt = now` hanya bila masih `null` (re-publish tidak mengubah waktu publish pertama); `APPROVED` mengisi `approvedAt = now` bila masih `null`.
 - `approvedAt` **tidak** dapat dikirim client (tidak ada di DTO) → kirim `approvedAt` = **422** (`forbidNonWhitelisted`). `approvedAt` tetap server-managed dan tidak disentuh oleh `publishedAt`.
-- `galleryImageIds` tidak memengaruhi aturan status: pada create/update ia disimpan apa adanya (update = replace seluruh array) dan id galeri ikut di-bind ke post (union `imageIds` + `galleryImageIds`) — lihat [§9](#9-upload-gambar-s3--tabel-images).
+- `galleryImageIds`/`flyerImageIds` tidak memengaruhi aturan status: pada create/update disimpan apa adanya (update = replace seluruh array) dan id galeri/flyer ikut di-bind ke post (union `imageIds` + `galleryImageIds` + `flyerImageIds`) — lihat [§9](#9-upload-gambar-s3--tabel-images).
 
 ```typescript
 // libs/src/modules/post/post.service.ts
@@ -622,11 +640,11 @@ Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terda
 | `publish` | `POST /posts/:id/publish` | `story:publish` | `APPROVED` | `PUBLISHED` |
 | `unpublish` | `POST /posts/:id/unpublish` | `story:unpublish` | `PUBLISHED` | `DRAFT` |
 
-- Request: **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery>, message }`.
+- Request: **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
 - Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
 - `approve` mengisi `approvedAt = now` bila masih `null` (re-approve tidak menimpa). `publish` mengisi `publishedAt = now` bila masih `null` (re-publish tidak mengubah waktu publish pertama). Action lain tidak menyentuh `approvedAt`/`publishedAt`.
 - **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish` memakai `if (!existing.publishedAt)`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama). `reject` (`REQUEST`→`DRAFT`) menyisakan `approvedAt`. Ini sengaja, konsisten dengan perilaku `PATCH` existing (re-publish memakai tanggal publish pertama).
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (admin) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk role `organization` (dan scope lain), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` hanya bisa transisi sampai `REQUEST` (`story:submit`); approve/publish tidak dimilikinya. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`organization`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
 
 ### Scoping Baca & Tulis
 
@@ -634,17 +652,19 @@ Row-level scoping (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)
 
 | Scope (`kind`) | `canViewPrivate` | Baca | Tulis |
 | --- | --- | --- | --- |
-| `all` (admin) | ya | Semua status + PRIVATE. | Bebas. |
+| `all` (status-manager: `<story>:approve\|publish\|reject\|unpublish`) | ya | Semua status + PRIVATE. | Bebas. |
 | `organization` | ya | Hanya `creator.organizationId === scope.organizationId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
-| `published` (member) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
-| `published` (role lain) | tidak | Sama seperti member **dan** `visibility = PUBLIC`. | **403**. |
+| `own` | ya | Miliknya (`createdBy === scope.userId`) **atau** konten terbit (M5). | create diizinkan; update/remove/transition hanya konten miliknya. |
+| `published` (punya tulis/status story) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
+| `published` (tanpa tulis) | tidak | Sama di atas **dan** `visibility = PUBLIC`. | **403**. |
 | `none` | tidak | **List kosong**; `findOne` **403**. | **403**. |
 
-- `canViewPrivate` = `role.code ∈ ['admin','member','organization']` (`PRIVATE_READER_ROLES` di `access-scope.service.ts`), independen dari `kind`.
-- **Akses PRIVATE**: hanya user `canViewPrivate`. Role custom (bukan admin/member/organization) **tidak** boleh membaca PRIVATE.
-- **List** (`GET /posts`): scope di-`AND` ke filter — `organization` → `{ creator: { organizationId } }`, `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
-- **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
-- **Tulis**: `organization` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**.
+- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `organizationId` — **bukan** nama/`role.code` (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)). `all` = salah satu `story:approve/publish/reject/unpublish`; `organization` = `organizationId` + `story:create/update/submit`; `own` = tulis story tanpa `organizationId`. **`event:*` tidak memberi scope story** (M2).
+- `canViewPrivate` = punya permission **tulis** (`story:create/update/submit`) atau **status** (`story:approve/publish/reject/unpublish`) pada story/event — **bukan** sekadar `*:read` (H1). `admin`/`organization`/`member` lama punya tulis konten → tetap boleh baca PRIVATE.
+- **Seed**: role `organization` & `member` **tidak** punya story write (`story:create/update/delete/submit`); hanya `story:read`. `member` justru mengelola **event** (`event:create/update/submit`). Lihat [rbac.md §7](../modules/rbac.md#7-seed-default).
+- **List** (`GET /posts`): scope di-`AND` ke filter — `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
+- **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
+- **Tulis**: `organization`/`own` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**.
 - **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body. Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
 
 Contoh 403 (detail post milik organisasi lain oleh user `organization`):
@@ -863,11 +883,11 @@ create(
 
 ### Binding ke post
 
-- Saat `POST /posts` / `PATCH /posts/:id`, FE mengirim daftar id `Image` lewat `imageIds` (gambar di `content` **dan** `thumbnail`) dan `galleryImageIds` (galeri berurut).
-- Service meng-`updateMany` row `Image` pada **union** `imageIds` + `galleryImageIds` → set `entityId = post.id` (dan pastikan `entityType='post'`). Pada **create**, post dibuat dulu (mendapat `id`) lalu binding di dalam `$transaction`.
+- Saat `POST /posts` / `PATCH /posts/:id`, FE mengirim daftar id `Image` lewat `imageIds` (gambar di `content` **dan** `thumbnail`), `galleryImageIds` (galeri berurut), dan `flyerImageIds` (flyer berurut).
+- Service meng-`updateMany` row `Image` pada **union** `imageIds` + `galleryImageIds` + `flyerImageIds` → set `entityId = post.id` (dan pastikan `entityType='post'`). Pada **create**, post dibuat dulu (mendapat `id`) lalu binding di dalam `$transaction`.
 - `thumbnail` tetap URL string absolut (FE mengirim URL + id-nya lewat `imageIds` agar baris ter-bind).
-- Id di `imageIds`/`galleryImageIds` yang tidak ada / bukan milik upload post → abaikan atau 422 (ditentukan saat implementasi; minimal jangan bind id milik entity lain). `bindImages` hanya menyentuh row yang `entityId=null` atau sudah milik post ini.
-- **Unbind galeri saat update.** `PATCH /posts/:id` yang mengirim `galleryImageIds` = replace seluruh array. Selisih id lama yang tidak lagi ada di array baru (`removedGalleryImageIds = existing.galleryImageIds − dto.galleryImageIds`) di-`unbindImages` (set `entityId = null`) dalam transaksi yang sama dengan bind. Ini mencegah gambar lama tetap menempel `entityId = postId` sehingga tak bisa dipakai post lain. Hanya berlaku untuk galeri; `imageIds` inline/thumbnail lama **tidak** di-unbind (FE tidak mengirim ulang id lama, unbind justru salah). Objek S3 & row `images` tidak dihapus (tetap orphan — batasan existing, lihat [§9 Orphan](#orphan)).
+- Id di `imageIds`/`galleryImageIds`/`flyerImageIds` yang tidak ada / bukan milik upload post → abaikan atau 422 (ditentukan saat implementasi; minimal jangan bind id milik entity lain). `bindImages` hanya menyentuh row yang `entityId=null` atau sudah milik post ini.
+- **Unbind galeri/flyer saat update.** `PATCH /posts/:id` yang mengirim `galleryImageIds` (atau `flyerImageIds`) = replace seluruh array. Selisih id lama yang tidak lagi ada di array baru (`removedGalleryImageIds = existing.galleryImageIds − dto.galleryImageIds`, `removedFlyerImageIds = existing.flyerImageIds − dto.flyerImageIds`) di-`unbindImages` (set `entityId = null`) dalam transaksi yang sama dengan bind. Ini mencegah gambar lama tetap menempel `entityId = postId` sehingga tak bisa dipakai post lain. Hanya berlaku untuk galeri/flyer; `imageIds` inline/thumbnail lama **tidak** di-unbind (FE tidak mengirim ulang id lama, unbind justru salah). Objek S3 & row `images` tidak dihapus (tetap orphan — batasan existing, lihat [§9 Orphan](#orphan)).
 
 ### Galeri post (`galleryImageIds` → `gallery`)
 
@@ -900,6 +920,15 @@ create(
   "message": "success"
 }
 ```
+
+### Flyer post (`flyerImageIds` → `flyer`)
+
+Paralel dengan galeri: daftar gambar berurut kedua.
+
+- `Post.flyerImageIds` = `String[]` (Postgres `TEXT[]`, `@default([])`, kolom `flyer_image_ids`). Urutan array = urutan flyer.
+- **Create/update**: disimpan apa adanya; pada update, `flyerImageIds` dikirim → **replace seluruh array** (tidak ada saat tidak dikirim = jangan sentuh).
+- **Response** (`GET /posts`, `GET /posts/:id`, `POST/PATCH/DELETE /posts`): field `flyer: ImageResponse[]` berurut sesuai `flyerImageIds`, bentuk sama dengan `gallery`/respons `POST /images`. `flyerImageIds` mentah **tidak** dikembalikan.
+- Resolusi lewat `ImageRepository.findByIds` + `ImageService.toImageResponse` (tidak menduplikasi logika URL/variants); `hydrate()` melakukan **satu** lookup untuk gabungan id galeri + flyer, lalu menyusun ulang per post. Id yang tidak ditemukan di-skip.
 
 ### Hapus post (`DELETE /posts/:id`)
 
