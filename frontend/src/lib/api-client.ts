@@ -1,4 +1,11 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+declare global {
+  interface Window {
+    __API_BASE_URL__?: string
+  }
+}
+
+const BASE_URL =
+  window.__API_BASE_URL__ || import.meta.env.VITE_API_BASE_URL || '/api/v1'
 const TOKEN_KEY = 'auth.token'
 const REFRESH_TOKEN_KEY = 'auth.refreshToken'
 const USER_KEY = 'auth.user'

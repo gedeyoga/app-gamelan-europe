@@ -17,8 +17,11 @@
 #   DATABASE_URL, REDIS_URL, S3_ENDPOINT, S3_PUBLIC_BASE_URL
 # (S3_PUBLIC_BASE_URL is browser-facing; the rest are container-facing.)
 #
-# The frontend stays on the `internal` network so its nginx can proxy /api/
-# to backend-app:3001 same-origin; cross-subdomain CORS is therefore unnecessary.
+# The browser calls the backend cross-origin at https://api.<BASE_DOMAIN>/api/v1
+# (injected into the frontend at container start via VITE_API_BASE_URL); the
+# frontend nginx no longer proxies /api/. CORS is therefore required: backend-app
+# is given CORS_ORIGINS=https://app.<BASE_DOMAIN>, credentials stay off (bearer
+# tokens in localStorage, no cookies).
 #
 # pgbouncer is reached over the external `traefik` network, which
 # backend-app and backend-worker join; postgres itself is intentionally
@@ -33,6 +36,8 @@ services:
     image: ${IMAGE_PREFIX:-ghcr.io/gedeyoga/app-gamelan-europe}/backend-app:${IMAGE_TAG:-latest}
     env_file:
       - ${BACKEND_ENV_FILE:-./backend/.env}
+    environment:
+      CORS_ORIGINS: "https://app.${BASE_DOMAIN:?BASE_DOMAIN is required}"
     restart: unless-stopped
     expose:
       - "3001"
@@ -75,12 +80,11 @@ services:
   frontend:
     image: ${IMAGE_PREFIX:-ghcr.io/gedeyoga/app-gamelan-europe}/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    depends_on:
-      - backend-app
+    environment:
+      VITE_API_BASE_URL: "https://api.${BASE_DOMAIN:?BASE_DOMAIN is required}/api/v1"
     expose:
       - "80"
     networks:
-      - internal
       - traefik
     labels:
       - 'traefik.enable=true'

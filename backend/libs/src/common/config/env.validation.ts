@@ -28,6 +28,7 @@ const storageBase = {
 export const appEnvValidationSchema = Joi.object({
   ...internalBase,
   ...storageBase,
+  CORS_ORIGINS: Joi.string().allow('').optional(),
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRES_IN: Joi.string()
     .pattern(/^\d+[smhd]$/)
