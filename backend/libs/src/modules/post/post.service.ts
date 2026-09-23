@@ -22,7 +22,7 @@ export type PostAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpublis
 // Sumber tunggal aturan transisi status story. Pure & mudah diaudit.
 export const POST_TRANSITIONS: Record<PostAction, { from: ContentStatus; to: ContentStatus }> = {
   submit: { from: ContentStatus.DRAFT, to: ContentStatus.REQUEST },
-  approve: { from: ContentStatus.REQUEST, to: ContentStatus.APPROVED },
+  approve: { from: ContentStatus.REQUEST, to: ContentStatus.PUBLISHED },
   reject: { from: ContentStatus.REQUEST, to: ContentStatus.DRAFT },
   publish: { from: ContentStatus.APPROVED, to: ContentStatus.PUBLISHED },
   unpublish: { from: ContentStatus.PUBLISHED, to: ContentStatus.DRAFT },
@@ -213,7 +213,8 @@ export class PostService {
         : status === ContentStatus.PUBLISHED
           ? now
           : undefined,
-      approvedAt: status === ContentStatus.APPROVED ? now : undefined,
+      // Audit marker "pertama kali terbit" (dibuat langsung PUBLISHED), bukan status APPROVED.
+      approvedAt: autoPublish || status === ContentStatus.PUBLISHED ? now : undefined,
       categoryIds: dto.categoryIds,
       imageIds: dto.imageIds,
       galleryImageIds: dto.galleryImageIds,
@@ -290,11 +291,18 @@ export class PostService {
         // Tanggal publish manual: timpa nilai lama (ubah/backdate) + paksa PUBLISHED.
         data.publishedAt = new Date(dto.publishedAt);
         data.status = ContentStatus.PUBLISHED;
+        if (!existing.approvedAt) data.approvedAt = new Date();
       } else if (dto.status !== undefined) {
         data.status = dto.status;
-        if (dto.status === ContentStatus.PUBLISHED && !existing.publishedAt) data.publishedAt = new Date();
-        if (dto.status === ContentStatus.APPROVED && !existing.approvedAt) data.approvedAt = new Date();
+        if (dto.status === ContentStatus.PUBLISHED) {
+          if (!existing.publishedAt) data.publishedAt = new Date();
+          if (!existing.approvedAt) data.approvedAt = new Date();
+        }
       }
+    } else if (dto.status === ContentStatus.DRAFT && existing.status === ContentStatus.PUBLISHED) {
+      // Pemilik/organisasi boleh menarik kembali kontennya yang sudah terbit menjadi DRAFT.
+      // `publishedAt`/`approvedAt` dibiarkan (konsisten dengan transisi `unpublish`).
+      data.status = ContentStatus.DRAFT;
     }
 
     const post = await this.postRepository.update(id, data);
@@ -302,7 +310,13 @@ export class PostService {
   }
 
   // Transisi status terkontrol; `PATCH /posts/:id` tetap untuk update konten.
-  async transition(id: string, action: PostAction, userId: string): Promise<PostResponse> {
+  // `approve` langsung PUBLISHED (+ `publishedAt`); `publish` legacy (APPROVED → PUBLISHED) tetap ada.
+  async transition(
+    id: string,
+    action: PostAction,
+    userId: string,
+    options?: { publishedAt?: string },
+  ): Promise<PostResponse> {
     const existing = await this.postRepository.findById(id); // 404 bila tak ada
     const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(existing, scope);
@@ -311,9 +325,14 @@ export class PostService {
       throw new ConflictException(`Cannot ${action} post in status ${existing.status}`);
     }
     // `updateStatusIf` conditional → dua request paralel dari status sama: hanya satu sukses.
+    // `approvedAt` = audit marker "pertama kali terbit" (server-managed), bukan status APPROVED.
     const extra: { approvedAt?: Date; publishedAt?: Date } = {};
-    if (action === 'approve' && !existing.approvedAt) extra.approvedAt = new Date();
-    if (action === 'publish' && !existing.publishedAt) extra.publishedAt = new Date();
+    if (action === 'approve' || action === 'publish') {
+      extra.publishedAt = options?.publishedAt
+        ? new Date(options.publishedAt)
+        : (existing.publishedAt ?? new Date());
+      extra.approvedAt = existing.approvedAt ?? new Date();
+    }
     const updated = await this.postRepository.updateStatusIf(id, rule.from, rule.to, extra);
     if (!updated) {
       const current = await this.postRepository.findById(id); // 404 bila post terhapus

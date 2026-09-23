@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm, useWatch, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarCheck,
   CalendarClock,
   Check,
   PanelRightClose,
@@ -23,17 +22,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { FormField, FormItem, FormMessage, Form } from '@/components/ui/form'
-import { DateTimePicker } from '@/components/shared/date-time-picker'
+import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
@@ -42,7 +32,19 @@ import { RichTextEditor } from '@/components/shared/rich-text-editor'
 import { StoryMetaPanel } from './story-meta-panel'
 import { createStorySchema, type StoryFormValues } from '../lib/schema'
 import { slugify } from '../lib/slug'
-import type { ContentStatus, CreateStoryInput, StoryCategory, UploadedImage } from '../types'
+import type {
+  ContentStatus,
+  CreateStoryInput,
+  StoryCategory,
+  StoryFormAction,
+  UploadedImage,
+} from '../types'
+
+const STATUS_BY_ACTION: Partial<Record<StoryFormAction, ContentStatus>> = {
+  draft: 'DRAFT',
+  request: 'REQUEST',
+  publish: 'PUBLISHED',
+}
 
 export interface StoryFormProps {
   mode: 'create' | 'edit'
@@ -52,7 +54,7 @@ export interface StoryFormProps {
   initialFlyer?: UploadedImage[]
   isPending: boolean
   submissionError: Error | null
-  onSubmit: (payload: CreateStoryInput) => void
+  onSubmit: (payload: CreateStoryInput, action: StoryFormAction) => void
   onCancel: () => void
   categories: StoryCategory[]
   isLoadingCategories: boolean
@@ -113,11 +115,11 @@ export function StoryForm({
   const [showSettings, setShowSettings] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
-    status: ContentStatus
+    action: StoryFormAction
     label: string
   } | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
-  const [publishAt, setPublishAt] = useState<string | undefined>(undefined)
+  const [publishAction, setPublishAction] = useState<'publish' | 'approve'>('publish')
 
   // 422 → per-field; 409 → per-field pada `slug`; keduanya tanpa toast, tetap di halaman.
   useEffect(() => {
@@ -220,7 +222,7 @@ export function StoryForm({
     }
   }
 
-  function handleSubmit(values: StoryFormValues & { publishedAt?: string }) {
+  function handleSubmit(values: StoryFormValues, action: StoryFormAction, publishedAt?: string) {
     const name = values.name.trim()
     const slug = values.slug.trim()
     const imageIds = Array.from(
@@ -228,12 +230,10 @@ export function StoryForm({
     )
     const payload: CreateStoryInput = {
       name,
-      status: values.status,
+      status: STATUS_BY_ACTION[action] ?? values.status,
       visibility: values.visibility,
       categoryIds: values.categoryIds,
-      ...(values.publishedAt
-        ? { publishedAt: new Date(values.publishedAt).toISOString() }
-        : {}),
+      ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
       ...(values.content ? { content: values.content } : {}),
       ...(imageIds.length > 0 ? { imageIds } : {}),
@@ -246,34 +246,24 @@ export function StoryForm({
     if (mode === 'edit' || flyerImageIds.length > 0) payload.flyerImageIds = flyerImageIds
     // Hanya kirim `thumbnail` bila berubah: hapus → `null`, ganti → url baru.
     if (thumbnail !== initialThumbnail) payload.thumbnail = thumbnail
-    onSubmit(payload)
+    onSubmit(payload, action)
   }
 
-  function submitWithStatus(next: ContentStatus, publishedAt?: string) {
-    void form.handleSubmit((values) => handleSubmit({ ...values, status: next, publishedAt }))()
+  function runSubmit(action: StoryFormAction, publishedAt?: string) {
+    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt))()
   }
 
-  function submitCurrent() {
-    void form.handleSubmit(handleSubmit)()
-  }
-
-  async function openPublishDialog() {
+  async function openPublishDialog(action: 'publish' | 'approve') {
     const valid = await form.trigger()
     if (!valid) return
-    setPublishAt(initialPublishedAt ?? new Date().toISOString())
+    setPublishAction(action)
     setPublishOpen(true)
   }
 
-  function handleConfirmPublish() {
-    setPublishOpen(false)
-    if (!publishAt) return
-    submitWithStatus('PUBLISHED', publishAt)
-  }
-
-  async function requestStatusChange(next: ContentStatus, label: string) {
+  async function requestStatusChange(action: StoryFormAction, label: string) {
     const valid = await form.trigger()
     if (!valid) return
-    setConfirmAction({ status: next, label })
+    setConfirmAction({ action, label })
     setConfirmOpen(true)
   }
 
@@ -286,29 +276,34 @@ export function StoryForm({
 
   const actions = (
     <>
-      {status === 'REQUEST' || status === 'PUBLISHED' ? (
-        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={submitCurrent}>
-          <Save className="size-4" data-icon="inline-start" />
-          {t('story:form.save')}
-        </Button>
-      ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isPending}
+        onClick={() => runSubmit('save')}
+      >
+        <Save className="size-4" data-icon="inline-start" />
+        {status === 'DRAFT' ? t('story:form.saveAsDraft') : t('story:form.save')}
+      </Button>
+      {(status === 'PUBLISHED' || (canPublishStory && status === 'APPROVED')) && (
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={isPending}
-          onClick={() => void requestStatusChange('DRAFT', t('story:form.saveAsDraft'))}
+          onClick={() => void requestStatusChange('draft', t('story:form.saveAsDraft'))}
         >
           <Save className="size-4" data-icon="inline-start" />
           {t('story:form.saveAsDraft')}
         </Button>
       )}
-      {canPublishStory && status !== 'REQUEST' && status !== 'PUBLISHED' && (
+      {canPublishStory && status !== 'REQUEST' && (
         <Button
           type="button"
           size="sm"
           disabled={isPending}
-          onClick={() => void openPublishDialog()}
+          onClick={() => void openPublishDialog('publish')}
         >
           <CalendarClock className="size-4" data-icon="inline-start" />
           {t('story:form.publish')}
@@ -319,7 +314,10 @@ export function StoryForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-1 flex-col gap-4 lg:min-h-0">
+      <form
+        onSubmit={form.handleSubmit((values) => handleSubmit(values, 'save'))}
+        className="flex flex-1 flex-col gap-4 lg:min-h-0"
+      >
         {globalMessage && (
           <p
             role="alert"
@@ -340,7 +338,7 @@ export function StoryForm({
                     variant="outline"
                     size="sm"
                     disabled={isPending}
-                    onClick={() => void requestStatusChange('DRAFT', t('story:workflow.reject'))}
+                    onClick={() => void requestStatusChange('reject', t('story:workflow.reject'))}
                   >
                     <X className="size-4" data-icon="inline-start" />
                     {t('story:workflow.reject')}
@@ -351,7 +349,7 @@ export function StoryForm({
                     type="button"
                     size="sm"
                     disabled={isPending}
-                    onClick={() => void openPublishDialog()}
+                    onClick={() => void openPublishDialog('approve')}
                   >
                     <Check className="size-4" data-icon="inline-start" />
                     {t('story:workflow.approve')}
@@ -479,9 +477,9 @@ export function StoryForm({
             <AlertDialogAction
               disabled={isPending}
               onClick={() => {
-                const next = confirmAction?.status
+                const action = confirmAction?.action
                 setConfirmOpen(false)
-                if (next) submitWithStatus(next)
+                if (action) runSubmit(action)
               }}
             >
               <Check className="size-4" data-icon="inline-start" />
@@ -491,43 +489,28 @@ export function StoryForm({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={publishOpen} onOpenChange={(open) => setPublishOpen(open)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('story:publishDialog.title')}</DialogTitle>
-            <DialogDescription>{t('story:publishDialog.description')}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="story-publish-at" className="text-sm font-medium">
-              {t('story:publishDialog.dateLabel')}
-            </label>
-            <DateTimePicker
-              id="story-publish-at"
-              value={publishAt}
-              onChange={setPublishAt}
-              placeholder={t('story:publishDialog.datePlaceholder')}
-              disabled={isPending}
-            />
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm">
-                <X className="size-4" data-icon="inline-start" />
-                {t('story:form.cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isPending || !publishAt}
-              onClick={handleConfirmPublish}
-            >
-              <CalendarCheck className="size-4" data-icon="inline-start" />
-              {t('story:publishDialog.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PublishScheduleDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        onConfirm={(publishedAt) =>
+          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt)
+        }
+        isPending={isPending}
+        defaultValue={initialPublishedAt ?? new Date().toISOString()}
+        title={t('story:publishDialog.title')}
+        description={t('story:publishDialog.description')}
+        dateLabel={t('story:publishDialog.dateLabel')}
+        datePlaceholder={t('story:publishDialog.datePlaceholder')}
+        nextLabel={t('story:confirm.submit')}
+        confirmTitle={t('story:confirm.title')}
+        confirmDescription={t('story:publishDialog.confirmDescription')}
+        confirmLabel={
+          publishAction === 'approve'
+            ? t('story:workflow.approve')
+            : t('story:publishDialog.confirm')
+        }
+        cancelLabel={t('story:form.cancel')}
+      />
     </Form>
   )
 }

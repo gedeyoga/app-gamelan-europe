@@ -35,6 +35,12 @@ tags:
     description: Event type taxonomy. Create is idempotent by `name`. No detail endpoint.
   - name: Images
     description: S3 image upload (multipart).
+  - name: Archives
+    description: |
+      Archives + status transitions. `GET /archives` is the backend resource for
+      the UI "Archives" menu.
+  - name: Documents
+    description: PDF document upload (multipart); bound to archives via `documentIds`.
 security:
   - apiKeyAuth: []
 paths:
@@ -46,6 +52,9 @@ paths:
       description: |
         Permission `story:read`. Row-level scoping applied server-side
         (`all` / `organization` / `published` / `none`).
+
+        Member-only (`visibility=PRIVATE`) rows are never returned to callers lacking
+        member access — the list filters them out.
 
         Filter by status with `filter[status]` (e.g. `filter[status]=PUBLISHED`);
         see the `filter` parameter for the full set of allowed keys.
@@ -108,7 +117,9 @@ paths:
       tags: [Story]
       operationId: getPost
       summary: Get post by id
-      description: Permission `story:read`.
+      description: |
+        Permission `story:read`. Member-only (`visibility=PRIVATE`) rows are never
+        returned to callers lacking member access — detail returns 403.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
@@ -221,10 +232,16 @@ paths:
     post:
       tags: [Story]
       operationId: approvePost
-      summary: Approve post (REQUEST → APPROVED)
-      description: Permission `story:approve`. Invalid current status → 409.
+      summary: Approve & publish post (REQUEST → PUBLISHED)
+      description: Permission `story:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
       responses:
         '200':
           description: Post transitioned.
@@ -242,6 +259,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -278,9 +297,15 @@ paths:
       tags: [Story]
       operationId: publishPost
       summary: Publish post (APPROVED → PUBLISHED)
-      description: Permission `story:publish`. Invalid current status → 409.
+      description: Permission `story:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
       responses:
         '200':
           description: Post transitioned.
@@ -298,6 +323,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -479,6 +506,9 @@ paths:
         Permission `event:read`. Row-level scoping applied server-side
         (`all` / `organization` / `published` / `none`).
 
+        Member-only (`visibility=PRIVATE`) rows are never returned to callers lacking
+        member access — the list filters them out.
+
         Filter by status with `filter[status]` (e.g. `filter[status]=PUBLISHED`);
         see the `filter` parameter for the full set of allowed keys.
       parameters:
@@ -540,7 +570,9 @@ paths:
       tags: [Events]
       operationId: getEvent
       summary: Get event by id
-      description: Permission `event:read`.
+      description: |
+        Permission `event:read`. Member-only (`visibility=PRIVATE`) rows are never
+        returned to callers lacking member access — detail returns 403.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
@@ -653,10 +685,16 @@ paths:
     post:
       tags: [Events]
       operationId: approveEvent
-      summary: Approve event (REQUEST → APPROVED)
-      description: Permission `event:approve`. Invalid current status → 409.
+      summary: Approve & publish event (REQUEST → PUBLISHED)
+      description: Permission `event:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
       responses:
         '200':
           description: Event transitioned.
@@ -674,6 +712,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -710,9 +750,15 @@ paths:
       tags: [Events]
       operationId: publishEvent
       summary: Publish event (APPROVED → PUBLISHED)
-      description: Permission `event:publish`. Invalid current status → 409.
+      description: Permission `event:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
       responses:
         '200':
           description: Event transitioned.
@@ -730,6 +776,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -847,6 +895,347 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /documents:
+    post:
+      tags: [Documents]
+      operationId: uploadDocument
+      summary: Upload a PDF document to S3
+      description: |
+        Permission ANY-of `archive:create`, `archive:update`. `multipart/form-data`
+        with field `file` (mime `application/pdf` only, validated by magic bytes
+        `%PDF-`; max `UPLOAD_DOCUMENT_MAX_SIZE_MB`, default 10 MB). The document is
+        unbound (`entityId: null`) until referenced by an archive via `documentIds`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentUploadRequest'
+      responses:
+        '201':
+          description: Uploaded document metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentUploadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives:
+    get:
+      tags: [Archives]
+      operationId: listArchives
+      summary: List archives (paginated)
+      description: |
+        Permission `archive:read`. Row-level scoping applied server-side.
+        `GET /archives` is the backend resource for the UI "Archives" menu.
+
+        Member-only rows (`type=MEMBER`) have `externalLinks` set to `null` when the
+        caller lacks member access (`canViewPrivate=false`).
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/ArchiveSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/ArchiveFilterParam'
+      responses:
+        '200':
+          description: Paginated list of archives.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Archives]
+      operationId: createArchive
+      summary: Create archive
+      description: |
+        Permission `archive:create`. Non-admin scopes cannot force
+        `status`/`publishedAt` (forced to `DRAFT`). Sending `publishedAt` forces
+        `status=PUBLISHED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateArchiveRequest'
+      responses:
+        '201':
+          description: Archive created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}:
+    get:
+      tags: [Archives]
+      operationId: getArchive
+      summary: Get archive by id
+      description: |
+        Permission `archive:read`. Member-only (`type=MEMBER`) archives return
+        `externalLinks` and `documents` as `null` when the caller lacks member
+        access (`canViewPrivate=false`).
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Archive detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Archives]
+      operationId: updateArchive
+      summary: Update archive
+      description: |
+        Permission `archive:update`. Array fields (`categoryIds`, `externalLinks`,
+        `documentIds`) are replace-all when sent. `thumbnail: null` clears it.
+        `publishedAt: null` clears the date without forcing `PUBLISHED`.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateArchiveRequest'
+      responses:
+        '200':
+          description: Archive updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Archives]
+      operationId: deleteArchive
+      summary: Delete archive
+      description: Permission `archive:delete`. Deletes bound document rows + S3 objects (best effort).
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted archive (resolved documents included).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}/submit:
+    post:
+      tags: [Archives]
+      operationId: submitArchive
+      summary: Submit archive for review (DRAFT → REQUEST)
+      description: Permission `archive:submit`. Invalid current status → 409.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Archive transitioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}/approve:
+    post:
+      tags: [Archives]
+      operationId: approveArchive
+      summary: Approve & publish archive (REQUEST → PUBLISHED)
+      description: Permission `archive:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
+      responses:
+        '200':
+          description: Archive transitioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}/reject:
+    post:
+      tags: [Archives]
+      operationId: rejectArchive
+      summary: Reject archive (REQUEST → DRAFT)
+      description: Permission `archive:reject`. Invalid current status → 409.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Archive transitioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}/publish:
+    post:
+      tags: [Archives]
+      operationId: publishArchive
+      summary: Publish archive (APPROVED → PUBLISHED)
+      description: Permission `archive:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
+      responses:
+        '200':
+          description: Archive transitioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/{id}/unpublish:
+    post:
+      tags: [Archives]
+      operationId: unpublishArchive
+      summary: Unpublish archive (PUBLISHED → DRAFT)
+      description: Permission `archive:unpublish`. Invalid current status → 409.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Archive transitioned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -996,6 +1385,29 @@ components:
       schema:
         type: object
         additionalProperties: true
+    ArchiveSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `type`, `status`, `publishedAt`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, type, status, publishedAt, createdAt, updatedAt]
+        default: createdAt
+    ArchiveFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `type` (ArchiveType), `status`
+        (ArchiveStatus), `publishedAt`, `createdAt`, `updatedAt` (ISO 8601; date
+        operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
 
   responses:
     BadRequest:
@@ -1088,6 +1500,12 @@ components:
     CategoryType:
       type: string
       enum: [STORY, ARCHIVE]
+    ArchiveType:
+      type: string
+      enum: [MEMBER, PUBLIC]
+    ArchiveStatus:
+      type: string
+      enum: [DRAFT, REQUEST, APPROVED, PUBLISHED]
 
     # ---------- envelopes ----------
     SuccessMessage:
@@ -1794,6 +2212,230 @@ components:
         location:
           $ref: '#/components/schemas/EventLocationInput'
 
+    # ---------- archives ----------
+    PublishContentRequest:
+      type: object
+      additionalProperties: false
+      description: Optional body for `approve` / `publish`.
+      properties:
+        publishedAt:
+          type: string
+          format: date-time
+          description: Optional ISO 8601 publish date; defaults to the existing value or now.
+    Document:
+      type: object
+      required: [id, url, key, filename, mimeType, size]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        key:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: [string, 'null']
+        size:
+          type: [integer, 'null']
+    ArchiveCreatorRef:
+      type: object
+      required: [id, fullName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+    ArchiveListItem:
+      type: object
+      description: |
+        Archive list item. `externalLinks` is `null` when `type=MEMBER` and the
+        caller lacks member access (`canViewPrivate=false`); otherwise it is the
+        ordered list of URLs. `documents` is not present on list items.
+      required:
+        - id
+        - name
+        - description
+        - thumbnail
+        - type
+        - status
+        - publishedAt
+        - approvedAt
+        - externalLinks
+        - categories
+        - creator
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        thumbnail:
+          type: [string, 'null']
+        type:
+          $ref: '#/components/schemas/ArchiveType'
+        status:
+          $ref: '#/components/schemas/ArchiveStatus'
+        publishedAt:
+          type: [string, 'null']
+          format: date-time
+        approvedAt:
+          type: [string, 'null']
+          format: date-time
+        externalLinks:
+          type: [array, 'null']
+          maxItems: 50
+          description: '`null` when `type=MEMBER` and the caller lacks member access (`canViewPrivate=false`).'
+          items:
+            type: string
+            format: uri
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryRef'
+        creator:
+          anyOf:
+            - $ref: '#/components/schemas/ArchiveCreatorRef'
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Archive:
+      allOf:
+        - $ref: '#/components/schemas/ArchiveListItem'
+        - type: object
+          description: |
+            Archive detail. `documents` is `null` when `type=MEMBER` and the caller
+            lacks member access (`canViewPrivate=false`); otherwise it is the
+            ordered list of bound documents. `externalLinks` follows the same rule.
+          required: [documents]
+          properties:
+            documents:
+              type: [array, 'null']
+              items:
+                $ref: '#/components/schemas/Document'
+    ArchiveResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Archive'
+    ArchiveListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ArchiveListItem'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    CreateArchiveRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Optional fields are validated with `@IsOptional()`: omit them rather than
+        sending `null`. Only `thumbnail`/`publishedAt` in the update DTO define
+        explicit `null` semantics.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        thumbnail:
+          type: string
+          maxLength: 2048
+        type:
+          $ref: '#/components/schemas/ArchiveType'
+        status:
+          $ref: '#/components/schemas/ArchiveStatus'
+        publishedAt:
+          type: string
+          format: date-time
+          description: When sent, forces `status=PUBLISHED`.
+        categoryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        externalLinks:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uri
+        documentIds:
+          type: array
+          maxItems: 50
+          description: Ordered document ids; replaces the whole array on update.
+          items:
+            type: string
+            format: uuid
+    UpdateArchiveRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        All fields optional; omit a field to leave it untouched. `thumbnail: null`
+        clears the thumbnail; `publishedAt: null` clears the publish date without
+        forcing `status`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        thumbnail:
+          anyOf:
+            - type: string
+              maxLength: 2048
+            - type: 'null'
+          description: '`undefined` = leave untouched; `null` = clear thumbnail.'
+        type:
+          $ref: '#/components/schemas/ArchiveType'
+        status:
+          $ref: '#/components/schemas/ArchiveStatus'
+        publishedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: '`null` = clear the date without forcing `PUBLISHED`; a value overrides `status` and forces `PUBLISHED`.'
+        categoryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        externalLinks:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uri
+        documentIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+
     # ---------- upload ----------
     UploadImageRequest:
       type: object
@@ -1807,3 +2449,23 @@ components:
           type: string
           enum: [post, event]
           default: post
+    DocumentUploadRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: 'PDF only (`application/pdf`, validated by magic bytes `%PDF-`). Max size `UPLOAD_DOCUMENT_MAX_SIZE_MB` (default 10 MB).'
+        entityType:
+          type: string
+          enum: [archive]
+          default: archive
+    DocumentUploadResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Document'

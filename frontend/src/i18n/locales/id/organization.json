@@ -3,7 +3,7 @@
   "subtitle": "Kelola organisasi dan lokasinya",
   "add": "Tambah Organization",
   "search": {
-    "placeholder": "Cari nama, kota, negara, atau alamat...",
+    "placeholder": "Cari nama, negara bagian, negara, atau alamat...",
     "ariaLabel": "Cari organisasi"
   },
   "errors": {
@@ -12,7 +12,7 @@
   },
   "table": {
     "name": "Nama",
-    "city": "Kota",
+    "state": "Negara Bagian",
     "country": "Negara",
     "created": "Dibuat",
     "empty": "Belum ada organisasi",
@@ -27,11 +27,17 @@
     "createDescription": "Buat organisasi baru.",
     "editDescription": "Perbarui data organisasi.",
     "name": "Nama",
-    "city": "Kota",
+    "state": "Negara Bagian",
     "country": "Negara",
     "address": "Alamat",
-    "lat": "Latitude",
-    "lng": "Longitude"
+    "mapLabel": "Pilih lokasi di peta",
+    "countryPlaceholder": "Pilih negara",
+    "countrySearch": "Cari negara...",
+    "countryEmpty": "Negara tidak ditemukan.",
+    "statePlaceholder": "Pilih negara bagian",
+    "stateSearch": "Cari negara bagian...",
+    "stateEmpty": "Negara bagian tidak ditemukan.",
+    "stateSelectCountry": "Pilih negara terlebih dahulu"
   },
   "delete": {
     "title": "Hapus Organization",

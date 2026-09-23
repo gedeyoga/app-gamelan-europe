@@ -12,9 +12,19 @@ export interface UseStoriesParams {
   sortOrder?: ListSortOrder | null
   /** Filter generik `filter[<key>]=<value>` (diteruskan ke `GET /posts`). */
   filter?: Record<string, string>
+  /** `false` → query tidak dijalankan (mis. gate admin di dashboard). */
+  enabled?: boolean
 }
 
-export function useStories({ page, limit, search, sortBy, sortOrder, filter }: UseStoriesParams) {
+export function useStories({
+  page,
+  limit,
+  search,
+  sortBy,
+  sortOrder,
+  filter,
+  enabled,
+}: UseStoriesParams) {
   return useQuery({
     queryKey: [
       'story',
@@ -23,5 +33,6 @@ export function useStories({ page, limit, search, sortBy, sortOrder, filter }: U
     queryFn: () => listPosts({ page, limit, search, sortBy, sortOrder, filter }),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+    enabled,
   })
 }

@@ -67,3 +67,35 @@ export function formatDate(
     return DATETIME_FALLBACK
   }
 }
+
+export interface DayMonthParts {
+  /** Nomor hari, mis. `"15"`. */
+  day: string
+  /** Nama bulan pendek lokal browser, mis. `"Jan"`. */
+  month: string
+}
+
+/**
+ * Pecahan tanggal untuk chip kalender: nomor hari + nama bulan pendek.
+ * Ditujukan untuk nilai tanggal ber-UTC-midnight (tanggal event): komponen UTC
+ * dibaca lalu diproyeksikan ke tengah hari lokal agar hari tidak bergeser oleh
+ * timezone client — sama dengan pola `features/event/lib/format.ts`.
+ * Invalid/kosong → `{ day: '—', month: '' }`, tidak pernah melempar.
+ */
+export function formatDayMonth(value: DateTimeInput): DayMonthParts {
+  const date = toDate(value)
+  if (date === null) return { day: DATETIME_FALLBACK, month: '' }
+  const local = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12)
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, {
+      day: 'numeric',
+      month: 'short',
+    }).formatToParts(local)
+    return {
+      day: parts.find((part) => part.type === 'day')?.value ?? DATETIME_FALLBACK,
+      month: parts.find((part) => part.type === 'month')?.value ?? '',
+    }
+  } catch {
+    return { day: DATETIME_FALLBACK, month: '' }
+  }
+}

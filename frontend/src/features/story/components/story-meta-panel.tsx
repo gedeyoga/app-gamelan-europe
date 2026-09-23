@@ -11,16 +11,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
-import { CategoryCombobox } from './category-combobox'
+import { CategoryCombobox } from '@/components/shared/category-combobox'
 import { GalleryUpload } from './gallery-upload'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import type { StoryFormValues } from '../lib/schema'
@@ -155,20 +149,26 @@ export function StoryMetaPanel({
         render={({ field }) => (
           <FormItem>
             <FormLabel>{t('story:form.visibility')}</FormLabel>
-            <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-              <FormControl>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
+            <FormControl>
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={disabled}
+                aria-label={t('story:form.visibility')}
+                className="flex flex-wrap gap-4"
+              >
                 {VISIBILITIES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {t(`story:visibilityOptions.${value}`)}
-                  </SelectItem>
+                  <FormItem key={value} className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value={value} />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      {t(`story:visibilityOptions.${value}`)}
+                    </FormLabel>
+                  </FormItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </RadioGroup>
+            </FormControl>
             <FormMessage />
           </FormItem>
         )}

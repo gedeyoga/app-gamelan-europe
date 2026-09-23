@@ -19,6 +19,8 @@ import { EventModule } from './modules/event/event.module';
 import { EventTypeModule } from './modules/event-type/event-type.module';
 import { ImageModule } from './modules/image/image.module';
 import { PostModule } from './modules/post/post.module';
+import { DocumentModule } from './modules/document/document.module';
+import { ArchiveModule } from './modules/archive/archive.module';
 import { OrganizationModule } from './modules/organization/organization.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { BillingModule } from './modules/billing/billing.module';
@@ -49,6 +51,8 @@ const redisProvider = {
     EventTypeModule,
     ImageModule,
     PostModule,
+    DocumentModule,
+    ArchiveModule,
     OrganizationModule,
     SubscriptionModule,
     BillingModule,
@@ -73,6 +77,8 @@ const redisProvider = {
     EventTypeModule,
     ImageModule,
     PostModule,
+    DocumentModule,
+    ArchiveModule,
     OrganizationModule,
     SubscriptionModule,
     BillingModule,

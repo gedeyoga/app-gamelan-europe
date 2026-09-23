@@ -18,6 +18,8 @@ export interface UseEventsParams {
   upcoming?: boolean
   /** Filter generik `filter[<key>]=<value>` (diteruskan ke `GET /events`). */
   filter?: Record<string, string>
+  /** `false` → query tidak dijalankan (mis. gate admin di dashboard). */
+  enabled?: boolean
 }
 
 export function useEvents({
@@ -30,6 +32,7 @@ export function useEvents({
   mine,
   upcoming,
   filter,
+  enabled,
 }: UseEventsParams) {
   return useQuery({
     queryKey: [
@@ -50,5 +53,6 @@ export function useEvents({
       listEvents({ page, limit, search, sortBy, sortOrder, eventMonth, mine, upcoming, filter }),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+    enabled,
   })
 }

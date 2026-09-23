@@ -5,6 +5,10 @@ import { GuestRoute, ProtectedRoute } from '@/features/auth/auth-routes'
 
 import { ForbiddenPage } from './403'
 import { ApiKeysPage } from './api-keys'
+import { ArchiveDetailPage } from './archive-detail'
+import { ArchiveEditPage } from './archive-edit'
+import { ArchiveNewPage } from './archive-new'
+import { ArchivesPage } from './archives'
 import { BillingsPage } from './billings'
 import { DashboardLayout } from './dashboard'
 import { DashboardHomePage } from './dashboard-home'
@@ -62,6 +66,17 @@ export const router = createBrowserRouter([
       { path: 'stories/new', element: <StoryNewPage /> },
       { path: 'stories/:id/edit', element: <StoryEditPage /> },
       { path: 'stories/:id', element: <StoryDetailPage /> },
+      {
+        path: 'archives',
+        element: (
+          <RequirePermission code="archive:read">
+            <ArchivesPage />
+          </RequirePermission>
+        ),
+      },
+      { path: 'archives/new', element: <ArchiveNewPage /> },
+      { path: 'archives/:id/edit', element: <ArchiveEditPage /> },
+      { path: 'archives/:id', element: <ArchiveDetailPage /> },
       {
         path: 'events',
         element: (

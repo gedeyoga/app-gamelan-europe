@@ -3,7 +3,7 @@
   "subtitle": "Manage organizations and their locations",
   "add": "Add Organization",
   "search": {
-    "placeholder": "Search name, city, country, or address...",
+    "placeholder": "Search name, state, country, or address...",
     "ariaLabel": "Search organizations"
   },
   "errors": {
@@ -12,7 +12,7 @@
   },
   "table": {
     "name": "Name",
-    "city": "City",
+    "state": "State",
     "country": "Country",
     "created": "Created",
     "empty": "No organizations yet",
@@ -27,11 +27,17 @@
     "createDescription": "Create a new organization.",
     "editDescription": "Update organization data.",
     "name": "Name",
-    "city": "City",
+    "state": "State",
     "country": "Country",
     "address": "Address",
-    "lat": "Latitude",
-    "lng": "Longitude"
+    "mapLabel": "Pick location on map",
+    "countryPlaceholder": "Select country",
+    "countrySearch": "Search country...",
+    "countryEmpty": "No country found.",
+    "statePlaceholder": "Select state",
+    "stateSearch": "Search state...",
+    "stateEmpty": "No state found.",
+    "stateSelectCountry": "Select a country first"
   },
   "delete": {
     "title": "Delete Organization",

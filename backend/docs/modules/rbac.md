@@ -165,7 +165,7 @@ Format: **lowercase** `resource:action`.
 | apikey | delete | `apikey:delete` |
 | admin | access | `admin:access` (khusus gerbang manajemen user/role) |
 
-Selain CRUD, resource konten (`story`, `event`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (REQUEST→APPROVED), `reject` (REQUEST→DRAFT), `publish` (APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
+Selain CRUD, resource konten (`story`, `event`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (REQUEST→PUBLISHED), `reject` (REQUEST→DRAFT), `publish` (APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
 
 Aturan:
 
@@ -566,7 +566,7 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | PATCH | `/api/v1/posts/:id` | Update story | PERMISSION: `story:update` |
 | DELETE | `/api/v1/posts/:id` | Hapus story (+ row `images` & objek S3) | PERMISSION: `story:delete` |
 | POST | `/api/v1/posts/:id/submit` | Ajukan story review (`DRAFT`→`REQUEST`) | PERMISSION: `story:submit` |
-| POST | `/api/v1/posts/:id/approve` | Setujui story (`REQUEST`→`APPROVED`) | PERMISSION: `story:approve` |
+| POST | `/api/v1/posts/:id/approve` | Setujui & terbitkan story (`REQUEST`→`PUBLISHED`) | PERMISSION: `story:approve` |
 | POST | `/api/v1/posts/:id/reject` | Tolak story (`REQUEST`→`DRAFT`) | PERMISSION: `story:reject` |
 | POST | `/api/v1/posts/:id/publish` | Terbitkan story (`APPROVED`→`PUBLISHED`) | PERMISSION: `story:publish` |
 | POST | `/api/v1/posts/:id/unpublish` | Tarik story (`PUBLISHED`→`DRAFT`) | PERMISSION: `story:unpublish` |
@@ -581,7 +581,7 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 
 > **Permission action story (`story:submit`, `story:approve`, `story:reject`, `story:publish`, `story:unpublish`) kini di-enforce** oleh endpoint `POST /api/v1/posts/:id/<action>` (lihat [story.md](./story.md#action--transisi)). Transisi status tak valid → **409**. `PATCH /api/v1/posts/:id` (`story:update`) tetap untuk update konten.
 >
-> ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (permission moderator) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `organization`/`own`/`published`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
+> ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (permission moderator) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `organization`/`own`/`published`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik (`organization`/`own`) boleh mengirim `status: DRAFT` untuk menarik kontennya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
 
 ### Organization (sinkron dengan [organization.md](./organization.md))
 
@@ -724,10 +724,10 @@ Kontras: `list` menyembunyikan baris (hasil kosong), `findOne` menolak eksplisit
 
 ### Bypass workflow ditutup
 
-Untuk scope `!= all`, field `status`/`publishedAt` dari body **diabaikan**:
+Untuk scope `!= all`, field `status`/`publishedAt` dari body **diabaikan**, kecuali satu kasus: pemilik (`organization`/`own`) boleh menarik kontennya sendiri yang berstatus `PUBLISHED` kembali ke `DRAFT` ("save as draft").
 
 - `create` → paksa `status = DRAFT`, `publishedAt = undefined` (dan `approvedAt` tidak diisi).
-- `update` → blok `status`/`publishedAt` dilewati; hanya konten yang berubah.
+- `update` → blok `status`/`publishedAt` dilewati; hanya konten yang berubah. **Kecuali**: baris miliknya (`creator.organizationId === scope.organizationId` untuk `organization`, `createdBy === userId` untuk `own`) berstatus `PUBLISHED` dan body mengirim `status: DRAFT` → `status` di-set `DRAFT`; `publishedAt`/`approvedAt` **dipertahankan** (konsisten transisi `unpublish`). Nilai `status` lain (`REQUEST`/`APPROVED`/`PUBLISHED`) dan `publishedAt` tetap diabaikan.
 
 Akibatnya role `organization` tidak bisa memaksa `PUBLISHED`/`APPROVED` lewat `POST`/`PATCH` — harus lewat endpoint action (`story:publish`/`event:publish`, yang tidak dimilikinya). Scope `all` (status-manager) tetap bisa (backward-compat FE).
 

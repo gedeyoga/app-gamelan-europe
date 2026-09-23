@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ImageOff,
   MapPin,
-  MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
@@ -14,14 +13,8 @@ import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 
 import { formatEventDate } from '../lib/format'
 import { STATUS_VARIANT } from './status-variant'
@@ -89,7 +82,7 @@ export function EventCard({
         </div>
       ) : (
         items.map((event) => (
-          <Card key={event.id} className="relative pt-0">
+          <Card key={event.id} className="relative flex h-full flex-col pt-0">
             <div className="relative">
               {event.thumbnail ? (
                 <img
@@ -116,37 +109,8 @@ export function EventCard({
             </div>
             <CardHeader>
               <CardTitle className="line-clamp-2">{event.name}</CardTitle>
-              {showActions && (
-                <CardAction className="relative z-20">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('common:table.actionsFor', { name: event.name })}
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canUpdate && (
-                        <DropdownMenuItem onClick={() => onEdit(event)}>
-                          <Pencil />
-                          {t('event:table.edit')}
-                        </DropdownMenuItem>
-                      )}
-                      {canDelete && (
-                        <DropdownMenuItem variant="destructive" onClick={() => onDelete(event)}>
-                          <Trash2 />
-                          {t('event:table.delete')}
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardAction>
-              )}
             </CardHeader>
-            <CardContent className="flex flex-col gap-2">
+            <CardContent className="flex flex-1 flex-col gap-2">
               {event.eventTypes.length === 0 ? (
                 <span className="text-muted-foreground">—</span>
               ) : (
@@ -185,6 +149,22 @@ export function EventCard({
                   {event.creator?.organization?.name ?? event.creator?.fullName ?? '—'}
                 </span>
               </span>
+              {showActions && (
+                <div className="relative z-20 mt-auto grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {canUpdate && (
+                    <Button variant="outline" onClick={() => onEdit(event)}>
+                      <Pencil className="size-4" data-icon="inline-start" />
+                      {t('event:table.edit')}
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button variant="destructive" onClick={() => onDelete(event)}>
+                      <Trash2 className="size-4" data-icon="inline-start" />
+                      {t('event:table.delete')}
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
             {/* Overlay link: menutupi seluruh kartu → buka detail di tab baru.
                 Kontrol interaktif dinaikkan `relative z-20` agar klik tidak menavigasi. */}

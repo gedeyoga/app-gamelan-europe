@@ -9,9 +9,9 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { LocationMapPicker } from '@/components/shared/location-map-picker'
 import { cn } from '@/lib/utils'
 
-import { LocationMapPicker } from './location-map-picker'
 import type { EventFormValues } from '../lib/schema'
 
 export interface EventLocationFieldProps {

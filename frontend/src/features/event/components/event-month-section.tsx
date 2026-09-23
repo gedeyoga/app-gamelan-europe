@@ -1,14 +1,12 @@
-import { CalendarDays, ChevronLeft, ChevronRight, ImageOff, MapPin, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/badge'
+import { EventHighlightCard } from '@/components/shared/event-highlight-card'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/datetime'
+import { cn } from '@/lib/utils'
 
-import { formatEventDate } from '../lib/format'
 import type { Event } from '../types'
 
 export interface EventMonthSectionProps {
@@ -20,7 +18,6 @@ export interface EventMonthSectionProps {
   errorMessage?: string
   onPrevMonth: () => void
   onNextMonth: () => void
-  onView: (event: Event) => void
   /** CTA "Tambah" di empty state; disembunyikan bila tidak diberikan. */
   onCreate?: () => void
   className?: string
@@ -33,7 +30,6 @@ export function EventMonthSection({
   errorMessage,
   onPrevMonth,
   onNextMonth,
-  onView,
   onCreate,
   className,
 }: EventMonthSectionProps) {
@@ -77,12 +73,12 @@ export function EventMonthSection({
       ) : isPending ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="flex flex-row gap-0 overflow-hidden rounded-xl border">
-              <Skeleton className="w-2/5 shrink-0 rounded-none" />
-              <div className="flex w-3/5 min-w-0 flex-col justify-between gap-3 p-4">
+            <div key={index} className="overflow-hidden rounded-xl border">
+              <Skeleton className="aspect-[16/10] w-full rounded-none" />
+              <div className="flex flex-col gap-2 p-4">
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-3 w-1/2" />
-                <Skeleton className="mt-auto h-8 w-24" />
+                <Skeleton className="h-5 w-16" />
               </div>
             </div>
           ))}
@@ -102,64 +98,15 @@ export function EventMonthSection({
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((event) => (
-            <Card key={event.id} className="flex flex-row gap-0 overflow-hidden py-0">
-              <div className="w-2/5 shrink-0">
-                {event.thumbnail ? (
-                  <img
-                    src={event.thumbnail}
-                    alt={event.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
-                    <ImageOff className="size-6" aria-hidden="true" />
-                    <span className="sr-only">{t('event:card.noThumbnail')}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex w-3/5 min-w-0 flex-col justify-between gap-3 p-4">
-                <CardHeader className="px-0">
-                  <CardTitle className="line-clamp-2">{event.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2 px-0">
-                  {event.eventTypes.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {event.eventTypes.map((eventType) => (
-                        <Badge key={eventType.id} variant="secondary">
-                          {eventType.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{event.location?.name ?? '—'}</span>
-                  </span>
-                  <div className="flex min-w-0 items-start gap-1.5">
-                    <CalendarDays className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                    {event.dates.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex min-w-0 flex-col gap-1">
-                        {event.dates.map((d, i) => (
-                          <span
-                            key={`${d.date}-${i}`}
-                            className="truncate text-xs text-muted-foreground"
-                          >
-                            {formatEventDate(d)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter className="border-0 bg-transparent p-0">
-                  <Button className="w-full" onClick={() => onView(event)}>
-                    {t('event:org.viewEvent')}
-                  </Button>
-                </CardFooter>
-              </div>
-            </Card>
+            <EventHighlightCard
+              key={event.id}
+              id={event.id}
+              name={event.name}
+              thumbnail={event.thumbnail}
+              date={event.dates[0]?.date ?? null}
+              locationName={event.location?.name ?? null}
+              eventTypes={event.eventTypes.map((eventType) => eventType.name)}
+            />
           ))}
         </div>
       )}

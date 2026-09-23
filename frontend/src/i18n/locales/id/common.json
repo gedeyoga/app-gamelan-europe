@@ -55,5 +55,10 @@
   "toast": {
     "dismiss": "Tutup",
     "errorDefault": "Terjadi kesalahan"
+  },
+  "eventCard": {
+    "noThumbnail": "Tanpa thumbnail",
+    "noLocation": "Lokasi belum tersedia",
+    "openEvent": "Buka event {{name}}"
   }
 }

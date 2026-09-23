@@ -40,3 +40,15 @@ export function updatePost(id: string, payload: UpdateStoryInput): Promise<Story
 export function deletePost(id: string): Promise<Story> {
   return request<Story>(`/posts/${id}`, { method: 'DELETE' })
 }
+
+export function approveStory(id: string, publishedAt: string): Promise<Story> {
+  return request<Story>(`/posts/${id}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publishedAt }),
+  })
+}
+
+export function rejectStory(id: string): Promise<Story> {
+  return request<Story>(`/posts/${id}/reject`, { method: 'POST' })
+}

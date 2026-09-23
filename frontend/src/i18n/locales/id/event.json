@@ -47,7 +47,7 @@
   },
   "visibilityOptions": {
     "PUBLIC": "Publik",
-    "PRIVATE": "Privat"
+    "PRIVATE": "Khusus Member"
   },
   "form": {
     "createTitle": "Tambah Event",
@@ -92,20 +92,15 @@
     "namePlaceholder": "Masukkan nama lokasi...",
     "addressLabel": "Alamat",
     "addressPlaceholder": "Masukkan alamat...",
-    "mapLabel": "Pilih lokasi di peta",
-    "clickHint": "Klik peta atau geser marker untuk menetapkan koordinat.",
-    "coordinates": "Koordinat: {{latitude}}, {{longitude}}",
-    "searchPlaceholder": "Cari alamat...",
-    "searching": "Mencari...",
-    "searchNoResults": "Alamat tidak ditemukan.",
-    "searchHint": "Ketik minimal 3 karakter untuk mencari alamat."
+    "mapLabel": "Pilih lokasi di peta"
   },
   "publishDialog": {
     "title": "Terbitkan Event",
     "description": "Pilih tanggal dan waktu terbit.",
     "dateLabel": "Tanggal & waktu terbit",
     "datePlaceholder": "Pilih tanggal & waktu",
-    "confirm": "Terbitkan"
+    "confirm": "Terbitkan",
+    "confirmDescription": "Event akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?"
   },
   "workflow": {
     "requested": "Menunggu persetujuan",
@@ -143,7 +138,6 @@
     "prevMonth": "Bulan sebelumnya",
     "nextMonth": "Bulan berikutnya",
     "emptyMonth": "Tidak ada event bulan ini",
-    "viewEvent": "Lihat Event",
     "myTitle": "My Event",
     "emptyList": "Belum ada event",
     "columnDate": "Tanggal",
@@ -157,6 +151,10 @@
     "deleted": "Event berhasil dihapus",
     "createFailed": "Gagal membuat event",
     "updateFailed": "Gagal memperbarui event",
-    "deleteFailed": "Gagal menghapus event"
+    "deleteFailed": "Gagal menghapus event",
+    "approved": "Event berhasil disetujui",
+    "rejected": "Event berhasil ditolak",
+    "approveFailed": "Gagal menyetujui event",
+    "rejectFailed": "Gagal menolak event"
   }
 }

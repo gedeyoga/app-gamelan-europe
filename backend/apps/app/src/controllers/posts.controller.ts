@@ -6,6 +6,7 @@ import {
   ListPostsQueryDto,
   Permissions,
   PostService,
+  PublishContentDto,
   UpdatePostDto,
 } from '@app/libs';
 
@@ -58,8 +59,12 @@ export class PostsController {
   @Post(':id/approve')
   @Permissions('story:approve')
   @HttpCode(200)
-  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.postService.transition(id, 'approve', user.id);
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PublishContentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.postService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt });
   }
 
   @Post(':id/reject')
@@ -72,8 +77,12 @@ export class PostsController {
   @Post(':id/publish')
   @Permissions('story:publish')
   @HttpCode(200)
-  publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.postService.transition(id, 'publish', user.id);
+  publish(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PublishContentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.postService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt });
   }
 
   @Post(':id/unpublish')

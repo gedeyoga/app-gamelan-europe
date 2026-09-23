@@ -61,7 +61,7 @@ export function OrganizationTable({
               <SortableHeader label={t('organization:table.name')} field="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             </TableHead>
             <TableHead>
-              <SortableHeader label={t('organization:table.city')} field="city" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label={t('organization:table.state')} field="state" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             </TableHead>
             <TableHead>
               <SortableHeader label={t('organization:table.country')} field="country" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
@@ -98,7 +98,7 @@ export function OrganizationTable({
             items.map((organization) => (
               <TableRow key={organization.id}>
                 <TableCell className="font-medium">{organization.name}</TableCell>
-                <TableCell>{organization.city ?? '—'}</TableCell>
+                <TableCell>{organization.state ?? '—'}</TableCell>
                 <TableCell>{organization.country ?? '—'}</TableCell>
                 <TableCell>{formatDateTime(organization.createdAt)}</TableCell>
                 {showActions && (

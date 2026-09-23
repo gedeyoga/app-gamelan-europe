@@ -9,7 +9,10 @@
   },
   "stats": {
     "upcomingEvents": "Event Akan Datang",
-    "publishedStories": "Story Terbit"
+    "publishedStories": "Story Terbit",
+    "totalEvents": "Total Event",
+    "totalStories": "Total Story",
+    "totalMembers": "Total Member"
   },
   "section": {
     "upcomingEvents": {
@@ -25,20 +28,47 @@
       "viewAll": "Lihat semua",
       "empty": "Belum ada story terbit.",
       "error": "Gagal memuat data."
+    },
+    "pendingEvents": {
+      "title": "Event Menunggu Persetujuan",
+      "subtitle": "Event yang diajukan member dan organisasi.",
+      "viewAll": "Lihat semua",
+      "empty": "Tidak ada event yang menunggu persetujuan.",
+      "error": "Gagal memuat data."
+    },
+    "pendingArchives": {
+      "title": "Arsip Menunggu Persetujuan",
+      "subtitle": "Arsip yang diajukan member dan organisasi.",
+      "viewAll": "Lihat semua",
+      "empty": "Tidak ada arsip yang menunggu persetujuan.",
+      "error": "Gagal memuat data."
+    },
+    "archives": {
+      "title": "Arsip Terbaru",
+      "subtitle": "Arsip yang dapat Anda akses.",
+      "viewAll": "Lihat semua",
+      "empty": "Belum ada arsip.",
+      "error": "Gagal memuat data."
     }
+  },
+  "pending": {
+    "approve": "Setujui",
+    "reject": "Tolak",
+    "viewDetail": "Lihat detail",
+    "unknown": "Penyelenggara tidak diketahui"
   },
   "card": {
     "noThumbnail": "Tanpa thumbnail",
-    "noDate": "Tanggal belum tersedia",
-    "noLocation": "Lokasi belum tersedia",
-    "openEvent": "Buka event {{name}}",
-    "openStory": "Buka story {{name}}"
+    "noDescription": "Belum ada deskripsi",
+    "openStory": "Buka story {{name}}",
+    "openArchive": "Buka arsip {{name}}"
   },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",
     "roles": "Roles",
     "story": "Story",
+    "archives": "Archives",
     "event": "Event",
     "myBilling": "Billing Saya",
     "organizations": "Organizations",

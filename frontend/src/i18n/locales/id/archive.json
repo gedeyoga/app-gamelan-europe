@@ -1,0 +1,150 @@
+{
+  "title": "Archives",
+  "subtitle": "Kelola arsip seni dan penelitian",
+  "add": "Tambah Archive",
+  "search": {
+    "placeholder": "Cari judul atau deskripsi...",
+    "ariaLabel": "Cari archive"
+  },
+  "view": {
+    "card": "Tampilan kartu",
+    "list": "Tampilan daftar"
+  },
+  "filter": {
+    "type": "Filter berdasarkan tipe",
+    "status": "Filter berdasarkan status",
+    "allTypes": "Semua tipe",
+    "allStatuses": "Semua status"
+  },
+  "table": {
+    "thumbnail": "Thumbnail",
+    "title": "Judul",
+    "categories": "Kategori",
+    "type": "Tipe",
+    "status": "Status",
+    "publishedAt": "Diterbitkan",
+    "empty": "Belum ada archive",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "card": {
+    "noThumbnail": "Tanpa thumbnail"
+  },
+  "typeOptions": {
+    "MEMBER": "Member",
+    "PUBLIC": "Publik"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Diajukan",
+    "APPROVED": "Disetujui",
+    "PUBLISHED": "Terbit"
+  },
+  "form": {
+    "sectionInfo": "Informasi",
+    "sectionLinks": "Link & Dokumen",
+    "titleLabel": "Judul",
+    "titlePlaceholder": "Masukkan judul archive...",
+    "descriptionLabel": "Deskripsi",
+    "type": "Tipe Arsip",
+    "categories": "Kategori",
+    "categoryPlaceholder": "Pilih kategori",
+    "categorySearch": "Cari atau tambah kategori...",
+    "categoryAdd": "Tambah \"{{name}}\"",
+    "categoryCreating": "Menambahkan...",
+    "categoryEmpty": "Kategori tidak ditemukan",
+    "thumbnail": "Thumbnail",
+    "externalLinks": "Link Eksternal",
+    "externalLinksEmpty": "Belum ada link eksternal.",
+    "externalLinksPlaceholder": "https://contoh.com",
+    "externalLinksAdd": "Tambah Link",
+    "externalLinksRemove": "Hapus link",
+    "documents": "Dokumen PDF",
+    "save": "Simpan",
+    "saveAsDraft": "Simpan sebagai Draft",
+    "requestPublish": "Ajukan untuk Terbit",
+    "publish": "Terbitkan",
+    "cancel": "Batal"
+  },
+  "publishDialog": {
+    "title": "Terbitkan Arsip",
+    "description": "Pilih tanggal dan waktu terbit.",
+    "dateLabel": "Tanggal & waktu terbit",
+    "datePlaceholder": "Pilih tanggal & waktu",
+    "next": "Lanjutkan",
+    "confirmTitle": "Konfirmasi",
+    "confirmDescription": "Arsip akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?",
+    "confirm": "Terbitkan"
+  },
+  "workflow": {
+    "requested": "Menunggu persetujuan",
+    "approve": "Setujui",
+    "reject": "Tolak"
+  },
+  "confirm": {
+    "title": "Konfirmasi",
+    "description": "Yakin ingin {{action}}? Perubahan akan disimpan.",
+    "submit": "Lanjutkan"
+  },
+  "thumbnail": {
+    "upload": "Unggah thumbnail",
+    "uploading": "Mengunggah...",
+    "remove": "Hapus",
+    "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB."
+  },
+  "document": {
+    "add": "Tambah dokumen PDF",
+    "empty": "Belum ada dokumen.",
+    "formats": "Format: PDF. Maks 10 MB.",
+    "uploading": "Mengunggah...",
+    "uploadInvalid": "File harus berupa dokumen PDF.",
+    "uploadTooLarge": "PDF maksimal 10 MB.",
+    "remove": "Hapus",
+    "moveUp": "Naikkan",
+    "moveDown": "Turunkan",
+    "open": "Buka"
+  },
+  "detail": {
+    "back": "Kembali ke archive",
+    "open": "Lihat detail \"{{name}}\"",
+    "notFound": "Archive tidak ditemukan.",
+    "metadata": "Metadata",
+    "type": "Tipe",
+    "status": "Status",
+    "categories": "Kategori",
+    "creator": "Penulis",
+    "publishedAt": "Tanggal terbit",
+    "externalLinks": "Link Eksternal",
+    "documents": "Dokumen PDF",
+    "index": "No.",
+    "empty": "Belum ada isi."
+  },
+  "delete": {
+    "title": "Hapus Archive",
+    "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "errors": {
+    "loadData": "Gagal memuat data archive. Silakan coba lagi.",
+    "forbidden": "Tidak punya akses untuk melihat data archive.",
+    "loadDetail": "Gagal memuat detail archive.",
+    "uploadFailed": "Gagal mengunggah file. Silakan coba lagi.",
+    "createCategoryFailed": "Gagal membuat kategori.",
+    "noCreatePermission": "Tidak punya izin untuk membuat archive.",
+    "noUpdatePermission": "Tidak punya izin untuk mengubah archive."
+  },
+  "toast": {
+    "created": "Archive berhasil dibuat",
+    "updated": "Archive berhasil diperbarui",
+    "deleted": "Archive berhasil dihapus",
+    "createFailed": "Gagal membuat archive",
+    "updateFailed": "Gagal memperbarui archive",
+    "deleteFailed": "Gagal menghapus archive",
+    "approved": "Archive berhasil disetujui",
+    "rejected": "Archive berhasil ditolak",
+    "approveFailed": "Gagal menyetujui archive",
+    "rejectFailed": "Gagal menolak archive"
+  }
+}

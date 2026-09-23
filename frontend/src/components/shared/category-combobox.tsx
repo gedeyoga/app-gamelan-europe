@@ -15,17 +15,23 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
-import type { StoryCategory } from '../types'
+/** Bentuk minimal kategori yang dibutuhkan combobox (story & archive kompatibel). */
+export interface CategoryOption {
+  id: string
+  name: string
+}
 
 export interface CategoryComboboxProps {
-  options: StoryCategory[]
+  options: CategoryOption[]
   value: string[]
   onChange: (ids: string[]) => void
   isLoading?: boolean
   disabled?: boolean
   /** Gate `category:create` — input tambah kategori disembunyikan bila `false`. */
   canCreate?: boolean
-  onCreate: (name: string) => Promise<StoryCategory | undefined>
+  onCreate: (name: string) => Promise<CategoryOption | undefined>
+  /** Namespace i18n label; default `story` (dipakai archive lewat `archive`). */
+  i18nPrefix?: string
   className?: string
 }
 
@@ -37,6 +43,7 @@ export function CategoryCombobox({
   disabled = false,
   canCreate = false,
   onCreate,
+  i18nPrefix = 'story',
   className,
 }: CategoryComboboxProps) {
   const { t } = useTranslation()
@@ -88,7 +95,9 @@ export function CategoryCombobox({
         >
           <span className="flex flex-wrap gap-1">
             {selected.length === 0 ? (
-              <span className="text-muted-foreground">{t('story:form.categoryPlaceholder')}</span>
+              <span className="text-muted-foreground">
+                {t(`${i18nPrefix}:form.categoryPlaceholder`)}
+              </span>
             ) : (
               selected.map((category) => (
                 <Badge key={category.id} variant="secondary">
@@ -105,11 +114,13 @@ export function CategoryCombobox({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder={t('story:form.categorySearch')}
+            placeholder={t(`${i18nPrefix}:form.categorySearch`)}
           />
           <CommandList>
             <CommandEmpty>
-              {canAddNew ? t('story:form.categoryAdd', { name: search.trim() }) : t('story:form.categoryEmpty')}
+              {canAddNew
+                ? t(`${i18nPrefix}:form.categoryAdd`, { name: search.trim() })
+                : t(`${i18nPrefix}:form.categoryEmpty`)}
             </CommandEmpty>
             <CommandGroup>
               {filtered.map((option) => (
@@ -131,8 +142,8 @@ export function CategoryCombobox({
                 >
                   <Plus className="size-4" />
                   {isCreating
-                    ? t('story:form.categoryCreating')
-                    : t('story:form.categoryAdd', { name: search.trim() })}
+                    ? t(`${i18nPrefix}:form.categoryCreating`)
+                    : t(`${i18nPrefix}:form.categoryAdd`, { name: search.trim() })}
                 </CommandItem>
               )}
             </CommandGroup>

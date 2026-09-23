@@ -604,10 +604,11 @@ async function uniqueSlug(base: string): Promise<string> {
 - **Create:**
   - `publishedAt` dikirim → `publishedAt = new Date(dto.publishedAt)` **dan** paksa `status = PUBLISHED` (tanggal publish menyiratkan terbit; `status` yang dikirim diabaikan).
   - `publishedAt` tidak dikirim → perilaku lama: `publishedAt = now` hanya bila `status = PUBLISHED`, `null` bila tidak.
+  - Bila hasil create `PUBLISHED` (`autoPublish` atau `status = PUBLISHED`) → `approvedAt = now` (audit "pertama kali terbit").
 - **Update:**
   - `publishedAt` dikirim → `publishedAt = new Date(dto.publishedAt)` (**menimpa** nilai lama — untuk ubah/backdate jadwal terbit) **dan** `status = PUBLISHED`. `publishedAt` menang atas `status` bila keduanya dikirim.
-  - `publishedAt` tidak dikirim → perilaku lama: menaikkan `status` ke `PUBLISHED` mengisi `publishedAt = now` hanya bila masih `null` (re-publish tidak mengubah waktu publish pertama); `APPROVED` mengisi `approvedAt = now` bila masih `null`.
-- `approvedAt` **tidak** dapat dikirim client (tidak ada di DTO) → kirim `approvedAt` = **422** (`forbidNonWhitelisted`). `approvedAt` tetap server-managed dan tidak disentuh oleh `publishedAt`.
+  - `publishedAt` tidak dikirim → perilaku lama: menaikkan `status` ke `PUBLISHED` mengisi `publishedAt = now` hanya bila masih `null` (re-publish tidak mengubah waktu publish pertama). Bila hasil update `PUBLISHED` (`publishedAt` dikirim atau `status = PUBLISHED`) → `approvedAt = existing.approvedAt ?? now`.
+- `approvedAt` **tidak** dapat dikirim client (tidak ada di DTO) → kirim `approvedAt` = **422** (`forbidNonWhitelisted`). Kolom `approvedAt` = audit marker **"pertama kali terbit"** (server-managed); **bukan** penanda status `APPROVED` (status `APPROVED` tetap deprecated, tidak diproduksi).
 - `galleryImageIds`/`flyerImageIds` tidak memengaruhi aturan status: pada create/update disimpan apa adanya (update = replace seluruh array) dan id galeri/flyer ikut di-bind ke post (union `imageIds` + `galleryImageIds` + `flyerImageIds`) — lihat [§9](#9-upload-gambar-s3--tabel-images).
 
 ```typescript
@@ -621,10 +622,16 @@ publishedAt: autoPublish ? new Date(dto.publishedAt!) : status === ContentStatus
 if (dto.publishedAt !== undefined) {
   data.publishedAt = new Date(dto.publishedAt);
   data.status = ContentStatus.PUBLISHED;
+  if (!existing.approvedAt) data.approvedAt = new Date();
 } else if (dto.status !== undefined) {
   data.status = dto.status;
-  if (dto.status === ContentStatus.PUBLISHED && !existing.publishedAt) data.publishedAt = new Date();
-  if (dto.status === ContentStatus.APPROVED && !existing.approvedAt) data.approvedAt = new Date();
+  if (dto.status === ContentStatus.PUBLISHED) {
+    if (!existing.publishedAt) data.publishedAt = new Date();
+    if (!existing.approvedAt) data.approvedAt = new Date();
+  }
+} else if (dto.status === ContentStatus.DRAFT && existing.status === ContentStatus.PUBLISHED) {
+  // Pemilik/organisasi boleh menarik kembali kontennya yang sudah terbit menjadi DRAFT.
+  data.status = ContentStatus.DRAFT;
 }
 ```
 
@@ -635,16 +642,17 @@ Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terda
 | Action | Endpoint | Permission | Dari | Ke |
 | --- | --- | --- | --- | --- |
 | `submit` | `POST /posts/:id/submit` | `story:submit` | `DRAFT` | `REQUEST` |
-| `approve` | `POST /posts/:id/approve` | `story:approve` | `REQUEST` | `APPROVED` |
+| `approve` | `POST /posts/:id/approve` | `story:approve` | `REQUEST` | `PUBLISHED` |
 | `reject` | `POST /posts/:id/reject` | `story:reject` | `REQUEST` | `DRAFT` |
 | `publish` | `POST /posts/:id/publish` | `story:publish` | `APPROVED` | `PUBLISHED` |
 | `unpublish` | `POST /posts/:id/unpublish` | `story:unpublish` | `PUBLISHED` | `DRAFT` |
 
-- Request: **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
+- **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy). `approvedAt` = audit marker **"pertama kali terbit"**, di-set `existing.approvedAt ?? now` pada `approve`/`publish`; **bukan** penanda status `APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` tetap ada untuk kompatibilitas (APPROVED→PUBLISHED; baris APPROVED lama).
+- `submit`/`reject`/`unpublish`: **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
 - Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
-- `approve` mengisi `approvedAt = now` bila masih `null` (re-approve tidak menimpa). `publish` mengisi `publishedAt = now` bila masih `null` (re-publish tidak mengubah waktu publish pertama). Action lain tidak menyentuh `approvedAt`/`publishedAt`.
-- **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish` memakai `if (!existing.publishedAt)`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama). `reject` (`REQUEST`→`DRAFT`) menyisakan `approvedAt`. Ini sengaja, konsisten dengan perilaku `PATCH` existing (re-publish memakai tanggal publish pertama).
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`organization`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
+- **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish`/`approve` memakai `existing.publishedAt ?? now`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama) kecuali `publishedAt` eksplisit dikirim di body.
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`organization`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik story-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
 
 ### Scoping Baca & Tulis
 
@@ -665,7 +673,7 @@ Row-level scoping (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)
 - **List** (`GET /posts`): scope di-`AND` ke filter — `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
 - **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
 - **Tulis**: `organization`/`own` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**.
-- **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body. Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
+- **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body — **kecuali** `status: DRAFT` pada post miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
 
 Contoh 403 (detail post milik organisasi lain oleh user `organization`):
 
@@ -997,7 +1005,7 @@ const DEFAULT_PERMISSIONS = [
   { code: 'story:update', description: 'Mengubah story' },
   { code: 'story:delete', description: 'Menghapus story' },
   { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
-  { code: 'story:approve', description: 'Menyetujui story (REQUEST -> APPROVED)' },
+  { code: 'story:approve', description: 'Menyetujui & menerbitkan story (REQUEST -> PUBLISHED)' },
   { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
   { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
   { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
@@ -1052,9 +1060,9 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | PATCH | `/api/v1/posts/:id` | PERMISSION `story:update` | path `id`, body `UpdatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → timpa + paksa `PUBLISHED`) | 200 `{ data: <post + gallery>, message }` | 404, 409 slug duplikat, 422, 401/403 |
 | DELETE | `/api/v1/posts/:id` | PERMISSION `story:delete` | path `id` (ikut hapus row `images` + objek S3) | 200 `{ data: <post + gallery>, message }` | 404, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/submit` | PERMISSION `story:submit` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
-| POST | `/api/v1/posts/:id/approve` | PERMISSION `story:approve` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/approve` | PERMISSION `story:approve` | path `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/reject` | PERMISSION `story:reject` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
-| POST | `/api/v1/posts/:id/publish` | PERMISSION `story:publish` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/publish` | PERMISSION `story:publish` | path `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/unpublish` | PERMISSION `story:unpublish` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/categories` | PERMISSION `category:create` | body `CreateCategoryDto` | 201 `{ data: <category>, message }` | 422, 401/403 |
 | GET | `/api/v1/categories` | PERMISSION `category:read` | query `ListCategoriesQueryDto` | 200 `{ data: [category], meta, message }` | 422, 401/403 |
@@ -1124,7 +1132,7 @@ Format error standar: `{ statusCode, message, errors }` (RULES bab 5).
 ### Catatan untuk FE
 
 - Endpoint **siap**; jangan ubah kontrak brief ini.
-- Kontrak penting: `slug` opsional (server generate bila kosong); `status` server-managed kecuali `publishedAt` dikirim manual; `publishedAt` opsional di body POST/PATCH (ISO 8601, menimpa + paksa `PUBLISHED`, tanpa penjadwalan otomatis); `approvedAt` tetap server-managed (kirim → 422); `categories` item **flat** `[{ id, name, type }]`; inline-add kategori lewat `POST /categories` bersifat idempoten (aman dari 409). `PATCH /posts/:id` dengan `"thumbnail": null` menghapus thumbnail.
+- Kontrak penting: `slug` opsional (server generate bila kosong); `status` server-managed kecuali `publishedAt` dikirim manual; `publishedAt` opsional di body POST/PATCH (ISO 8601, menimpa + paksa `PUBLISHED`, tanpa penjadwalan otomatis); `approvedAt` audit marker "pertama kali terbit" server-managed (kirim → 422); `categories` item **flat** `[{ id, name, type }]`; inline-add kategori lewat `POST /categories` bersifat idempoten (aman dari 409). `PATCH /posts/:id` dengan `"thumbnail": null` menghapus thumbnail.
 - **Galeri**: kirim `galleryImageIds: string[]` (urutan = urutan galeri) di body `POST/PATCH`; `PATCH` **replace** seluruh array. Response `GET /posts` & `GET /posts/:id` mengembalikan `gallery: ImageResponse[]` berurut (bentuk sama dengan respons `POST /images`); field mentah `galleryImageIds` tidak dikembalikan.
 - **GIF tidak didukung**: mime upload hanya `image/png`, `image/jpeg`, `image/webp`; GIF → 422.
 - Gambar: upload ke `POST /images` (multipart `file`) → response `url` absolut S3; sisipkan `url` di `content`/`thumbnail`; kirim id `Image` via `imageIds` (konten/thumbnail) dan `galleryImageIds` (galeri) saat create/update post agar ter-bind; render `<img src>` langsung (bucket public-read).

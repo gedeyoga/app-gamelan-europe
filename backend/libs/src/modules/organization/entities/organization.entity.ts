@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 export const organizationSelect = {
   id: true,
   name: true,
-  city: true,
+  state: true,
   country: true,
   address: true,
   lat: true,

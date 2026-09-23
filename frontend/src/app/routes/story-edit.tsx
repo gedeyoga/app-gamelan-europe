@@ -15,12 +15,14 @@ import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { StoryForm } from '@/features/story/components/story-form'
 import type { StoryFormValues } from '@/features/story/lib/schema'
+import { useApproveStory } from '@/features/story/hooks/use-approve-story'
 import { useCategories } from '@/features/story/hooks/use-categories'
 import { useCreateCategory } from '@/features/story/hooks/use-create-category'
+import { useRejectStory } from '@/features/story/hooks/use-reject-story'
 import { useStory } from '@/features/story/hooks/use-story'
 import { useUpdateStory } from '@/features/story/hooks/use-update-story'
 import { useUploadImage } from '@/features/story/hooks/use-upload-image'
-import type { CreateStoryInput, Story, StoryCategory } from '@/features/story/types'
+import type { CreateStoryInput, Story, StoryCategory, StoryFormAction } from '@/features/story/types'
 
 function toFormValues(story: Story): StoryFormValues {
   return {
@@ -51,6 +53,8 @@ export function StoryEditPage() {
   const storyQuery = useStory(id)
   const categoriesQuery = useCategories(canReadCategories)
   const updateStory = useUpdateStory()
+  const approveStory = useApproveStory()
+  const rejectStory = useRejectStory()
   const createCategory = useCreateCategory()
   const uploadImage = useUploadImage()
 
@@ -70,22 +74,48 @@ export function StoryEditPage() {
     toastError(getApiErrorMessage(err, t('story:errors.uploadFailed')))
   }
 
-  function handleSubmit(payload: CreateStoryInput) {
+  async function handleSubmit(payload: CreateStoryInput, action: StoryFormAction) {
     if (!id) return
-    updateStory.mutate(
-      { id, payload },
-      {
-        onSuccess: () => {
-          toastSuccess(t('story:toast.updated'))
-          navigate('/stories')
-        },
-        onError: (err: unknown) => {
-          // 422/409 mengalir ke form via submissionError → setError per-field; tetap di halaman.
-          if (isValidationError(err) || isConflictError(err)) return
-          toastError(getApiErrorMessage(err, t('story:toast.updateFailed')))
-        },
-      },
-    )
+    // `approve` mengirim `publishedAt` ke endpoint approve, bukan ke PATCH
+    // (PATCH `publishedAt` memaksa PUBLISHED → approve 409). `status` juga dibuang
+    // untuk approve/reject — transisi yang memiliki status (cegah PATCH regresi).
+    const publishedAt = payload.publishedAt
+    let body: CreateStoryInput = payload
+    if (action === 'approve' || action === 'reject') {
+      body = { ...payload }
+      delete body.publishedAt
+      delete body.status
+    }
+    // Simpan perubahan field dulu.
+    try {
+      await updateStory.mutateAsync({ id, payload: body })
+    } catch (err: unknown) {
+      // 422/409 mengalir ke form via submissionError → setError per-field; tetap di halaman.
+      if (isValidationError(err) || isConflictError(err)) return
+      toastError(getApiErrorMessage(err, t('story:toast.updateFailed')))
+      return
+    }
+    try {
+      if (action === 'approve') {
+        await approveStory.mutateAsync({ id, publishedAt: publishedAt ?? new Date().toISOString() })
+        toastSuccess(t('story:toast.approved'))
+      } else if (action === 'reject') {
+        await rejectStory.mutateAsync(id)
+        toastSuccess(t('story:toast.rejected'))
+      } else {
+        toastSuccess(t('story:toast.updated'))
+      }
+    } catch (err: unknown) {
+      const key =
+        action === 'approve'
+          ? 'story:toast.approveFailed'
+          : action === 'reject'
+            ? 'story:toast.rejectFailed'
+            : 'story:toast.updateFailed'
+      toastError(getApiErrorMessage(err, t(key)))
+      return
+    }
+    navigate('/stories')
   }
 
   if (!canUpdate) {
@@ -135,7 +165,9 @@ export function StoryEditPage() {
           initialPublishedAt={storyQuery.data.publishedAt}
           initialGallery={storyQuery.data.gallery ?? []}
           initialFlyer={storyQuery.data.flyer ?? []}
-          isPending={updateStory.isPending}
+          isPending={
+            updateStory.isPending || approveStory.isPending || rejectStory.isPending
+          }
           submissionError={updateStory.error}
           onSubmit={handleSubmit}
           onCancel={() => navigate('/stories')}

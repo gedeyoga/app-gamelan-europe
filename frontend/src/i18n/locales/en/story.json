@@ -46,7 +46,7 @@
   },
   "visibilityOptions": {
     "PUBLIC": "Public",
-    "PRIVATE": "Private"
+    "PRIVATE": "Members Only"
   },
   "form": {
     "createTitle": "Add Story",
@@ -80,7 +80,8 @@
     "description": "Choose publish date and time.",
     "dateLabel": "Publish date & time",
     "datePlaceholder": "Choose date & time",
-    "confirm": "Publish"
+    "confirm": "Publish",
+    "confirmDescription": "The story will be published at the selected date and time. Continue?"
   },
   "workflow": {
     "requested": "Awaiting approval",
@@ -177,6 +178,10 @@
     "deleted": "Story deleted successfully",
     "createFailed": "Failed to create story",
     "updateFailed": "Failed to update story",
-    "deleteFailed": "Failed to delete story"
+    "deleteFailed": "Failed to delete story",
+    "approved": "Story approved successfully",
+    "rejected": "Story rejected successfully",
+    "approveFailed": "Failed to approve story",
+    "rejectFailed": "Failed to reject story"
   }
 }

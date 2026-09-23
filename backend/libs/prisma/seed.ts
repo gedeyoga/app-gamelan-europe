@@ -45,7 +45,7 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'story:update', description: 'Mengubah story' },
   { code: 'story:delete', description: 'Menghapus story' },
   { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
-  { code: 'story:approve', description: 'Menyetujui story (REQUEST -> APPROVED)' },
+  { code: 'story:approve', description: 'Menyetujui & menerbitkan story (REQUEST -> PUBLISHED)' },
   { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
   { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
   { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
@@ -58,7 +58,7 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'event:update', description: 'Mengubah event' },
   { code: 'event:delete', description: 'Menghapus event' },
   { code: 'event:submit', description: 'Mengajukan event untuk review (DRAFT -> REQUEST)' },
-  { code: 'event:approve', description: 'Menyetujui event (REQUEST -> APPROVED)' },
+  { code: 'event:approve', description: 'Menyetujui & menerbitkan event (REQUEST -> PUBLISHED)' },
   { code: 'event:reject', description: 'Menolak event (REQUEST -> DRAFT)' },
   { code: 'event:publish', description: 'Menerbitkan event (APPROVED -> PUBLISHED)' },
   { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
@@ -80,6 +80,15 @@ const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'apikey:read', description: 'Melihat daftar/detail API key' },
   { code: 'apikey:update', description: 'Mengubah nama/permission API key' },
   { code: 'apikey:delete', description: 'Menghapus API key' },
+  { code: 'archive:create', description: 'Membuat archive' },
+  { code: 'archive:read', description: 'Melihat daftar/detail archive' },
+  { code: 'archive:update', description: 'Mengubah archive' },
+  { code: 'archive:delete', description: 'Menghapus archive' },
+  { code: 'archive:submit', description: 'Mengajukan archive untuk review (DRAFT -> REQUEST)' },
+  { code: 'archive:approve', description: 'Menyetujui & menerbitkan archive (REQUEST -> PUBLISHED)' },
+  { code: 'archive:reject', description: 'Menolak archive (REQUEST -> DRAFT)' },
+  { code: 'archive:publish', description: 'Menerbitkan archive (APPROVED -> PUBLISHED)' },
+  { code: 'archive:unpublish', description: 'Menarik archive dari publikasi (PUBLISHED -> DRAFT)' },
   // Gerbang manajemen user/role — HANYA role `admin` (dipetakan otomatis dari DEFAULT_PERMISSIONS).
   { code: 'admin:access', description: 'Akses penuh manajemen user/role (admin)' },
 ];
@@ -105,6 +114,11 @@ const DEFAULT_ROLES: DefaultRole[] = [
       'event:submit',
       'event-type:read',
       'category:read',
+      'archive:create',
+      'archive:read',
+      'archive:update',
+      'archive:delete',
+      'archive:submit',
       'user:create',
       'user:read',
     ],
@@ -112,7 +126,7 @@ const DEFAULT_ROLES: DefaultRole[] = [
   {
     name: 'member',
     description: 'Anggota organisasi — mengelola event (sampai REQUEST), tanpa story write',
-    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read'],
+    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'],
   },
 ];
 
@@ -149,90 +163,92 @@ async function main(): Promise<void> {
     parallelism: 4,
   });
 
-  await prisma.$transaction(async (tx) => {
-    const permissionIdByCode = new Map<string, string>();
+  // Tanpa interactive transaction: seed idempoten/additive, partial failure aman di-rerun.
+  const permissionIdByCode = new Map<string, string>();
 
-    for (const perm of DEFAULT_PERMISSIONS) {
-      const saved = await tx.permission.upsert({
-        where: { code: perm.code },
-        update: { description: perm.description },
-        create: { id: randomUUID(), code: perm.code, description: perm.description },
-      });
-      permissionIdByCode.set(saved.code, saved.id);
-      console.log(`permission ${saved.code}: upserted`);
+  for (const perm of DEFAULT_PERMISSIONS) {
+    const saved = await prisma.permission.upsert({
+      where: { code: perm.code },
+      update: { description: perm.description },
+      create: { id: randomUUID(), code: perm.code, description: perm.description },
+    });
+    permissionIdByCode.set(saved.code, saved.id);
+    console.log(`permission ${saved.code}: upserted`);
+  }
+
+  const roleIdByName = new Map<string, string>();
+
+  for (const role of DEFAULT_ROLES) {
+    const saved = await prisma.role.upsert({
+      where: { name: role.name },
+      update: { description: role.description, code: toCode(role.name) },
+      create: { id: randomUUID(), name: role.name, code: toCode(role.name), description: role.description },
+    });
+    roleIdByName.set(saved.name, saved.id);
+    console.log(`role ${saved.name}: upserted`);
+  }
+
+  // ADDITIVE: susun seluruh relasi role -> permission, lalu insert sekali jalan.
+  // skipDuplicates menjaga idempotensi (relasi yang sudah ada dilewati).
+  const rolePermissionData: { roleId: string; permissionId: string }[] = [];
+  for (const role of DEFAULT_ROLES) {
+    const roleId = roleIdByName.get(role.name);
+    if (!roleId) {
+      throw new Error(`Role "${role.name}" tidak ditemukan setelah upsert.`);
     }
-
-    const roleIdByName = new Map<string, string>();
-
-    for (const role of DEFAULT_ROLES) {
-      const saved = await tx.role.upsert({
-        where: { name: role.name },
-        update: { description: role.description, code: toCode(role.name) },
-        create: { id: randomUUID(), name: role.name, code: toCode(role.name), description: role.description },
-      });
-      roleIdByName.set(saved.name, saved.id);
-      console.log(`role ${saved.name}: upserted`);
-    }
-
-    // ADDITIVE: hanya upsert relasi yang kurang (pengecualian: targeted delete di bawah).
-    for (const role of DEFAULT_ROLES) {
-      const roleId = roleIdByName.get(role.name);
-      if (!roleId) {
-        throw new Error(`Role "${role.name}" tidak ditemukan setelah upsert.`);
+    for (const code of role.permissions) {
+      const permissionId = permissionIdByCode.get(code);
+      if (!permissionId) {
+        throw new Error(`Permission "${code}" tidak ditemukan setelah upsert.`);
       }
-      for (const code of role.permissions) {
-        const permissionId = permissionIdByCode.get(code);
-        if (!permissionId) {
-          throw new Error(`Permission "${code}" tidak ditemukan setelah upsert.`);
-        }
-        await tx.rolePermission.upsert({
-          where: { roleId_permissionId: { roleId, permissionId } },
-          update: {},
-          create: { roleId, permissionId },
-        });
-        console.log(`role-permission ${role.name} -> ${code}: upserted`);
-      }
+      rolePermissionData.push({ roleId, permissionId });
     }
+  }
 
-    // Targeted delete: copot story-write dari role `organization` (bukan deleteMany global —
-    // custom role & relasi role lain tidak tersentuh). Perubahan permission yang di-*tambah*
-    // tetap additive lewat loop di atas.
-    const organizationRoleId = roleIdByName.get('organization');
-    if (organizationRoleId) {
-      const removed = await tx.rolePermission.deleteMany({
-        where: {
-          roleId: organizationRoleId,
-          permission: { code: { in: ORGANIZATION_REMOVED_PERMISSION_CODES } },
-        },
-      });
-      console.log(
-        `role-permission organization -> removed ${removed.count} story-write relation(s): targeted`,
-      );
-    }
+  const createdRolePermissions = await prisma.rolePermission.createMany({
+    data: rolePermissionData,
+    skipDuplicates: true,
+  });
+  console.log(`role-permission: ${createdRolePermissions.count} relation(s) created (additive)`);
 
-    const adminRoleId = roleIdByName.get('admin');
-    if (!adminRoleId) {
-      throw new Error('Role "admin" wajib ada di DEFAULT_ROLES.');
-    }
-
-    await tx.user.upsert({
-      where: { email: ADMIN_EMAIL },
-      update: {
-        fullName: ADMIN_FULL_NAME,
-        passwordHash,
-        roleId: adminRoleId,
-      },
-      create: {
-        id: randomUUID(),
-        email: ADMIN_EMAIL,
-        fullName: ADMIN_FULL_NAME,
-        passwordHash,
-        roleId: adminRoleId,
-        status: 'ACTIVE',
+  // Targeted delete: copot story-write dari role `organization` (bukan deleteMany global —
+  // custom role & relasi role lain tidak tersentuh). Perubahan permission yang di-*tambah*
+  // tetap additive lewat createMany di atas.
+  const organizationRoleId = roleIdByName.get('organization');
+  if (organizationRoleId) {
+    const removed = await prisma.rolePermission.deleteMany({
+      where: {
+        roleId: organizationRoleId,
+        permission: { code: { in: ORGANIZATION_REMOVED_PERMISSION_CODES } },
       },
     });
-    console.log(`user ${ADMIN_EMAIL}: upserted (password di-reset)`);
-  }, { timeout: 120_000, maxWait: 10_000 });
+    console.log(
+      `role-permission organization -> removed ${removed.count} story-write relation(s): targeted`,
+    );
+  }
+
+  const adminRoleId = roleIdByName.get('admin');
+  if (!adminRoleId) {
+    throw new Error('Role "admin" wajib ada di DEFAULT_ROLES.');
+  }
+
+  await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {
+      fullName: ADMIN_FULL_NAME,
+      passwordHash,
+      roleId: adminRoleId,
+    },
+    create: {
+      id: randomUUID(),
+      email: ADMIN_EMAIL,
+      fullName: ADMIN_FULL_NAME,
+      passwordHash,
+      roleId: adminRoleId,
+      status: 'ACTIVE',
+    },
+  });
+  console.log(`user ${ADMIN_EMAIL}: upserted (password di-reset)`);
 
   console.log('Seed RBAC selesai (idempoten, additive).');
 }

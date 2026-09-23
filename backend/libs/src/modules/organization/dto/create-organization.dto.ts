@@ -14,7 +14,7 @@ export class CreateOrganizationDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  city?: string;
+  state?: string;
 
   @Transform(trim)
   @IsOptional()

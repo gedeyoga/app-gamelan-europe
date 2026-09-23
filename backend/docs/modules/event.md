@@ -319,9 +319,9 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | PATCH | `/api/v1/events/:id` | PERMISSION `event:update` | `UpdateEventDto` | 200 `{ data, message }` |
 | DELETE | `/api/v1/events/:id` | PERMISSION `event:delete` | `id` UUID | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/submit` | PERMISSION `event:submit` | `id` UUID (tanpa body) | 200 `{ data, message }` |
-| POST | `/api/v1/events/:id/approve` | PERMISSION `event:approve` | `id` UUID (tanpa body) | 200 `{ data, message }` |
+| POST | `/api/v1/events/:id/approve` | PERMISSION `event:approve` | `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/reject` | PERMISSION `event:reject` | `id` UUID (tanpa body) | 200 `{ data, message }` |
-| POST | `/api/v1/events/:id/publish` | PERMISSION `event:publish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
+| POST | `/api/v1/events/:id/publish` | PERMISSION `event:publish` | `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/unpublish` | PERMISSION `event:unpublish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
 | POST | `/api/v1/event-types` | PERMISSION `event-type:create` | `CreateEventTypeDto` (idempoten) | 201 `{ data, message }` |
 | GET | `/api/v1/event-types` | PERMISSION `event-type:read` | `ListQueryDto` | 200 `{ data, meta, message }` |
@@ -336,15 +336,18 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 | Action | Endpoint | Permission | Dari | Ke |
 | --- | --- | --- | --- | --- |
 | `submit` | `POST /events/:id/submit` | `event:submit` | `DRAFT` | `REQUEST` |
-| `approve` | `POST /events/:id/approve` | `event:approve` | `REQUEST` | `APPROVED` |
+| `approve` | `POST /events/:id/approve` | `event:approve` | `REQUEST` | `PUBLISHED` |
 | `reject` | `POST /events/:id/reject` | `event:reject` | `REQUEST` | `DRAFT` |
 | `publish` | `POST /events/:id/publish` | `event:publish` | `APPROVED` | `PUBLISHED` |
 | `unpublish` | `POST /events/:id/unpublish` | `event:unpublish` | `PUBLISHED` | `DRAFT` |
 
-- Request **tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
+- **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
+- `approvedAt` = **audit marker "pertama kali terbit"** (server-managed): di-set `existing.approvedAt ?? now` saat transisi `approve`/`publish`, atau saat `create`/`update` menghasilkan `PUBLISHED`. **Bukan** penanda status `APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` tetap ada untuk kompatibilitas (APPROVED→PUBLISHED; baris APPROVED lama).
+- `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
-- `approve` mengisi `approvedAt = now` bila masih `null`; `publish` mengisi `publishedAt = now` bila masih `null` (re-publish tidak mengubah waktu publish pertama). `unpublish`/`reject` **menyisakan** `publishedAt`/`approvedAt` (disengaja, konsisten `PATCH`).
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `organization`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
+- `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `organization`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik event-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
 
 ### Scoping Baca & Tulis
 
@@ -364,7 +367,7 @@ Row-level scoping (`AccessScopeService.resolve(userId, 'event')`, per-resource; 
 - **List** (`GET /events`): `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
 - **Detail**: row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
 - **Tulis**: `organization`/`own` bukan pemilik → **403** `ForbiddenException('Forbidden resource')`; `none`/`published` → **403**.
-- **Bypass ditutup**: scope `!= all` → create paksa `DRAFT` (buang `publishedAt`); update/transition mengabaikan `status`/`publishedAt`. Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya.
+- **Bypass ditutup**: scope `!= all` → create paksa `DRAFT` (buang `publishedAt`); update/transition mengabaikan `status`/`publishedAt` — **kecuali** `status: DRAFT` pada event miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya.
 
 ```json
 { "statusCode": 403, "message": "Forbidden resource", "errors": [] }

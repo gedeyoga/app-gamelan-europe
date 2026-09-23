@@ -13,6 +13,11 @@ export class CategoryRepository {
     return category;
   }
 
+  async findByIds(ids: string[]): Promise<CategoryEntity[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.category.findMany({ where: { id: { in: ids } }, select: categorySelect });
+  }
+
   async findMany(params: {
     where: Prisma.CategoryWhereInput;
     skip: number;

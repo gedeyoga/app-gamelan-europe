@@ -2,7 +2,7 @@
 
 Menu: [rbac.md](./rbac.md) (master) · [user.md](./user.md)
 
-> **STATUS: DIIMPLEMENTASIKAN (backend).** CRUD `Organization` tersedia. **Tanpa migration baru** — model `Organization` sudah ada sejak migration init repo; hanya entity/service/controller + 4 permission `organization:*` yang ditambahkan. Fitur row-level scoping yang memakainya → [rbac.md §10 Row-Level Scoping](./rbac.md#10-row-level-scoping).
+> **STATUS: DIIMPLEMENTASIKAN (backend).** CRUD `Organization` tersedia. Kolom `city` di-rename menjadi `state` (migration `*_rename_organization_city_to_state`), nilainya diisi dari tabel `states`. Fitur row-level scoping yang memakainya → [rbac.md §10 Row-Level Scoping](./rbac.md#10-row-level-scoping).
 
 ---
 
@@ -31,9 +31,9 @@ apps/app/src/controllers/organizations.controller.ts   ← controller di apps/, 
 
 Alur baku `Controller → Service → Repository → Prisma`; repository satu-satunya tempat query Prisma. Modul didaftarkan di `libs/src/libs.module.ts` (imports + exports) dan controller di `apps/app/src/app.module.ts`.
 
-### Tidak ada migration baru
+### Migration rename `city` → `state`
 
-Model `Organization` sudah ada di `libs/prisma/schema.prisma` (dan tabel `organizations` sudah dibuat migration init repo). Iterasi ini **tidak** menambah/mengubah kolom → tidak ada migration. Jalankan `pnpm prisma:seed` untuk menambah 4 permission `organization:*` (lihat [rbac.md §7](./rbac.md#7-seed-default)).
+Kolom `city` pada tabel `organizations` di-rename menjadi `state` (isi: nama state/provinsi dari tabel `states`). Migration `*_rename_organization_city_to_state` berisi `ALTER TABLE "organizations" RENAME COLUMN "city" TO "state";`. Jalankan `pnpm prisma:seed` untuk menambah 4 permission `organization:*` (lihat [rbac.md §7](./rbac.md#7-seed-default)).
 
 ---
 
@@ -43,7 +43,7 @@ Model `Organization` sudah ada di `libs/prisma/schema.prisma` (dan tabel `organi
 model Organization {
   id        String    @id @default(uuid())
   name      String
-  city      String?
+  state     String?
   country   String?
   address   String?
   lat       Decimal?  @db.Decimal(10, 7)
@@ -74,7 +74,7 @@ import { Prisma } from '@prisma/client';
 export const organizationSelect = {
   id: true,
   name: true,
-  city: true,
+  state: true,
   country: true,
   address: true,
   lat: true,
@@ -120,7 +120,7 @@ export class CreateOrganizationDto {
   name: string;
 
   @Transform(trim) @IsOptional() @IsString() @MaxLength(100)
-  city?: string;
+  state?: string;
 
   @Transform(trim) @IsOptional() @IsString() @MaxLength(100)
   country?: string;
@@ -156,7 +156,7 @@ export class ListOrganizationsQueryDto extends ListQueryDto {}
 | Field | Aturan | Gagal → |
 | --- | --- | --- |
 | `name` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(200)` | 422 `{ field: 'name', message }` |
-| `city` | trim opsional, `@IsString()`, `@MaxLength(100)` | 422 `{ field: 'city', message }` |
+| `state` | trim opsional, `@IsString()`, `@MaxLength(100)` | 422 `{ field: 'state', message }` |
 | `country` | trim opsional, `@IsString()`, `@MaxLength(100)` | 422 `{ field: 'country', message }` |
 | `address` | trim opsional, `@IsString()`, `@MaxLength(500)` | 422 `{ field: 'address', message }` |
 | `lat` | opsional, `@IsNumber()`, `@Min(-90)`, `@Max(90)` | 422 `{ field: 'lat', message }` |
@@ -180,9 +180,9 @@ export class ListOrganizationsQueryDto extends ListQueryDto {}
 
 | Konstanta | Nilai |
 | --- | --- |
-| `ORGANIZATION_SEARCHABLE_FIELDS` | `['name', 'city', 'country', 'address']` |
-| `ORGANIZATION_SORT_FIELDS` | `['name', 'city', 'country', 'address', 'createdAt', 'updatedAt']` |
-| `ORGANIZATION_FILTER_FIELDS` | `['name', 'city', 'country', 'createdAt', 'updatedAt']` |
+| `ORGANIZATION_SEARCHABLE_FIELDS` | `['name', 'state', 'country', 'address']` |
+| `ORGANIZATION_SORT_FIELDS` | `['name', 'state', 'country', 'address', 'createdAt', 'updatedAt']` |
+| `ORGANIZATION_FILTER_FIELDS` | `['name', 'state', 'country', 'createdAt', 'updatedAt']` |
 | `ORGANIZATION_DATE_FIELDS` | `['createdAt', 'updatedAt']` (ISO 8601; invalid → 422; `like` ditolak) |
 
 - `filter[<field>]` di luar whitelist → 422; `sortBy` di luar whitelist → 422 (`assertAllowedSort`).
@@ -242,7 +242,7 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta:
   "data": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "Gamelan Nusantara",
-    "city": "Amsterdam",
+    "state": "Bali",
     "country": "Belanda",
     "address": "Kerkstraat 1",
     "lat": 52.3676,

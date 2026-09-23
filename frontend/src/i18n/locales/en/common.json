@@ -55,5 +55,10 @@
   "toast": {
     "dismiss": "Dismiss",
     "errorDefault": "Something went wrong"
+  },
+  "eventCard": {
+    "noThumbnail": "No thumbnail",
+    "noLocation": "Location not available",
+    "openEvent": "Open event {{name}}"
   }
 }

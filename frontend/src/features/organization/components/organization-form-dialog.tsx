@@ -24,9 +24,13 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { LocationMapPicker } from '@/components/shared/location-map-picker'
+import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
 import { ApiError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 
+import { useCountries } from '../hooks/use-countries'
+import { useStates } from '../hooks/use-states'
 import type { CreateOrganizationInput, Organization, UpdateOrganizationInput } from '../types'
 
 export type OrganizationFormMode = 'create' | 'edit'
@@ -69,7 +73,7 @@ export function OrganizationFormDialog({
           .trim()
           .min(1, t('validation:nameRequired'))
           .max(200, t('validation:nameMax', { count: 200 })),
-        city: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
+        state: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
         country: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
         address: z.string().trim().max(500, t('validation:addressMax', { count: 500 })),
         lat: z.string().trim().refine(emptyOrInRange(-90, 90), t('validation:latInvalid')),
@@ -84,18 +88,60 @@ export function OrganizationFormDialog({
     mode === 'edit' && organization
       ? {
           name: organization.name,
-          city: organization.city ?? '',
+          state: organization.state ?? '',
           country: organization.country ?? '',
           address: organization.address ?? '',
           lat: organization.lat === null ? '' : String(organization.lat),
           lng: organization.lng === null ? '' : String(organization.lng),
         }
-      : { name: '', city: '', country: '', address: '', lat: '', lng: '' }
+      : { name: '', state: '', country: '', address: '', lat: '', lng: '' }
 
   const form = useForm<OrganizationFormValues>({
     resolver: zodResolver(schema),
     defaultValues,
   })
+
+  const latValue = form.watch('lat')
+  const lngValue = form.watch('lng')
+
+  const countryValue = form.watch('country')
+  const stateValue = form.watch('state')
+
+  const countriesQuery = useCountries()
+  const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
+
+  const countryOptions = useMemo<SearchSelectOption[]>(() => {
+    const options = countries.map((country) => ({ value: country.name, label: country.name }))
+    if (countryValue && !options.some((option) => option.value === countryValue)) {
+      options.push({ value: countryValue, label: countryValue })
+    }
+    return options
+  }, [countries, countryValue])
+
+  // iso2 diturunkan dari nama country terpilih (field form menyimpan nama).
+  const iso2 = countries.find((country) => country.name === countryValue)?.iso2 ?? ''
+  const statesQuery = useStates(iso2)
+  const states = useMemo(() => statesQuery.data ?? [], [statesQuery.data])
+
+  const stateOptions = useMemo<SearchSelectOption[]>(() => {
+    const options = states.map((state) => ({ value: state.name, label: state.name }))
+    if (stateValue && !options.some((option) => option.value === stateValue)) {
+      options.push({ value: stateValue, label: stateValue })
+    }
+    return options
+  }, [states, stateValue])
+
+  // Ganti country -> reset state (nama state tidak berlaku lintas negara).
+  function handleCountryChange(next: string, onChange: (value: string) => void) {
+    if (next === form.getValues('country')) return
+    onChange(next)
+    form.setValue('state', '', { shouldDirty: true, shouldValidate: true })
+  }
+
+  function handlePick(nextLat: string, nextLng: string) {
+    form.setValue('lat', nextLat, { shouldDirty: true, shouldValidate: true })
+    form.setValue('lng', nextLng, { shouldDirty: true, shouldValidate: true })
+  }
 
   // 422 -> tampil per-field via setError; tanpa toast, tanpa banner list.
   useEffect(() => {
@@ -116,7 +162,7 @@ export function OrganizationFormDialog({
     // Field opsional dikirim `null` eksplisit saat kosong (backend map null → clear), bukan di-omit.
     return {
       name: values.name,
-      city: values.city ? values.city : null,
+      state: values.state ? values.state : null,
       country: values.country ? values.country : null,
       address: values.address ? values.address : null,
       lat: values.lat.trim() ? Number(values.lat) : null,
@@ -132,7 +178,7 @@ export function OrganizationFormDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {mode === 'edit' ? t('organization:form.editTitle') : t('organization:form.createTitle')}
@@ -169,12 +215,20 @@ export function OrganizationFormDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="city"
+                name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('organization:form.city')}</FormLabel>
+                    <FormLabel>{t('organization:form.country')}</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <SearchSelect
+                        options={countryOptions}
+                        value={field.value}
+                        onChange={(value) => handleCountryChange(value, field.onChange)}
+                        placeholder={t('organization:form.countryPlaceholder')}
+                        searchPlaceholder={t('organization:form.countrySearch')}
+                        emptyLabel={t('organization:form.countryEmpty')}
+                        isLoading={countriesQuery.isLoading}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -182,12 +236,25 @@ export function OrganizationFormDialog({
               />
               <FormField
                 control={form.control}
-                name="country"
+                name="state"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('organization:form.country')}</FormLabel>
+                    <FormLabel>{t('organization:form.state')}</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <SearchSelect
+                        options={stateOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder={
+                          iso2
+                            ? t('organization:form.statePlaceholder')
+                            : t('organization:form.stateSelectCountry')
+                        }
+                        searchPlaceholder={t('organization:form.stateSearch')}
+                        emptyLabel={t('organization:form.stateEmpty')}
+                        disabled={!iso2 || statesQuery.isLoading}
+                        isLoading={statesQuery.isLoading}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -209,32 +276,13 @@ export function OrganizationFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="lat"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('organization:form.lat')}</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="any" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lng"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('organization:form.lng')}</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="any" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">{t('organization:form.mapLabel')}</p>
+              <LocationMapPicker
+                lat={latValue}
+                lng={lngValue}
+                onChange={handlePick}
+                disabled={isSubmitting}
               />
             </div>
 

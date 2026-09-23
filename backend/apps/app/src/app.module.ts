@@ -3,8 +3,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import {
   ApiKeyModule,
+  ArchiveModule,
   AuthModule,
   CategoryModule,
+  DocumentModule,
   EventModule,
   EventTypeModule,
   ImageModule,
@@ -29,6 +31,8 @@ import { CategoriesController } from './controllers/categories.controller';
 import { EventsController } from './controllers/events.controller';
 import { EventTypesController } from './controllers/event-types.controller';
 import { ImagesController } from './controllers/images.controller';
+import { ArchivesController } from './controllers/archives.controller';
+import { DocumentsController } from './controllers/documents.controller';
 import { OrganizationsController } from './controllers/organizations.controller';
 import { SubscriptionsController } from './controllers/subscriptions.controller';
 import { BillingsController } from './controllers/billings.controller';
@@ -46,6 +50,8 @@ import { ApiKeysController } from './controllers/api-keys.controller';
     EventTypeModule,
     ImageModule,
     StorageModule,
+    ArchiveModule,
+    DocumentModule,
   ],
   controllers: [
     HealthController,
@@ -61,6 +67,8 @@ import { ApiKeysController } from './controllers/api-keys.controller';
     EventsController,
     EventTypesController,
     ImagesController,
+    ArchivesController,
+    DocumentsController,
     OrganizationsController,
     SubscriptionsController,
     BillingsController,

@@ -1,0 +1,150 @@
+{
+  "title": "Archives",
+  "subtitle": "Manage art and research archives",
+  "add": "Add Archive",
+  "search": {
+    "placeholder": "Search title or description...",
+    "ariaLabel": "Search archives"
+  },
+  "view": {
+    "card": "Card view",
+    "list": "List view"
+  },
+  "filter": {
+    "type": "Filter by type",
+    "status": "Filter by status",
+    "allTypes": "All types",
+    "allStatuses": "All statuses"
+  },
+  "table": {
+    "thumbnail": "Thumbnail",
+    "title": "Title",
+    "categories": "Categories",
+    "type": "Type",
+    "status": "Status",
+    "publishedAt": "Published At",
+    "empty": "No archives yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "card": {
+    "noThumbnail": "No thumbnail"
+  },
+  "typeOptions": {
+    "MEMBER": "Member",
+    "PUBLIC": "Public"
+  },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Request",
+    "APPROVED": "Approved",
+    "PUBLISHED": "Published"
+  },
+  "form": {
+    "sectionInfo": "Information",
+    "sectionLinks": "Links & Documents",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Enter archive title...",
+    "descriptionLabel": "Description",
+    "type": "Archive Type",
+    "categories": "Categories",
+    "categoryPlaceholder": "Select categories",
+    "categorySearch": "Search or add category...",
+    "categoryAdd": "Add \"{{name}}\"",
+    "categoryCreating": "Adding...",
+    "categoryEmpty": "No category found",
+    "thumbnail": "Thumbnail",
+    "externalLinks": "External Links",
+    "externalLinksEmpty": "No external links yet.",
+    "externalLinksPlaceholder": "https://example.com",
+    "externalLinksAdd": "Add Link",
+    "externalLinksRemove": "Remove link",
+    "documents": "PDF Documents",
+    "save": "Save",
+    "saveAsDraft": "Save as Draft",
+    "requestPublish": "Request to publish",
+    "publish": "Publish",
+    "cancel": "Cancel"
+  },
+  "publishDialog": {
+    "title": "Publish archive",
+    "description": "Choose publish date and time.",
+    "dateLabel": "Publish date & time",
+    "datePlaceholder": "Choose date & time",
+    "next": "Continue",
+    "confirmTitle": "Confirm",
+    "confirmDescription": "The archive will be published at the selected date and time. Continue?",
+    "confirm": "Publish"
+  },
+  "workflow": {
+    "requested": "Awaiting approval",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "confirm": {
+    "title": "Confirm",
+    "description": "Are you sure you want to {{action}}? Changes will be saved.",
+    "submit": "Continue"
+  },
+  "thumbnail": {
+    "upload": "Upload thumbnail",
+    "uploading": "Uploading...",
+    "remove": "Remove",
+    "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB."
+  },
+  "document": {
+    "add": "Add PDF documents",
+    "empty": "No documents yet.",
+    "formats": "Format: PDF. Max 10 MB.",
+    "uploading": "Uploading...",
+    "uploadInvalid": "File must be a PDF document.",
+    "uploadTooLarge": "PDF must be at most 10 MB.",
+    "remove": "Remove",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "open": "Open"
+  },
+  "detail": {
+    "back": "Back to archives",
+    "open": "View details for \"{{name}}\"",
+    "notFound": "Archive not found.",
+    "metadata": "Metadata",
+    "type": "Type",
+    "status": "Status",
+    "categories": "Categories",
+    "creator": "Author",
+    "publishedAt": "Published At",
+    "externalLinks": "External Links",
+    "documents": "PDF Documents",
+    "index": "No.",
+    "empty": "Nothing here yet."
+  },
+  "delete": {
+    "title": "Delete Archive",
+    "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+  "errors": {
+    "loadData": "Failed to load archive data. Please try again.",
+    "forbidden": "You don't have access to view archive data.",
+    "loadDetail": "Failed to load archive detail.",
+    "uploadFailed": "Failed to upload file. Please try again.",
+    "createCategoryFailed": "Failed to create category.",
+    "noCreatePermission": "You don't have permission to create an archive.",
+    "noUpdatePermission": "You don't have permission to edit an archive."
+  },
+  "toast": {
+    "created": "Archive created successfully",
+    "updated": "Archive updated successfully",
+    "deleted": "Archive deleted successfully",
+    "createFailed": "Failed to create archive",
+    "updateFailed": "Failed to update archive",
+    "deleteFailed": "Failed to delete archive",
+    "approved": "Archive approved successfully",
+    "rejected": "Archive rejected successfully",
+    "approveFailed": "Failed to approve archive",
+    "rejectFailed": "Failed to reject archive"
+  }
+}

@@ -19,7 +19,7 @@ export type EventAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpubli
 // Sumber tunggal aturan transisi status event. Pure & mudah diaudit.
 export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus; to: ContentStatus }> = {
   submit: { from: ContentStatus.DRAFT, to: ContentStatus.REQUEST },
-  approve: { from: ContentStatus.REQUEST, to: ContentStatus.APPROVED },
+  approve: { from: ContentStatus.REQUEST, to: ContentStatus.PUBLISHED },
   reject: { from: ContentStatus.REQUEST, to: ContentStatus.DRAFT },
   publish: { from: ContentStatus.APPROVED, to: ContentStatus.PUBLISHED },
   unpublish: { from: ContentStatus.PUBLISHED, to: ContentStatus.DRAFT },
@@ -223,7 +223,8 @@ export class EventService {
         : status === ContentStatus.PUBLISHED
           ? now
           : undefined,
-      approvedAt: status === ContentStatus.APPROVED ? now : undefined,
+      // Audit marker "pertama kali terbit" (dibuat langsung PUBLISHED), bukan status APPROVED.
+      approvedAt: autoPublish || status === ContentStatus.PUBLISHED ? now : undefined,
       eventTypeIds: dto.eventTypeIds,
       dates: dto.dates?.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime })),
       location: dto.location,
@@ -281,18 +282,31 @@ export class EventService {
         // Tanggal publish manual: timpa nilai lama (ubah/backdate) + paksa PUBLISHED.
         data.publishedAt = new Date(dto.publishedAt);
         data.status = ContentStatus.PUBLISHED;
+        if (!existing.approvedAt) data.approvedAt = new Date();
       } else if (dto.status !== undefined) {
         data.status = dto.status;
-        if (dto.status === ContentStatus.PUBLISHED && !existing.publishedAt) data.publishedAt = new Date();
-        if (dto.status === ContentStatus.APPROVED && !existing.approvedAt) data.approvedAt = new Date();
+        if (dto.status === ContentStatus.PUBLISHED) {
+          if (!existing.publishedAt) data.publishedAt = new Date();
+          if (!existing.approvedAt) data.approvedAt = new Date();
+        }
       }
+    } else if (dto.status === ContentStatus.DRAFT && existing.status === ContentStatus.PUBLISHED) {
+      // Pemilik/organisasi boleh menarik kembali kontennya yang sudah terbit menjadi DRAFT.
+      // `publishedAt`/`approvedAt` dibiarkan (konsisten dengan transisi `unpublish`).
+      data.status = ContentStatus.DRAFT;
     }
 
     return this.toResponse(await this.eventRepository.update(id, data));
   }
 
   // Transisi status terkontrol; `PATCH /events/:id` tetap untuk update konten.
-  async transition(id: string, action: EventAction, userId: string): Promise<EventResponse> {
+  // `approve` langsung PUBLISHED (+ `publishedAt`); `publish` legacy (APPROVED → PUBLISHED) tetap ada.
+  async transition(
+    id: string,
+    action: EventAction,
+    userId: string,
+    options?: { publishedAt?: string },
+  ): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id); // 404 bila tak ada
     const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
@@ -301,9 +315,14 @@ export class EventService {
       throw new ConflictException(`Cannot ${action} event in status ${existing.status}`);
     }
     // `updateStatusIf` conditional → dua request paralel dari status sama: hanya satu sukses.
+    // `approvedAt` = audit marker "pertama kali terbit" (server-managed), bukan status APPROVED.
     const extra: { approvedAt?: Date; publishedAt?: Date } = {};
-    if (action === 'approve' && !existing.approvedAt) extra.approvedAt = new Date();
-    if (action === 'publish' && !existing.publishedAt) extra.publishedAt = new Date();
+    if (action === 'approve' || action === 'publish') {
+      extra.publishedAt = options?.publishedAt
+        ? new Date(options.publishedAt)
+        : (existing.publishedAt ?? new Date());
+      extra.approvedAt = existing.approvedAt ?? new Date();
+    }
     const updated = await this.eventRepository.updateStatusIf(id, rule.from, rule.to, extra);
     if (!updated) {
       const current = await this.eventRepository.findById(id); // 404 bila event terhapus

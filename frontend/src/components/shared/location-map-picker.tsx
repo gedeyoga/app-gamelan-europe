@@ -30,7 +30,7 @@ const MARKER_ICON = L.icon({
   shadowSize: [41, 41],
 })
 
-// Pusat default (Eropa) saat event belum punya koordinat.
+// Pusat default (Eropa) saat lokasi belum punya koordinat.
 const DEFAULT_CENTER: [number, number] = [48.8566, 2.3522]
 const DEFAULT_ZOOM = 4
 const SEARCH_ZOOM = 15
@@ -61,10 +61,10 @@ export interface LocationMapPickerProps {
   /** Koordinat string agar aman terhadap kolom DECIMAL backend. */
   lat: string
   lng: string
-  /** Alamat saat ini (dipakai sebagai nilai awal pencarian). */
-  address: string
+  /** Alamat awal opsional untuk nilai awal pencarian. */
+  address?: string
   onChange: (lat: string, lng: string) => void
-  onAddressChange: (address: string) => void
+  onAddressChange?: (address: string) => void
   disabled?: boolean
   className?: string
 }
@@ -189,14 +189,14 @@ function AddressSearch({ address, disabled, onSelect }: AddressSearchProps) {
           setQuery(event.target.value)
         }}
         onKeyDown={handleKeyDown}
-        placeholder={t('event:location.searchPlaceholder')}
-        aria-label={t('event:location.searchPlaceholder')}
+        placeholder={t('location:searchPlaceholder')}
+        aria-label={t('location:searchPlaceholder')}
         disabled={disabled}
       />
       {isActiveQuery && isSearching && (
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          {t('event:location.searching')}
+          {t('location:searching')}
         </p>
       )}
       {showResults && (
@@ -215,9 +215,9 @@ function AddressSearch({ address, disabled, onSelect }: AddressSearchProps) {
           ))}
         </ul>
       )}
-      {showHint && <p className="text-xs text-muted-foreground">{t('event:location.searchHint')}</p>}
+      {showHint && <p className="text-xs text-muted-foreground">{t('location:searchHint')}</p>}
       {showNoResults && (
-        <p className="text-xs text-muted-foreground">{t('event:location.searchNoResults')}</p>
+        <p className="text-xs text-muted-foreground">{t('location:searchNoResults')}</p>
       )}
     </div>
   )
@@ -227,7 +227,7 @@ function AddressSearch({ address, disabled, onSelect }: AddressSearchProps) {
 export function LocationMapPicker({
   lat,
   lng,
-  address,
+  address = '',
   onChange,
   onAddressChange,
   disabled = false,
@@ -248,7 +248,7 @@ export function LocationMapPicker({
 
   function handleSearchSelect(selection: AddressSearchSelection) {
     handlePick(selection.lat, selection.lng)
-    onAddressChange(selection.label)
+    onAddressChange?.(selection.label)
     setRecenter([selection.lat, selection.lng])
   }
 
@@ -286,8 +286,8 @@ export function LocationMapPicker({
       </MapContainer>
       <p className="text-xs text-muted-foreground">
         {hasPosition
-          ? t('event:location.coordinates', { latitude, longitude })
-          : t('event:location.clickHint')}
+          ? t('location:coordinates', { latitude, longitude })
+          : t('location:clickHint')}
       </p>
     </div>
   )

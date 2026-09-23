@@ -7,9 +7,9 @@ import { OrganizationEntity } from './entities/organization.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 
-export const ORGANIZATION_SEARCHABLE_FIELDS = ['name', 'city', 'country', 'address'];
-export const ORGANIZATION_SORT_FIELDS = ['name', 'city', 'country', 'address', 'createdAt', 'updatedAt'];
-export const ORGANIZATION_FILTER_FIELDS = ['name', 'city', 'country', 'createdAt', 'updatedAt'];
+export const ORGANIZATION_SEARCHABLE_FIELDS = ['name', 'state', 'country', 'address'];
+export const ORGANIZATION_SORT_FIELDS = ['name', 'state', 'country', 'address', 'createdAt', 'updatedAt'];
+export const ORGANIZATION_FILTER_FIELDS = ['name', 'state', 'country', 'createdAt', 'updatedAt'];
 export const ORGANIZATION_DATE_FIELDS = ['createdAt', 'updatedAt'];
 
 @Injectable()
@@ -43,7 +43,7 @@ export class OrganizationService {
   create(dto: CreateOrganizationDto): Promise<OrganizationEntity> {
     return this.organizationRepository.create({
       name: dto.name,
-      city: dto.city,
+      state: dto.state,
       country: dto.country,
       address: dto.address,
       lat: dto.lat,
@@ -54,7 +54,7 @@ export class OrganizationService {
   update(id: string, dto: UpdateOrganizationDto): Promise<OrganizationEntity> {
     const data: Prisma.OrganizationUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.city !== undefined) data.city = dto.city;
+    if (dto.state !== undefined) data.state = dto.state;
     if (dto.country !== undefined) data.country = dto.country;
     if (dto.address !== undefined) data.address = dto.address;
     if (dto.lat !== undefined) data.lat = dto.lat;

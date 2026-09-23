@@ -12,13 +12,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
 import { EventDatesField } from './event-dates-field'
@@ -136,20 +130,26 @@ export function EventMetaPanel({
         render={({ field }) => (
           <FormItem>
             <FormLabel>{t('event:form.visibility')}</FormLabel>
-            <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-              <FormControl>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
+            <FormControl>
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={disabled}
+                aria-label={t('event:form.visibility')}
+                className="flex flex-wrap gap-4"
+              >
                 {VISIBILITIES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {t(`event:visibilityOptions.${value}`)}
-                  </SelectItem>
+                  <FormItem key={value} className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value={value} />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      {t(`event:visibilityOptions.${value}`)}
+                    </FormLabel>
+                  </FormItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </RadioGroup>
+            </FormControl>
             <FormMessage />
           </FormItem>
         )}

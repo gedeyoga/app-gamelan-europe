@@ -53,3 +53,18 @@ export function deleteEvent(id: string): Promise<Event> {
 export function submitEvent(id: string): Promise<Event> {
   return request<Event>(`/events/${id}/submit`, { method: 'POST' })
 }
+
+export function approveEvent(id: string, publishedAt?: string): Promise<Event> {
+  if (publishedAt === undefined) {
+    return request<Event>(`/events/${id}/approve`, { method: 'POST' })
+  }
+  return request<Event>(`/events/${id}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publishedAt }),
+  })
+}
+
+export function rejectEvent(id: string): Promise<Event> {
+  return request<Event>(`/events/${id}/reject`, { method: 'POST' })
+}

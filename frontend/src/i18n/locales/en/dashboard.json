@@ -9,7 +9,10 @@
   },
   "stats": {
     "upcomingEvents": "Upcoming Events",
-    "publishedStories": "Published Stories"
+    "publishedStories": "Published Stories",
+    "totalEvents": "Total Events",
+    "totalStories": "Total Stories",
+    "totalMembers": "Total Members"
   },
   "section": {
     "upcomingEvents": {
@@ -25,20 +28,47 @@
       "viewAll": "View all",
       "empty": "No published stories yet.",
       "error": "Failed to load data."
+    },
+    "pendingEvents": {
+      "title": "Events Awaiting Approval",
+      "subtitle": "Events submitted by members and organizations.",
+      "viewAll": "View all",
+      "empty": "No events awaiting approval.",
+      "error": "Failed to load data."
+    },
+    "pendingArchives": {
+      "title": "Archives Awaiting Approval",
+      "subtitle": "Archives submitted by members and organizations.",
+      "viewAll": "View all",
+      "empty": "No archives awaiting approval.",
+      "error": "Failed to load data."
+    },
+    "archives": {
+      "title": "Latest Archives",
+      "subtitle": "Archives you can access.",
+      "viewAll": "View all",
+      "empty": "No archives yet.",
+      "error": "Failed to load data."
     }
+  },
+  "pending": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "viewDetail": "View detail",
+    "unknown": "Unknown organizer"
   },
   "card": {
     "noThumbnail": "No thumbnail",
-    "noDate": "Date not available",
-    "noLocation": "Location not available",
-    "openEvent": "Open event {{name}}",
-    "openStory": "Open story {{name}}"
+    "noDescription": "No description",
+    "openStory": "Open story {{name}}",
+    "openArchive": "Open archive {{name}}"
   },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",
     "roles": "Roles",
     "story": "Story",
+    "archives": "Archives",
     "event": "Event",
     "myBilling": "My Billing",
     "organizations": "Organizations",

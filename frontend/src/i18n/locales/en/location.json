@@ -1,0 +1,8 @@
+{
+  "clickHint": "Click the map or drag the marker to set coordinates.",
+  "coordinates": "Coordinates: {{latitude}}, {{longitude}}",
+  "searchPlaceholder": "Search address...",
+  "searching": "Searching...",
+  "searchNoResults": "No address found.",
+  "searchHint": "Type at least 3 characters to search by address."
+}

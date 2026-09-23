@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { DataTablePagination } from '@/components/shared/data-table-pagination'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +24,9 @@ import { useDeleteEvent } from '@/features/event/hooks/use-delete-event'
 import { useEvents } from '@/features/event/hooks/use-events'
 import type { Event } from '@/features/event/types'
 
-// Ponytail: 2 seksi tanpa pagination — naikkan/beri pagination bila user bisa >100 event.
+// Ponytail: seksi bulan tanpa pagination — naikkan/beri pagination bila user bisa >100 event.
 const SECTION_LIMIT = 100
+const MY_EVENT_LIMIT = 10
 
 function startOfCurrentMonth(): Date {
   const now = new Date()
@@ -41,11 +43,12 @@ export function OrgEventsPage() {
   const navigate = useNavigate()
   const { can } = useAuthPermissions()
   const [month, setMonth] = useState(startOfCurrentMonth)
+  const [myEventPage, setMyEventPage] = useState(1)
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null)
 
   const eventMonth = toEventMonth(month)
   const monthQuery = useEvents({ page: 1, limit: SECTION_LIMIT, eventMonth })
-  const listQuery = useEvents({ page: 1, limit: SECTION_LIMIT, mine: true })
+  const listQuery = useEvents({ page: myEventPage, limit: MY_EVENT_LIMIT, mine: true })
   const deleteEvent = useDeleteEvent()
 
   const canUpdateEvent = can('event:update')
@@ -62,6 +65,16 @@ export function OrgEventsPage() {
       ? t('event:errors.forbidden')
       : t('event:errors.loadData')
     : undefined
+
+  const listTotal = listQuery.data?.total ?? 0
+
+  // Clamp pagination boundary setelah total berubah (mis. hapus item terakhir).
+  useEffect(() => {
+    if (listTotal > 0 && myEventPage > 1 && (myEventPage - 1) * MY_EVENT_LIMIT >= listTotal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMyEventPage(Math.max(1, Math.ceil(listTotal / MY_EVENT_LIMIT)))
+    }
+  }, [listTotal, myEventPage])
 
   function goCreate() {
     navigate('/events/new')
@@ -107,7 +120,6 @@ export function OrgEventsPage() {
         onNextMonth={() =>
           setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
         }
-        onView={(event) => navigate(`/events/${event.id}`)}
         onCreate={canCreateEvent ? goCreate : undefined}
       />
 
@@ -122,6 +134,18 @@ export function OrgEventsPage() {
         onEdit={(event) => navigate(`/events/${event.id}/edit`)}
         onDelete={setDeletingEvent}
       />
+
+      {!listError && (
+        <DataTablePagination
+          page={myEventPage}
+          limit={MY_EVENT_LIMIT}
+          total={listQuery.data?.total ?? 0}
+          entityName={t('event:org.myTitle')}
+          isPending={listQuery.isPending}
+          onPrev={() => setMyEventPage((prev) => Math.max(1, prev - 1))}
+          onNext={() => setMyEventPage((prev) => prev + 1)}
+        />
+      )}
 
       {deletingEvent && (
         <AlertDialog open onOpenChange={(open) => !open && setDeletingEvent(null)}>

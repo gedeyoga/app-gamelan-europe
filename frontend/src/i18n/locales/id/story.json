@@ -46,7 +46,7 @@
   },
   "visibilityOptions": {
     "PUBLIC": "Publik",
-    "PRIVATE": "Privat"
+    "PRIVATE": "Khusus Member"
   },
   "form": {
     "createTitle": "Tambah Story",
@@ -80,7 +80,8 @@
     "description": "Pilih tanggal dan waktu terbit.",
     "dateLabel": "Tanggal & waktu terbit",
     "datePlaceholder": "Pilih tanggal & waktu",
-    "confirm": "Terbitkan"
+    "confirm": "Terbitkan",
+    "confirmDescription": "Story akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?"
   },
   "workflow": {
     "requested": "Menunggu persetujuan",
@@ -177,6 +178,10 @@
     "deleted": "Story berhasil dihapus",
     "createFailed": "Gagal membuat story",
     "updateFailed": "Gagal memperbarui story",
-    "deleteFailed": "Gagal menghapus story"
+    "deleteFailed": "Gagal menghapus story",
+    "approved": "Story berhasil disetujui",
+    "rejected": "Story berhasil ditolak",
+    "approveFailed": "Gagal menyetujui story",
+    "rejectFailed": "Gagal menolak story"
   }
 }

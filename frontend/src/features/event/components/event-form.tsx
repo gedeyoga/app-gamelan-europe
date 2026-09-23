@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm, useWatch, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import {
-  CalendarCheck,
   CalendarClock,
   Check,
   PanelRightClose,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import { RichTextEditor } from '@/components/shared/rich-text-editor'
+import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,17 +25,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { FormField, FormItem, FormMessage, Form } from '@/components/ui/form'
-import { DateTimePicker } from '@/components/shared/date-time-picker'
 import { ApiError, isConflictError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
@@ -47,10 +37,17 @@ import type {
   ContentStatus,
   CreateEventInput,
   EventDateInput,
+  EventFormAction,
   EventLocationInput,
   EventType,
 } from '../types'
 import type { UploadedImage } from '@/types/image'
+
+const STATUS_BY_ACTION: Partial<Record<EventFormAction, ContentStatus>> = {
+  draft: 'DRAFT',
+  request: 'REQUEST',
+  publish: 'PUBLISHED',
+}
 
 export interface EventFormProps {
   mode: 'create' | 'edit'
@@ -58,7 +55,7 @@ export interface EventFormProps {
   initialPublishedAt?: string | null
   isPending: boolean
   submissionError: Error | null
-  onSubmit: (payload: CreateEventInput) => void
+  onSubmit: (payload: CreateEventInput, action: EventFormAction) => void
   onCancel: () => void
   eventTypes: EventType[]
   isLoadingEventTypes: boolean
@@ -122,11 +119,11 @@ export function EventForm({
   const [showSettings, setShowSettings] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
-    status: ContentStatus
+    action: EventFormAction
     label: string
   } | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
-  const [publishAt, setPublishAt] = useState<string | undefined>(undefined)
+  const [publishAction, setPublishAction] = useState<'publish' | 'approve'>('publish')
 
   // 422 → per-field; 409 → per-field pada `slug`; keduanya tanpa toast, tetap di halaman.
   useEffect(() => {
@@ -189,7 +186,7 @@ export function EventForm({
     form.setValue('thumbnail', null)
   }
 
-  function handleSubmit(values: EventFormValues & { publishedAt?: string }) {
+  function handleSubmit(values: EventFormValues, action: EventFormAction, publishedAt?: string) {
     const name = values.name.trim()
     const slug = values.slug.trim()
     const dates = values.dates
@@ -204,13 +201,11 @@ export function EventForm({
       })
     const payload: CreateEventInput = {
       name,
-      status: values.status,
+      status: STATUS_BY_ACTION[action] ?? values.status,
       visibility: values.visibility,
       eventTypeIds: values.eventTypeIds,
       location: buildLocation(values.location),
-      ...(values.publishedAt
-        ? { publishedAt: new Date(values.publishedAt).toISOString() }
-        : {}),
+      ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
       ...(values.content ? { content: values.content } : {}),
     }
@@ -218,34 +213,24 @@ export function EventForm({
     if (mode === 'edit' || dates.length > 0) payload.dates = dates
     // Hanya kirim `thumbnail` bila berubah: hapus → `null`, ganti → url baru.
     if (thumbnail !== initialThumbnail) payload.thumbnail = thumbnail
-    onSubmit(payload)
+    onSubmit(payload, action)
   }
 
-  function submitWithStatus(next: ContentStatus, publishedAt?: string) {
-    void form.handleSubmit((values) => handleSubmit({ ...values, status: next, publishedAt }))()
+  function runSubmit(action: EventFormAction, publishedAt?: string) {
+    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt))()
   }
 
-  function submitCurrent() {
-    void form.handleSubmit(handleSubmit)()
-  }
-
-  async function openPublishDialog() {
+  async function openPublishDialog(action: 'publish' | 'approve') {
     const valid = await form.trigger()
     if (!valid) return
-    setPublishAt(initialPublishedAt ?? new Date().toISOString())
+    setPublishAction(action)
     setPublishOpen(true)
   }
 
-  function handleConfirmPublish() {
-    setPublishOpen(false)
-    if (!publishAt) return
-    submitWithStatus('PUBLISHED', publishAt)
-  }
-
-  async function requestStatusChange(next: ContentStatus, label: string) {
+  async function requestStatusChange(action: EventFormAction, label: string) {
     const valid = await form.trigger()
     if (!valid) return
-    setConfirmAction({ status: next, label })
+    setConfirmAction({ action, label })
     setConfirmOpen(true)
   }
 
@@ -258,50 +243,59 @@ export function EventForm({
 
   const actions = (
     <>
-      {status === 'REQUEST' || status === 'PUBLISHED' ? (
-        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={submitCurrent}>
-          <Save className="size-4" data-icon="inline-start" />
-          {t('event:form.save')}
-        </Button>
-      ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isPending}
+        onClick={() => runSubmit('save')}
+      >
+        <Save className="size-4" data-icon="inline-start" />
+        {status === 'DRAFT' ? t('event:form.saveAsDraft') : t('event:form.save')}
+      </Button>
+      {(status === 'PUBLISHED' || (canPublishEvent && status === 'APPROVED')) && (
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={isPending}
-          onClick={() => void requestStatusChange('DRAFT', t('event:form.saveAsDraft'))}
+          onClick={() => void requestStatusChange('draft', t('event:form.saveAsDraft'))}
         >
           <Save className="size-4" data-icon="inline-start" />
           {t('event:form.saveAsDraft')}
         </Button>
       )}
-      {status !== 'REQUEST' && status !== 'PUBLISHED' && canPublishEvent ? (
+      {canPublishEvent && status !== 'REQUEST' && (
         <Button
           type="button"
           size="sm"
           disabled={isPending}
-          onClick={() => void openPublishDialog()}
+          onClick={() => void openPublishDialog('publish')}
         >
           <CalendarClock className="size-4" data-icon="inline-start" />
           {t('event:form.publish')}
         </Button>
-      ) : status !== 'REQUEST' && status !== 'PUBLISHED' && canSubmitEvent ? (
+      )}
+      {!canPublishEvent && canSubmitEvent && status === 'DRAFT' && (
         <Button
           type="button"
           size="sm"
           disabled={isPending}
-          onClick={() => void requestStatusChange('REQUEST', t('event:form.requestPublish'))}
+          onClick={() => void requestStatusChange('request', t('event:form.requestPublish'))}
         >
           <Send className="size-4" data-icon="inline-start" />
           {t('event:form.requestPublish')}
         </Button>
-      ) : null}
+      )}
     </>
   )
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-1 flex-col gap-4 lg:min-h-0">
+      <form
+        onSubmit={form.handleSubmit((values) => handleSubmit(values, 'save'))}
+        className="flex flex-1 flex-col gap-4 lg:min-h-0"
+      >
         {globalMessage && (
           <p
             role="alert"
@@ -322,7 +316,7 @@ export function EventForm({
                     variant="outline"
                     size="sm"
                     disabled={isPending}
-                    onClick={() => void requestStatusChange('DRAFT', t('event:workflow.reject'))}
+                    onClick={() => void requestStatusChange('reject', t('event:workflow.reject'))}
                   >
                     <X className="size-4" data-icon="inline-start" />
                     {t('event:workflow.reject')}
@@ -333,7 +327,7 @@ export function EventForm({
                     type="button"
                     size="sm"
                     disabled={isPending}
-                    onClick={() => void openPublishDialog()}
+                    onClick={() => void openPublishDialog('approve')}
                   >
                     <Check className="size-4" data-icon="inline-start" />
                     {t('event:workflow.approve')}
@@ -451,9 +445,9 @@ export function EventForm({
             <AlertDialogAction
               disabled={isPending}
               onClick={() => {
-                const next = confirmAction?.status
+                const action = confirmAction?.action
                 setConfirmOpen(false)
-                if (next) submitWithStatus(next)
+                if (action) runSubmit(action)
               }}
             >
               <Check className="size-4" data-icon="inline-start" />
@@ -463,43 +457,28 @@ export function EventForm({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={publishOpen} onOpenChange={(open) => setPublishOpen(open)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('event:publishDialog.title')}</DialogTitle>
-            <DialogDescription>{t('event:publishDialog.description')}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="event-publish-at" className="text-sm font-medium">
-              {t('event:publishDialog.dateLabel')}
-            </label>
-            <DateTimePicker
-              id="event-publish-at"
-              value={publishAt}
-              onChange={setPublishAt}
-              placeholder={t('event:publishDialog.datePlaceholder')}
-              disabled={isPending}
-            />
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm">
-                <X className="size-4" data-icon="inline-start" />
-                {t('event:form.cancel')}
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isPending || !publishAt}
-              onClick={handleConfirmPublish}
-            >
-              <CalendarCheck className="size-4" data-icon="inline-start" />
-              {t('event:publishDialog.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PublishScheduleDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        onConfirm={(publishedAt) =>
+          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt)
+        }
+        isPending={isPending}
+        defaultValue={initialPublishedAt ?? new Date().toISOString()}
+        title={t('event:publishDialog.title')}
+        description={t('event:publishDialog.description')}
+        dateLabel={t('event:publishDialog.dateLabel')}
+        datePlaceholder={t('event:publishDialog.datePlaceholder')}
+        nextLabel={t('event:confirm.submit')}
+        confirmTitle={t('event:confirm.title')}
+        confirmDescription={t('event:publishDialog.confirmDescription')}
+        confirmLabel={
+          publishAction === 'approve'
+            ? t('event:workflow.approve')
+            : t('event:publishDialog.confirm')
+        }
+        cancelLabel={t('event:form.cancel')}
+      />
     </Form>
   )
 }

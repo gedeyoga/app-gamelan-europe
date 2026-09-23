@@ -3,12 +3,14 @@ import { initReactI18next } from 'react-i18next';
 
 import { resolveInitialLocale } from './types';
 import apiKeyEn from './locales/en/api-key.json';
+import archiveEn from './locales/en/archive.json';
 import authEn from './locales/en/auth.json';
 import commonEn from './locales/en/common.json';
 import dashboardEn from './locales/en/dashboard.json';
 import billingEn from './locales/en/billing.json';
 import myBillingEn from './locales/en/myBilling.json';
 import eventEn from './locales/en/event.json';
+import locationEn from './locales/en/location.json';
 import organizationEn from './locales/en/organization.json';
 import profileEn from './locales/en/profile.json';
 import roleEn from './locales/en/role.json';
@@ -17,12 +19,14 @@ import subscriptionEn from './locales/en/subscription.json';
 import userEn from './locales/en/user.json';
 import validationEn from './locales/en/validation.json';
 import apiKeyId from './locales/id/api-key.json';
+import archiveId from './locales/id/archive.json';
 import authId from './locales/id/auth.json';
 import commonId from './locales/id/common.json';
 import dashboardId from './locales/id/dashboard.json';
 import billingId from './locales/id/billing.json';
 import myBillingId from './locales/id/myBilling.json';
 import eventId from './locales/id/event.json';
+import locationId from './locales/id/location.json';
 import organizationId from './locales/id/organization.json';
 import profileId from './locales/id/profile.json';
 import roleId from './locales/id/role.json';
@@ -47,7 +51,9 @@ void i18n.use(initReactI18next).init({
       role: roleEn,
       'api-key': apiKeyEn,
       story: storyEn,
+      archive: archiveEn,
       event: eventEn,
+      location: locationEn,
       profile: profileEn,
       organization: organizationEn,
       subscription: subscriptionEn,
@@ -63,7 +69,9 @@ void i18n.use(initReactI18next).init({
       role: roleId,
       'api-key': apiKeyId,
       story: storyId,
+      archive: archiveId,
       event: eventId,
+      location: locationId,
       profile: profileId,
       organization: organizationId,
       subscription: subscriptionId,
@@ -83,7 +91,9 @@ void i18n.use(initReactI18next).init({
     'role',
     'api-key',
     'story',
+    'archive',
     'event',
+    'location',
     'profile',
     'organization',
     'subscription',

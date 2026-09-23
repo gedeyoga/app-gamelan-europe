@@ -47,7 +47,7 @@
   },
   "visibilityOptions": {
     "PUBLIC": "Public",
-    "PRIVATE": "Private"
+    "PRIVATE": "Members Only"
   },
   "form": {
     "createTitle": "Add Event",
@@ -92,20 +92,15 @@
     "namePlaceholder": "Enter location name...",
     "addressLabel": "Address",
     "addressPlaceholder": "Enter address...",
-    "mapLabel": "Pick location on map",
-    "clickHint": "Click the map or drag the marker to set coordinates.",
-    "coordinates": "Coordinates: {{latitude}}, {{longitude}}",
-    "searchPlaceholder": "Search address...",
-    "searching": "Searching...",
-    "searchNoResults": "No address found.",
-    "searchHint": "Type at least 3 characters to search by address."
+    "mapLabel": "Pick location on map"
   },
   "publishDialog": {
     "title": "Publish event",
     "description": "Choose publish date and time.",
     "dateLabel": "Publish date & time",
     "datePlaceholder": "Choose date & time",
-    "confirm": "Publish"
+    "confirm": "Publish",
+    "confirmDescription": "The event will be published at the selected date and time. Continue?"
   },
   "workflow": {
     "requested": "Awaiting approval",
@@ -143,7 +138,6 @@
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "emptyMonth": "No events this month",
-    "viewEvent": "View Event",
     "myTitle": "My Event",
     "emptyList": "No events yet",
     "columnDate": "Date",
@@ -157,6 +151,10 @@
     "deleted": "Event deleted successfully",
     "createFailed": "Failed to create event",
     "updateFailed": "Failed to update event",
-    "deleteFailed": "Failed to delete event"
+    "deleteFailed": "Failed to delete event",
+    "approved": "Event approved successfully",
+    "rejected": "Event rejected successfully",
+    "approveFailed": "Failed to approve event",
+    "rejectFailed": "Failed to reject event"
   }
 }

@@ -18,6 +18,7 @@ const storageBase = {
   S3_PUBLIC_BASE_URL: Joi.string().uri().optional(),
   S3_ENDPOINT: Joi.string().uri().optional(),
   UPLOAD_MAX_SIZE_MB: Joi.number().integer().min(1).default(5),
+  UPLOAD_DOCUMENT_MAX_SIZE_MB: Joi.number().integer().min(1).default(10),
   IMAGE_WEBP_QUALITY: Joi.number().integer().min(1).max(100).default(82),
   IMAGE_LARGE_WIDTH: Joi.number().integer().min(1).default(1920),
   IMAGE_MEDIUM_WIDTH: Joi.number().integer().min(1).default(1024),

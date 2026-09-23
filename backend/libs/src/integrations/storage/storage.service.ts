@@ -90,7 +90,7 @@ export class StorageService {
     } catch (error: unknown) {
       // Log detail asli untuk diagnosa; response tetap generik (jangan bocorkan kredensial/endpoint).
       this.logger.error(`S3 put failed: ${key}`, this.describeError(error));
-      throw new BadGatewayException('Failed to upload image');
+      throw new BadGatewayException('Failed to upload file');
     }
   }
 

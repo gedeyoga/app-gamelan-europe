@@ -1,5 +1,7 @@
 export type ContentStatus = 'DRAFT' | 'REQUEST' | 'APPROVED' | 'PUBLISHED'
 
+export type StoryFormAction = 'save' | 'draft' | 'request' | 'publish' | 'approve' | 'reject'
+
 export type Visibility = 'PUBLIC' | 'PRIVATE'
 
 export type CategoryType = 'STORY' | 'ARCHIVE'

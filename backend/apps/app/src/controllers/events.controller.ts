@@ -6,6 +6,7 @@ import {
   EventService,
   ListEventsQueryDto,
   Permissions,
+  PublishContentDto,
   UpdateEventDto,
 } from '@app/libs';
 
@@ -58,8 +59,12 @@ export class EventsController {
   @Post(':id/approve')
   @Permissions('event:approve')
   @HttpCode(200)
-  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.eventService.transition(id, 'approve', user.id);
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PublishContentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.eventService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt });
   }
 
   @Post(':id/reject')
@@ -72,8 +77,12 @@ export class EventsController {
   @Post(':id/publish')
   @Permissions('event:publish')
   @HttpCode(200)
-  publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.eventService.transition(id, 'publish', user.id);
+  publish(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PublishContentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.eventService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt });
   }
 
   @Post(':id/unpublish')

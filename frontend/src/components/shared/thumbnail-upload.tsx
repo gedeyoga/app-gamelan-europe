@@ -19,6 +19,8 @@ export interface ThumbnailUploadProps {
   disabled?: boolean
   onUpload: (file: File) => void
   onRemove: () => void
+  /** Namespace i18n; default `story` (dipakai archive lewat `archive`). */
+  i18nPrefix?: string
   className?: string
 }
 
@@ -30,6 +32,7 @@ export function ThumbnailUpload({
   disabled = false,
   onUpload,
   onRemove,
+  i18nPrefix = 'story',
   className,
 }: ThumbnailUploadProps) {
   const { t } = useTranslation()
@@ -45,7 +48,7 @@ export function ThumbnailUpload({
 
   function validateAndUpload(file: File) {
     if (!ACCEPTED_TYPES.includes(file.type) || file.size > MAX_SIZE_BYTES) {
-      setInvalidMessage(t('story:thumbnail.uploadInvalid'))
+      setInvalidMessage(t(`${i18nPrefix}:thumbnail.uploadInvalid`))
       return
     }
     setInvalidMessage(null)
@@ -80,14 +83,14 @@ export function ThumbnailUpload({
         >
           <img
             src={previewUrl ?? value}
-            alt={t('story:form.thumbnail')}
+            alt={t(`${i18nPrefix}:form.thumbnail`)}
             className="aspect-video w-full object-cover"
           />
         </div>
       ) : (
         <button
           type="button"
-          aria-label={t('story:thumbnail.upload')}
+          aria-label={t(`${i18nPrefix}:thumbnail.upload`)}
           onClick={() => inputRef.current?.click()}
           disabled={disabled || isUploading}
           className={cn(
@@ -108,7 +111,7 @@ export function ThumbnailUpload({
           onClick={() => inputRef.current?.click()}
         >
           <ImageUp className="size-4" data-icon="inline-start" />
-          {isUploading ? t('story:thumbnail.uploading') : t('story:thumbnail.upload')}
+          {isUploading ? t(`${i18nPrefix}:thumbnail.uploading`) : t(`${i18nPrefix}:thumbnail.upload`)}
         </Button>
         {value && (
           <Button
@@ -119,12 +122,12 @@ export function ThumbnailUpload({
             onClick={onRemove}
           >
             <Trash2 className="size-4" data-icon="inline-start" />
-            {t('story:thumbnail.remove')}
+            {t(`${i18nPrefix}:thumbnail.remove`)}
           </Button>
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground">{t('story:thumbnail.formats')}</p>
+      <p className="text-xs text-muted-foreground">{t(`${i18nPrefix}:thumbnail.formats`)}</p>
 
       {message && <p className="text-xs text-destructive">{message}</p>}
     </div>

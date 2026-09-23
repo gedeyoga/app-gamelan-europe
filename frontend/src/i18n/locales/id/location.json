@@ -1,0 +1,8 @@
+{
+  "clickHint": "Klik peta atau geser marker untuk menentukan koordinat.",
+  "coordinates": "Koordinat: {{latitude}}, {{longitude}}",
+  "searchPlaceholder": "Cari alamat...",
+  "searching": "Mencari...",
+  "searchNoResults": "Alamat tidak ditemukan.",
+  "searchHint": "Ketik minimal 3 karakter untuk mencari alamat."
+}

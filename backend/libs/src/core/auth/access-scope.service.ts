@@ -4,8 +4,8 @@ import { PrismaService } from '@app/libs/core/database/prisma.service';
 
 // Sumber tunggal penentuan scope konten. SEMUA berbasis `permission.code` + `organizationId`
 // — TIDAK ada cek `role.code`/nama role (role boleh custom) dan TIDAK ada permission khusus admin.
-export type ContentResource = 'story' | 'event';
-export const CONTENT_RESOURCES = ['story', 'event'] as const;
+export type ContentResource = 'story' | 'event' | 'archive';
+export const CONTENT_RESOURCES = ['story', 'event', 'archive'] as const;
 
 // Action status-manager/moderator konten (approve/publish/reject/unpublish) → scope `all`.
 export const CONTENT_MODERATOR_ACTIONS = ['approve', 'publish', 'reject', 'unpublish'] as const;
