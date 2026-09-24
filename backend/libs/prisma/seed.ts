@@ -2,10 +2,10 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { hash as argon2Hash } from '@node-rs/argon2';
+import { DEFAULT_PERMISSIONS } from './seed-data';
 
 const prisma = new PrismaClient();
 
-type DefaultPermission = { code: string; description: string };
 type DefaultRole = { name: string; description: string; permissions: string[] };
 
 function toCode(name: string): string {
@@ -18,80 +18,9 @@ function toCode(name: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sumber deklaratif tunggal seed RBAC (lihat RULES Bab 22 + rbac.md §7).
-// - Tambah resource baru: tambah { code, description } di DEFAULT_PERMISSIONS
-//   (format lowercase `resource:action`) + cantumkan code-nya di permissions
-//   role yang relevan, lalu `pnpm prisma:seed`.
-// - Tambah role baru: push { name, description, permissions } ke DEFAULT_ROLES.
-//   Relasi role -> permission bersifat ADDITIVE (hanya upsert yang kurang), KECUALI
-//   daftar ORGANIZATION_REMOVED_PERMISSION_CODES yang di-delete targeted dari role
-//   `organization` saja (lihat konstanta di bawah).
+// Sumber deklaratif permission dipindah ke seed-data.ts (RULES Bab 22).
+// Role -> permission ADDITIVE kecuali ORGANIZATION_REMOVED_PERMISSION_CODES.
 // ---------------------------------------------------------------------------
-const DEFAULT_PERMISSIONS: DefaultPermission[] = [
-  { code: 'user:create', description: 'Membuat user baru' },
-  { code: 'user:read', description: 'Melihat daftar/detail user' },
-  { code: 'user:update', description: 'Mengubah user / role user' },
-  { code: 'user:delete', description: 'Menghapus user' },
-  { code: 'role:create', description: 'Membuat role baru' },
-  { code: 'role:read', description: 'Melihat daftar/detail role' },
-  { code: 'role:update', description: 'Mengubah role' },
-  { code: 'role:delete', description: 'Menghapus role' },
-  { code: 'permission:create', description: 'Membuat permission baru' },
-  { code: 'permission:read', description: 'Melihat daftar/detail permission' },
-  { code: 'permission:update', description: 'Mengubah permission / relasi role-permission' },
-  { code: 'permission:delete', description: 'Menghapus permission' },
-  { code: 'story:create', description: 'Membuat story baru' },
-  { code: 'story:read', description: 'Melihat daftar/detail story' },
-  { code: 'story:update', description: 'Mengubah story' },
-  { code: 'story:delete', description: 'Menghapus story' },
-  { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
-  { code: 'story:approve', description: 'Menyetujui & menerbitkan story (REQUEST -> PUBLISHED)' },
-  { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
-  { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
-  { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
-  { code: 'category:create', description: 'Membuat kategori baru' },
-  { code: 'category:read', description: 'Melihat daftar/detail kategori' },
-  { code: 'category:update', description: 'Mengubah kategori' },
-  { code: 'category:delete', description: 'Menghapus kategori' },
-  { code: 'event:create', description: 'Membuat event baru' },
-  { code: 'event:read', description: 'Melihat daftar/detail event' },
-  { code: 'event:update', description: 'Mengubah event' },
-  { code: 'event:delete', description: 'Menghapus event' },
-  { code: 'event:submit', description: 'Mengajukan event untuk review (DRAFT -> REQUEST)' },
-  { code: 'event:approve', description: 'Menyetujui & menerbitkan event (REQUEST -> PUBLISHED)' },
-  { code: 'event:reject', description: 'Menolak event (REQUEST -> DRAFT)' },
-  { code: 'event:publish', description: 'Menerbitkan event (APPROVED -> PUBLISHED)' },
-  { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
-  { code: 'event-type:create', description: 'Membuat tipe event baru' },
-  { code: 'event-type:read', description: 'Melihat daftar/detail tipe event' },
-  { code: 'organization:create', description: 'Membuat organization baru' },
-  { code: 'organization:read', description: 'Melihat daftar/detail organization' },
-  { code: 'organization:update', description: 'Mengubah organization' },
-  { code: 'organization:delete', description: 'Menghapus organization' },
-  { code: 'subscription:create', description: 'Membuat subscription baru' },
-  { code: 'subscription:read', description: 'Melihat daftar/detail subscription' },
-  { code: 'subscription:update', description: 'Mengubah subscription' },
-  { code: 'subscription:delete', description: 'Menghapus subscription' },
-  { code: 'billing:create', description: 'Membuat billing baru' },
-  { code: 'billing:read', description: 'Melihat daftar/detail billing' },
-  { code: 'billing:update', description: 'Mengubah billing' },
-  { code: 'billing:delete', description: 'Menghapus billing' },
-  { code: 'apikey:create', description: 'Membuat API key baru' },
-  { code: 'apikey:read', description: 'Melihat daftar/detail API key' },
-  { code: 'apikey:update', description: 'Mengubah nama/permission API key' },
-  { code: 'apikey:delete', description: 'Menghapus API key' },
-  { code: 'archive:create', description: 'Membuat archive' },
-  { code: 'archive:read', description: 'Melihat daftar/detail archive' },
-  { code: 'archive:update', description: 'Mengubah archive' },
-  { code: 'archive:delete', description: 'Menghapus archive' },
-  { code: 'archive:submit', description: 'Mengajukan archive untuk review (DRAFT -> REQUEST)' },
-  { code: 'archive:approve', description: 'Menyetujui & menerbitkan archive (REQUEST -> PUBLISHED)' },
-  { code: 'archive:reject', description: 'Menolak archive (REQUEST -> DRAFT)' },
-  { code: 'archive:publish', description: 'Menerbitkan archive (APPROVED -> PUBLISHED)' },
-  { code: 'archive:unpublish', description: 'Menarik archive dari publikasi (PUBLISHED -> DRAFT)' },
-  // Gerbang manajemen user/role — HANYA role `admin` (dipetakan otomatis dari DEFAULT_PERMISSIONS).
-  { code: 'admin:access', description: 'Akses penuh manajemen user/role (admin)' },
-];
 
 // Role default (idempoten, additive). `admin` = semua permission;
 // `organization` = pengelola event milik anggota organisasinya (transisi maksimal sampai REQUEST);

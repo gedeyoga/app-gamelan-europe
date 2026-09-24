@@ -7,7 +7,7 @@ info:
     identifier: LicenseRef-Proprietary
   description: |
     Static OpenAPI 3.1.0 contract for the Story (`post`), Category, Event,
-    EventType and Image endpoints of the NestJS backend.
+    EventType, Organization and Image endpoints of the NestJS backend.
 
     All endpoints require the `x-api-key` header (global `JwtAuthGuard`) and are
     further gated by RBAC permissions attached to the key. JWT login is internal
@@ -33,6 +33,8 @@ tags:
     description: Events + status transitions.
   - name: EventTypes
     description: Event type taxonomy. Create is idempotent by `name`. No detail endpoint.
+  - name: Organizations
+    description: Organizations (admin-only). Used as the row-level scoping boundary for organization users. No row-level scoping in this module.
   - name: Images
     description: S3 image upload (multipart).
   - name: Archives
@@ -866,6 +868,145 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /organizations:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: List organizations (paginated)
+      description: |
+        Permission `organization:read`. CRUD is admin-only; no row-level scoping
+        is applied in this module.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OrganizationSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/OrganizationFilterParam'
+      responses:
+        '200':
+          description: Paginated list of organizations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Create organization
+      description: Permission `organization:create`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{id}:
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Get organization by id
+      description: Permission `organization:read`.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Organization detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Update organization
+      description: Permission `organization:update`.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Organizations]
+      operationId: deleteOrganization
+      summary: Delete organization
+      description: Permission `organization:delete`. Deleting an organization does not delete its users/billing (relations set to null).
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /images:
     post:
       tags: [Images]
@@ -1405,6 +1546,30 @@ components:
         (ArchiveStatus), `publishedAt`, `createdAt`, `updatedAt` (ISO 8601; date
         operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
         Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
+    OrganizationSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `state`, `country`, `address`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, state, country, address, createdAt, updatedAt]
+        default: createdAt
+    OrganizationFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `name`, `state`, `country`,
+        `createdAt`, `updatedAt` (ISO 8601; date operators supported, e.g.
+        `filter[createdAt][gte]=2026-09-01T00:00:00Z`). Unknown keys / invalid
+        enum / invalid date → 422. Empty values ignored. (`createdAt`/`updatedAt`
+        are the date fields; `like` is rejected for date fields.)
       schema:
         type: object
         additionalProperties: true
@@ -1973,6 +2138,106 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+
+    # ---------- organizations ----------
+    Organization:
+      type: object
+      required: [id, name, state, country, address, lat, lng, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        state:
+          type: [string, 'null']
+        country:
+          type: [string, 'null']
+        address:
+          type: [string, 'null']
+        lat:
+          type: [number, 'null']
+        lng:
+          type: [number, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrganizationResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Organization'
+    OrganizationListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Organization'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    CreateOrganizationRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        state:
+          type: string
+          maxLength: 100
+        country:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 500
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+    UpdateOrganizationRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        All fields optional; omit a field to leave it untouched. Sending `{}` returns the resource unchanged.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        state:
+          type: string
+          maxLength: 100
+        country:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 500
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
 
     # ---------- events ----------
     EventDate:
