@@ -66,6 +66,8 @@ model Event {
   visibility  ContentVisibility @default(PUBLIC)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  organizationId String?        @map("organization_id")
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   dates       EventDate[]
   eventTypes  AssignEventType[]
   locations   EventLocation[]
@@ -113,6 +115,7 @@ model EventLocation {
 - Relasi anak `EventDate`/`AssignEventType`/`EventLocation` `onDelete: Cascade`.
 - `event_locations.name` **wajib** (satu event = satu lokasi secara logis).
 - `visibility` enum `ContentVisibility` (`PUBLIC`/`PRIVATE`), default `PUBLIC`. Migration `20260920130000_add_content_visibility`.
+- `organizationId` **opsional/nullable** → `Event.organization` adalah organisasi penyelenggara event (hasil approve submission publik via `OrganizationService.findOrCreateByName`, atau di-set admin internal). Relasi `onDelete: SetNull` → hapus `Organization` tidak menghapus event, hanya melepas relasi. Back-relation: `Organization.events Event[]` (organization.md §2). **Migration baru** (mis. `add_event_organization`) wajib; belum ada saat catatan ini ditulis = RENCANA bila belum diimplementasi.
 
 ---
 
@@ -133,6 +136,7 @@ export const eventSelect = {
   dates: { select: { date: true, startTime: true, endTime: true }, orderBy: { date: 'asc' } },
   eventTypes: { select: { eventType: { select: { id: true, name: true } } } },
   locations: { select: { name: true, address: true, lat: true, lng: true } },
+  organization: { select: { id: true, name: true } }, // org event (approve submission / di-set admin); keluar ke FE
 } satisfies Prisma.EventSelect;
 
 export type EventDateEntity = { date: string; startTime: string | null; endTime: string | null };
@@ -141,6 +145,7 @@ export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations'> &
   dates: EventDateEntity[];              // date ISO 8601 UTC, startTime/endTime "HH:mm" | null, asc
   eventTypes: { id: string; name: string }[];
   location: { name: string; address: string | null; lat: number | null; lng: number | null } | null;
+  organization: { id: string; name: string } | null;
 };
 
 // `creator.organizationId` internal (scope); `creator.organization` ({ id, name } | null) keluar ke FE.
@@ -155,9 +160,20 @@ export type EventResponse = Omit<EventEntity, 'creator'> & {
 };
 ```
 
-`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`). Join shape tidak pernah bocor ke service/controller.
+`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`), `organization` → `{ id, name } | null`. Join shape tidak pernah bocor ke service/controller.
 
-`EventService.toResponse()` membuang `creator.organizationId` dan memetakan `creator` → `{ id, fullName, organization: { id, name } | null }`. `organizationId` tetap ada pada entity mentah (`EventEntity.creator.organizationId`) untuk `assertReadable`/`assertWritable`/`scopeWhere` (row-level scoping), tetapi **tidak pernah** masuk response. Bila `organization` null, FE memakai `fullName`.
+`EventService.toResponse()` membuang `creator.organizationId` dan memetakan `creator` → `{ id, fullName, organization: { id, name } | null }`. `organizationId` **milik creator** tetap ada pada entity mentah (`EventEntity.creator.organizationId`) untuk `assertReadable`/`assertWritable`/`scopeWhere` (row-level scoping), tetapi **tidak pernah** masuk response. Scalar `Event.organizationId` (top-level, milik event) **tetap** dikirim — bukan data sensitif; FE utamanya memakai `Event.organization`. `Event.organization` diisi dari approve submission publik atau admin internal (§7).
+
+**Precedence tampilan organisasi (kontrak FE).** Backend menyediakan datanya; FE merender:
+
+```ts
+event.organization?.name            // 1. org event (approve submission publik / di-set admin)
+  ?? event.creator?.organization?.name  // 2. org milik user pembuat (fallback, perilaku lama)
+  ?? event.creator?.fullName            // 3. nama user pembuat
+  ?? '—';
+```
+
+`Event.organization` = sumber utama (organisasi penyelenggara). `creator.organization` **tetap dipertahankan** sebagai fallback agar event internal lama (tanpa `Event.organization`) tidak regresi. Bila keduanya null → tampil `creator.fullName`.
 
 
 ---
@@ -177,6 +193,7 @@ export type EventResponse = Omit<EventEntity, 'creator'> & {
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` |
 | `eventTypeIds` | opsional, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` |
 | `dates` | opsional, `@IsArray()`, `@ValidateNested({ each: true })` + `@Type(() => EventDateDto)`, `@ArrayMaxSize(100)`; array kosong `[]` valid → clear/replace-all relasi `event_dates` |
+| `organizationId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Organization` → tidak ada = **422** per-field (`organizationId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.organization`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
 | `location` | **wajib**, nested `EventLocationDto` (`@ValidateNested` + `@Type`) |
 
 `EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`.
@@ -213,6 +230,8 @@ export class UpdateEventDto extends PartialType(OmitType(CreateEventDto, ['thumb
   thumbnail?: string | null; // undefined = jangan sentuh; null = hapus
 }
 ```
+
+`organizationId` ikut menjadi opsional lewat `PartialType` (kirim `null` untuk melepas relasi; kirim UUID untuk pindah org). Service tetap cek existence → **422** bila UUID tidak ada. Skema perlu migration baru `add_event_organization` sebelum kolom ini ada (RENCANA bila belum diimplementasi).
 
 ### Contoh 422
 
@@ -329,6 +348,8 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 
 Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin` otomatis mendapat semuanya.
 
+> **Perubahan skema (RENCANA bila belum diimplementasi):** `Event.organizationId` (nullable) + relasi `Event.organization` + back-relation `Organization.events Event[]` (organization.md §2) → migration baru `add_event_organization`. Diisi dari approve submission publik (`OrganizationService.findOrCreateByName`) atau admin internal via DTO `organizationId` (§4). Tidak ada permission baru untuk field ini.
+
 ### Permission action (transisi status) — DI-ENFORCE
 
 `Event` punya `ContentStatus` (`DRAFT`/`REQUEST`/`APPROVED`/`PUBLISHED`) + `publishedAt`/`approvedAt` (mirror `Post`). 5 permission action status di-enforce oleh endpoint `POST /events/:id/<action>` (paritas story, lihat [story.md §6 Action & Transisi](./story.md#action--transisi)). Sumber tunggal aturan: `EVENT_TRANSITIONS` di `event.service.ts`.
@@ -338,16 +359,17 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 | `submit` | `POST /events/:id/submit` | `event:submit` | `DRAFT` | `REQUEST` |
 | `approve` | `POST /events/:id/approve` | `event:approve` | `REQUEST` | `PUBLISHED` |
 | `reject` | `POST /events/:id/reject` | `event:reject` | `REQUEST` | `DRAFT` |
-| `publish` | `POST /events/:id/publish` | `event:publish` | `APPROVED` | `PUBLISHED` |
+| `publish` | `POST /events/:id/publish` | `event:publish` | `DRAFT` **atau** `APPROVED` (legacy) | `PUBLISHED` |
 | `unpublish` | `POST /events/:id/unpublish` | `event:unpublish` | `PUBLISHED` | `DRAFT` |
 
 - **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
 - `approvedAt` = **audit marker "pertama kali terbit"** (server-managed): di-set `existing.approvedAt ?? now` saat transisi `approve`/`publish`, atau saat `create`/`update` menghasilkan `PUBLISHED`. **Bukan** penanda status `APPROVED`.
-- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` tetap ada untuk kompatibilitas (APPROVED→PUBLISHED; baris APPROVED lama).
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` menerima `DRAFT → PUBLISHED` (jalur utama, mis. event hasil approve submission) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
 - `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).
 - ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `organization`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik event-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
+- **`Event` `DRAFT` dari approve `event-submission`.** Modul `event-submission` (`event-submission.md` §5.2) membuat `Event` `DRAFT` saat admin approve submission, langsung lewat service modul tersebut (bukan `POST /events`); `createdBy` = admin penyetuju, `organizationId` = hasil find-or-create `Organization` dari `organiser` submission (event belum ada sebelum approve). Alur `event:submit`/`REQUEST` **dilewati** — event sudah `DRAFT`, jadi admin mengedit (`PATCH /events/:id`) lalu mem-publish lewat `event:publish`. Transisi `publish: DRAFT → PUBLISHED` **sudah diputuskan/ditambahkan** ke `EVENT_TRANSITIONS` (lihat tabel di atas; `APPROVED` deprecated tetap legacy). **RENCANA — belum ada di kode** saat catatan ini ditulis; tandai saat implementasi. Submission sumber **tetap menyimpan `eventId`** untuk audit (`EventSubmission.eventId`, `onDelete: SetNull`), bahkan setelah event diterbitkan.
 
 ### Scoping Baca & Tulis
 

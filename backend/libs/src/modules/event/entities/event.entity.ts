@@ -13,6 +13,7 @@ export const eventSelect = {
   thumbnail: true,
   visibility: true,
   createdBy: true,
+  organizationId: true,
   creator: {
     select: {
       id: true,
@@ -28,6 +29,7 @@ export const eventSelect = {
     },
   },
   locations: { select: { name: true, address: true, lat: true, lng: true } },
+  organization: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.EventSelect;

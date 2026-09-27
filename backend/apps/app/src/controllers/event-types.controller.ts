@@ -4,6 +4,7 @@ import {
   EventTypeService,
   ListQueryDto,
   Permissions,
+  Public,
 } from '@app/libs';
 
 @Controller('event-types')
@@ -19,7 +20,7 @@ export class EventTypesController {
   }
 
   @Get()
-  @Permissions('event-type:read')
+  @Public()
   async list(@Query() query: ListQueryDto) {
     const { items, total } = await this.eventTypeService.list(query);
     return {

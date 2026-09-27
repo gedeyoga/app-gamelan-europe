@@ -40,6 +40,22 @@ export class OrganizationService {
     return this.organizationRepository.findById(id);
   }
 
+  // Find-or-create untuk approve submission publik (event-submission §5.2.1).
+  // `name` tidak unik → findFirst case-insensitive; typo bisa membuat org duplikat (backlog).
+  // Opsi `tx` dipakai bila dipanggil di dalam transaksi caller (approve).
+  async findOrCreateByName(
+    name: string,
+    options: { state?: string | null; country?: string | null; tx?: Prisma.TransactionClient } = {},
+  ): Promise<OrganizationEntity> {
+    const trimmed = name.trim();
+    const existing = await this.organizationRepository.findByNameInsensitive(trimmed, options.tx);
+    if (existing) return existing;
+    return this.organizationRepository.create(
+      { name: trimmed, state: options.state ?? null, country: options.country ?? null },
+      options.tx,
+    );
+  }
+
   create(dto: CreateOrganizationDto): Promise<OrganizationEntity> {
     return this.organizationRepository.create({
       name: dto.name,

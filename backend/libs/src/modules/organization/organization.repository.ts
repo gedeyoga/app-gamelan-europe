@@ -7,10 +7,28 @@ import { OrganizationEntity, organizationSelect, mapOrganization } from './entit
 export class OrganizationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private client(tx?: Prisma.TransactionClient): Prisma.TransactionClient | PrismaService {
+    return tx ?? this.prisma;
+  }
+
   async findById(id: string): Promise<OrganizationEntity> {
     const organization = await this.prisma.organization.findUnique({ where: { id }, select: organizationSelect });
     if (!organization) throw new NotFoundException('Organization not found');
     return mapOrganization(organization);
+  }
+
+  async existsById(id: string): Promise<boolean> {
+    const found = await this.prisma.organization.findUnique({ where: { id }, select: { id: true } });
+    return Boolean(found);
+  }
+
+  // `name` tidak unik → ambil row pertama. Dipakai approve event-submission (find-or-create).
+  async findByNameInsensitive(name: string, tx?: Prisma.TransactionClient): Promise<OrganizationEntity | null> {
+    const organization = await this.client(tx).organization.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: organizationSelect,
+    });
+    return organization ? mapOrganization(organization) : null;
   }
 
   async findMany(params: {
@@ -26,8 +44,8 @@ export class OrganizationRepository {
     return { items: items.map(mapOrganization), total };
   }
 
-  async create(data: Prisma.OrganizationCreateInput): Promise<OrganizationEntity> {
-    return mapOrganization(await this.prisma.organization.create({ data, select: organizationSelect }));
+  async create(data: Prisma.OrganizationCreateInput, tx?: Prisma.TransactionClient): Promise<OrganizationEntity> {
+    return mapOrganization(await this.client(tx).organization.create({ data, select: organizationSelect }));
   }
 
   async update(id: string, data: Prisma.OrganizationUpdateInput): Promise<OrganizationEntity> {

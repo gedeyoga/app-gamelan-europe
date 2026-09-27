@@ -1,7 +1,8 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
+import { OrganizationRepository } from '@app/libs/modules/organization/organization.repository';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { EventRepository, CreateEventData, UpdateEventData } from './event.repository';
 import { EventEntity, EventResponse } from './entities/event.entity';
@@ -17,20 +18,38 @@ export const EVENT_DATE_FIELDS = ['publishedAt', 'createdAt', 'updatedAt'];
 export type EventAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpublish';
 
 // Sumber tunggal aturan transisi status event. Pure & mudah diaudit.
-export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus; to: ContentStatus }> = {
-  submit: { from: ContentStatus.DRAFT, to: ContentStatus.REQUEST },
-  approve: { from: ContentStatus.REQUEST, to: ContentStatus.PUBLISHED },
-  reject: { from: ContentStatus.REQUEST, to: ContentStatus.DRAFT },
-  publish: { from: ContentStatus.APPROVED, to: ContentStatus.PUBLISHED },
-  unpublish: { from: ContentStatus.PUBLISHED, to: ContentStatus.DRAFT },
+// `from` array: `publish` menerima DRAFT (jalur approve submission) maupun APPROVED (legacy).
+export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus[]; to: ContentStatus }> = {
+  submit: { from: [ContentStatus.DRAFT], to: ContentStatus.REQUEST },
+  approve: { from: [ContentStatus.REQUEST], to: ContentStatus.PUBLISHED },
+  reject: { from: [ContentStatus.REQUEST], to: ContentStatus.DRAFT },
+  publish: { from: [ContentStatus.DRAFT, ContentStatus.APPROVED], to: ContentStatus.PUBLISHED },
+  unpublish: { from: [ContentStatus.PUBLISHED], to: ContentStatus.DRAFT },
 };
 
 @Injectable()
 export class EventService {
   constructor(
     private readonly eventRepository: EventRepository,
+    private readonly organizationRepository: OrganizationRepository,
     private readonly accessScope: AccessScopeService,
   ) {}
+
+  private validationError(field: string, message: string): UnprocessableEntityException {
+    return new UnprocessableEntityException({
+      message: 'Validation failed',
+      errors: [{ field, message }],
+    });
+  }
+
+  // Cek existence Organization → 422 per-field (field body trust boundary).
+  private async assertOrganization(organizationId?: string | null): Promise<void> {
+    if (!organizationId) return;
+    const exists = await this.organizationRepository.existsById(organizationId);
+    if (!exists) {
+      throw this.validationError('organizationId', 'organizationId does not exist');
+    }
+  }
 
   // Scope baca. `none` tidak pernah sampai sini (list early-return); dikembalikan kosong agar aman.
   private scopeWhere(scope: AccessScope): Prisma.EventWhereInput | undefined {
@@ -218,6 +237,7 @@ export class EventService {
       status: autoPublish ? ContentStatus.PUBLISHED : status,
       visibility: dto.visibility ?? ContentVisibility.PUBLIC,
       createdBy,
+      organizationId: dto.organizationId ?? undefined,
       publishedAt: autoPublish
         ? new Date(dto.publishedAt!)
         : status === ContentStatus.PUBLISHED
@@ -239,6 +259,8 @@ export class EventService {
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
     const scoped = scope.kind === 'all' ? dto : { ...dto, status: ContentStatus.DRAFT, publishedAt: undefined };
     const status = scoped.status ?? ContentStatus.DRAFT;
+
+    await this.assertOrganization(scoped.organizationId);
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (scoped.slug) {
@@ -273,6 +295,10 @@ export class EventService {
     if (dto.dates !== undefined)
       data.dates = dto.dates.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime }));
     if (dto.location !== undefined) data.location = dto.location;
+    if (dto.organizationId !== undefined) {
+      await this.assertOrganization(dto.organizationId);
+      data.organizationId = dto.organizationId;
+    }
     // Visibility boleh diubah scope `all` maupun `organization` (assertWritable sudah membatasi).
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
 
@@ -311,7 +337,7 @@ export class EventService {
     const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
     const rule = EVENT_TRANSITIONS[action];
-    if (existing.status !== rule.from) {
+    if (!rule.from.includes(existing.status)) {
       throw new ConflictException(`Cannot ${action} event in status ${existing.status}`);
     }
     // `updateStatusIf` conditional → dua request paralel dari status sama: hanya satu sukses.

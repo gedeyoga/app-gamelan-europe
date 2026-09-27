@@ -1,14 +1,17 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import {
   ApiKeyModule,
   ArchiveModule,
+  ArchiveSubmissionModule,
   AuthModule,
   CategoryModule,
   DocumentModule,
   EventModule,
   EventTypeModule,
+  EventSubmissionModule,
   ImageModule,
   JwtAuthGuard,
   LibsModule,
@@ -16,6 +19,7 @@ import {
   PermissionsGuard,
   PostModule,
   StorageModule,
+  StorySubmissionModule,
 } from '@app/libs';
 import { appEnvValidationSchema } from '@app/libs/common/config/env.validation';
 import { HealthController } from './controllers/health.controller';
@@ -30,6 +34,9 @@ import { PostsController } from './controllers/posts.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { EventsController } from './controllers/events.controller';
 import { EventTypesController } from './controllers/event-types.controller';
+import { EventSubmissionsController } from './controllers/event-submissions.controller';
+import { ArchiveSubmissionsController } from './controllers/archive-submissions.controller';
+import { StorySubmissionsController } from './controllers/story-submissions.controller';
 import { ImagesController } from './controllers/images.controller';
 import { ArchivesController } from './controllers/archives.controller';
 import { DocumentsController } from './controllers/documents.controller';
@@ -41,6 +48,7 @@ import { ApiKeysController } from './controllers/api-keys.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validationSchema: appEnvValidationSchema }),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     LibsModule,
     AuthModule,
     ApiKeyModule,
@@ -48,6 +56,9 @@ import { ApiKeysController } from './controllers/api-keys.controller';
     CategoryModule,
     EventModule,
     EventTypeModule,
+    EventSubmissionModule,
+    ArchiveSubmissionModule,
+    StorySubmissionModule,
     ImageModule,
     StorageModule,
     ArchiveModule,
@@ -66,6 +77,9 @@ import { ApiKeysController } from './controllers/api-keys.controller';
     CategoriesController,
     EventsController,
     EventTypesController,
+    EventSubmissionsController,
+    ArchiveSubmissionsController,
+    StorySubmissionsController,
     ImagesController,
     ArchivesController,
     DocumentsController,

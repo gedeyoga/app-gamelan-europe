@@ -142,9 +142,13 @@ export class ArchiveService {
   }
 
   // Wajib setiap `documentIds` ada & belum ter-bind entity lain (kecuali archive ini).
-  private async assertDocuments(documentIds?: string[], archiveId: string | null = null): Promise<void> {
+  private async assertDocuments(
+    documentIds?: string[],
+    archiveId: string | null = null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
     if (!documentIds || documentIds.length === 0) return;
-    const documents = await this.documentRepository.findByIds(documentIds);
+    const documents = await this.documentRepository.findByIds(documentIds, tx);
     const byId = new Map(documents.map((document) => [document.id, document]));
     for (let i = 0; i < documentIds.length; i++) {
       const document = byId.get(documentIds[i]);
@@ -223,9 +227,10 @@ export class ArchiveService {
     return (await this.hydrate([archive], scope.canViewPrivate))[0];
   }
 
-  async create(dto: CreateArchiveDto, userId: string): Promise<ArchiveResponse> {
+  // `tx` opsional: diteruskan dari pemanggil yang sudah membuka transaksi (approve archive-submission).
+  async create(dto: CreateArchiveDto, userId: string, tx?: Prisma.TransactionClient): Promise<ArchiveResponse> {
     await this.assertArchiveCategories(dto.categoryIds);
-    await this.assertDocuments(dto.documentIds);
+    await this.assertDocuments(dto.documentIds, null, tx);
 
     const scope = await this.accessScope.resolve(userId, 'archive');
     if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
@@ -257,7 +262,7 @@ export class ArchiveService {
       createdBy: userId,
       categoryIds: scoped.categoryIds,
     };
-    const archive = await this.archiveRepository.create(data);
+    const archive = await this.archiveRepository.create(data, tx);
     return (await this.hydrate([archive], scope?.canViewPrivate ?? false))[0];
   }
 

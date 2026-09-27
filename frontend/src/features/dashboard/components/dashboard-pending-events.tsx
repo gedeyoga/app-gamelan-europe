@@ -1,12 +1,14 @@
-import { Check, Eye, ImageOff, X } from 'lucide-react'
+import { Building2, CalendarDays, Check, Eye, MapPin, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+import { ApprovalMediaCard } from './approval-media-card'
+import type { ApprovalMediaCardMeta } from './approval-media-card'
 import type { DashboardPendingEventItem } from '../types'
 
 export interface DashboardPendingEventsProps {
@@ -42,9 +44,21 @@ export function DashboardPendingEvents({
 
   if (isPending) {
     return (
-      <div className={cn('flex flex-col gap-2', className)}>
+      <div className={cn('flex flex-col gap-3', className)}>
         {Array.from({ length: 3 }).map((_, index) => (
-          <Skeleton key={index} className="h-20 w-full" />
+          <Card key={index} className="overflow-hidden p-0">
+            <div className="flex flex-col sm:flex-row">
+              <Skeleton className="aspect-video w-full rounded-none sm:w-48" />
+              <div className="flex flex-1 flex-col gap-3 p-4">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <div className="mt-auto flex justify-end gap-2 pt-3">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24" />
+                </div>
+              </div>
+            </div>
+          </Card>
         ))}
       </div>
     )
@@ -63,31 +77,24 @@ export function DashboardPendingEvents({
       {items.map((item) => {
         const busy = busyId === item.id
         const actionsDisabled = busy || isRefreshing
+        const metadata: ApprovalMediaCardMeta[] = [
+          { icon: Building2, value: item.creatorName ?? t('pending.unknown') },
+          ...(item.locationName ? [{ icon: MapPin, value: item.locationName }] : []),
+          ...(item.dateLabel ? [{ icon: CalendarDays, value: item.dateLabel }] : []),
+        ]
         return (
-          <Card key={item.id} size="sm">
-            <CardContent className="flex items-center gap-3">
-              {item.thumbnail ? (
-                <img src={item.thumbnail} alt="" className="size-12 shrink-0 rounded-md object-cover" />
-              ) : (
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <ImageOff className="size-5" aria-hidden="true" />
-                </div>
-              )}
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-medium">{item.name}</p>
-                  <Badge variant="secondary">{t('event:statusOptions.REQUEST')}</Badge>
-                </div>
-                <p className="truncate text-sm text-muted-foreground">
-                  {item.creatorName ?? t('pending.unknown')}
-                </p>
-                {item.dateLabel && (
-                  <p className="truncate text-sm text-muted-foreground">{item.dateLabel}</p>
-                )}
-              </div>
-
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <ApprovalMediaCard
+            key={item.id}
+            thumbnail={item.thumbnail}
+            title={item.name}
+            badge={
+              <Badge variant="secondary" className="shrink-0">
+                {t('event:statusOptions.REQUEST')}
+              </Badge>
+            }
+            metadata={metadata}
+            actions={
+              <>
                 <Button variant="ghost" size="sm" onClick={() => onViewDetail(item.id)}>
                   <Eye className="size-4" data-icon="inline-start" />
                   {t('pending.viewDetail')}
@@ -115,9 +122,9 @@ export function DashboardPendingEvents({
                     {t('pending.reject')}
                   </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </>
+            }
+          />
         )
       })}
     </div>

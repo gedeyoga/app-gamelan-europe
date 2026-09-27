@@ -71,9 +71,11 @@ export class ArchiveRepository {
     return { items: items.map(mapArchive), total };
   }
 
-  async create(data: CreateArchiveData): Promise<ArchiveEntity> {
-    return this.prisma.$transaction(async (tx) => {
-      const archive = await tx.archive.create({
+  // `tx` opsional: bila diberikan (pemanggil sudah membuka transaksi, mis. approve archive-submission),
+  // pakai client itu tanpa membuka `$transaction` bersarang. Tanpa `tx` perilaku lama dipertahankan.
+  async create(data: CreateArchiveData, tx?: Prisma.TransactionClient): Promise<ArchiveEntity> {
+    const run = async (client: Prisma.TransactionClient): Promise<ArchiveEntity> => {
+      const archive = await client.archive.create({
         data: {
           name: data.name,
           description: data.description,
@@ -88,12 +90,13 @@ export class ArchiveRepository {
         },
         select: { id: true },
       });
-      if (data.categoryIds !== undefined) await this.setCategories(tx, archive.id, data.categoryIds);
-      await this.documentRepository.bind(data.documentIds, 'archive', archive.id, tx);
+      if (data.categoryIds !== undefined) await this.setCategories(client, archive.id, data.categoryIds);
+      await this.documentRepository.bind(data.documentIds, 'archive', archive.id, client);
       return mapArchive(
-        await tx.archive.findUniqueOrThrow({ where: { id: archive.id }, select: archiveSelect }),
+        await client.archive.findUniqueOrThrow({ where: { id: archive.id }, select: archiveSelect }),
       );
-    });
+    };
+    return tx ? run(tx) : this.prisma.$transaction(run);
   }
 
   // Update status atomik (conditional). Non-null = tepat 1 row berubah → guard anti-TOCTOU.

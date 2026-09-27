@@ -7,11 +7,26 @@ info:
     identifier: LicenseRef-Proprietary
   description: |
     Static OpenAPI 3.1.0 contract for the Story (`post`), Category, Event,
-    EventType, Organization and Image endpoints of the NestJS backend.
+    EventType, Organization, EventSubmission, Archive, Document and Image
+    endpoints of the NestJS backend.
 
     All endpoints require the `x-api-key` header (global `JwtAuthGuard`) and are
     further gated by RBAC permissions attached to the key. JWT login is internal
     and out of scope for this spec.
+
+    **Public endpoints** are exempt from `x-api-key` (`@Public()`) and override the
+    global `security` with `security: []`: `POST /event-submissions`,
+    `POST /event-submissions/thumbnail`, `POST /archive-submissions`,
+    `POST /archive-submissions/thumbnail`, `POST /archive-submissions/attachments`,
+    `POST /story-submissions`, `POST /story-submissions/thumbnail`,
+    `POST /story-submissions/images`, `GET /story-submissions/categories`,
+    `GET /event-types`, `GET /countries`, `GET /countries/{id}`, `GET /states`,
+    `GET /states/{id}`. The submission write/upload endpoints (event, archive and
+    story submissions) are rate-limited per IP (`429` on excess).
+
+    `story-submission` `content` is sanitized server-side with a strict allowlist
+    before it is stored, and the global JSON body limit is `1mb` (larger JSON
+    receives `413`; multipart uploads are unaffected).
 
     ## Response envelope
     - Success (single): `{ data: <T>, message: "success" }`
@@ -32,7 +47,20 @@ tags:
   - name: Events
     description: Events + status transitions.
   - name: EventTypes
-    description: Event type taxonomy. Create is idempotent by `name`. No detail endpoint.
+    description: Event type taxonomy. `GET` is public (dropdown for the submission form). Create is idempotent by `name`. No detail endpoint.
+  - name: EventSubmissions
+    description: |
+      Event proposals submitted by the public (no account). Admins review the
+      queue; approve recreates an `Event` with `status=DRAFT` (not published).
+  - name: ArchiveSubmissions
+    description: |
+      Archive proposals submitted by the public (no account). Admins review the
+      queue; approve recreates an `Archive` with `status=DRAFT` (not published).
+  - name: StorySubmissions
+    description: |
+      Story proposals submitted by the public (no account), including rich
+      `content` (sanitized server-side). Admins review the queue; approve
+      recreates a `Post` with `status=DRAFT` (not published).
   - name: Organizations
     description: Organizations (admin-only). Used as the row-level scoping boundary for organization users. No row-level scoping in this module.
   - name: Images
@@ -43,6 +71,14 @@ tags:
       the UI "Archives" menu.
   - name: Documents
     description: PDF document upload (multipart); bound to archives via `documentIds`.
+  - name: Countries
+    description: |
+      Public geo reference data (read-only, source dr5hn/countries-states-cities-database).
+      No create/update/delete; served from the seeded `Country` table.
+  - name: States
+    description: |
+      Public geo reference data (read-only, source dr5hn/countries-states-cities-database).
+      No create/update/delete; served from the seeded `State` table.
 security:
   - apiKeyAuth: []
 paths:
@@ -816,7 +852,10 @@ paths:
       tags: [EventTypes]
       operationId: listEventTypes
       summary: List event types (paginated)
-      description: Permission `event-type:read`.
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — reference data for the
+        public event-submission form dropdown. Not gated by `event-type:read`.
+      security: []
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/LimitParam'
@@ -831,10 +870,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventTypeListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '500':
@@ -863,6 +898,823 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /event-submissions:
+    post:
+      tags: [EventSubmissions]
+      operationId: createEventSubmission
+      summary: Create an event submission (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous). Creates a
+        submission with `status=REQUEST` for admin review. Body is validated with
+        the global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` +
+        `transform`), so unknown fields (e.g. `status`, `reviewedBy`, `eventId`) →
+        **422**.
+
+        Only a compact `{ id, status }` is returned — the full row is never echoed
+        to the anonymous caller. Duplicate identical submission
+        (`title` + `startDate` + `countryId`) within ~10 minutes → **409**.
+        Rate-limited per IP to **5 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventSubmissionRequest'
+      responses:
+        '201':
+          description: Submission created (`REQUEST`). Returns only `{ id, status }`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          status:
+                            $ref: '#/components/schemas/EventSubmissionStatus'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [EventSubmissions]
+      operationId: listEventSubmissions
+      summary: List event submissions (paginated, admin)
+      description: |
+        Permission `event-submission:read`. Dashboard queue: filter by status with
+        `filter[status]=REQUEST`; the count per filter is read from `meta.total`.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/EventSubmissionSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/EventSubmissionFilterParam'
+      responses:
+        '200':
+          description: Paginated list of event submissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSubmissionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /event-submissions/thumbnail:
+    post:
+      tags: [EventSubmissions]
+      operationId: uploadEventSubmissionThumbnail
+      summary: Upload a submission thumbnail (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous).
+        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
+        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
+        synchronously via `sharp`.
+
+        `entityType` is **hardcoded server-side** to `event-submission` and is
+        never read from the request body. The returned `url` is later passed as the
+        `thumbnail` field of `POST /event-submissions`. Rate-limited per IP to
+        **10 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+      responses:
+        '201':
+          description: Uploaded image metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /event-submissions/{id}:
+    get:
+      tags: [EventSubmissions]
+      operationId: getEventSubmission
+      summary: Get event submission by id (admin)
+      description: Permission `event-submission:read`.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Event submission detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /event-submissions/{id}/approve:
+    post:
+      tags: [EventSubmissions]
+      operationId: approveEventSubmission
+      summary: Approve a submission (recreates a DRAFT event)
+      description: |
+        Permission `event-submission:approve`. Transitions `REQUEST → APPROVED`
+        and atomically **recreates** an `Event` with `status=DRAFT`
+        (`publishedAt=null`, `visibility=PUBLIC`); it does **not** publish. The
+        submission is kept as audit (`eventId` linked). Already-final
+        (`APPROVED`/`REJECTED`) row → **409**. Optional JSON body `{ adminNote? }`;
+        invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewEventSubmissionRequest'
+      responses:
+        '200':
+          description: Submission approved; draft event recreated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSubmissionApproveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /event-submissions/{id}/reject:
+    post:
+      tags: [EventSubmissions]
+      operationId: rejectEventSubmission
+      summary: Reject a submission
+      description: |
+        Permission `event-submission:reject`. Transitions `REQUEST → REJECTED`
+        (no `Event` is created). Already-final row → **409**. Optional JSON body
+        `{ adminNote? }`; invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewEventSubmissionRequest'
+      responses:
+        '200':
+          description: Submission rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions:
+    post:
+      tags: [ArchiveSubmissions]
+      operationId: createArchiveSubmission
+      summary: Create an archive submission (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous). Creates a
+        submission with `status=REQUEST` for admin review. Body is validated with
+        the global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` +
+        `transform`), so unknown fields (e.g. `status`, `reviewedBy`, `archiveId`,
+        `categoryIds`, `documentIds`) → **422**.
+
+        Only a compact `{ id, status }` is returned — the full row is never echoed
+        to the anonymous caller. Duplicate identical submission (`name`) within
+        ~10 minutes → **409**. Rate-limited per IP to **5 requests/minute** → **429**
+        on excess. Each `attachments` id must exist as a `Document` row with
+        `entityType=archive-submission` and `entityId=null` (from
+        `POST /archive-submissions/attachments`); otherwise → **422**.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateArchiveSubmissionRequest'
+      responses:
+        '201':
+          description: Submission created (`REQUEST`). Returns only `{ id, status }`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          status:
+                            $ref: '#/components/schemas/ArchiveSubmissionStatus'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [ArchiveSubmissions]
+      operationId: listArchiveSubmissions
+      summary: List archive submissions (paginated, admin)
+      description: |
+        Permission `archive-submission:read`. Dashboard queue: filter by status with
+        `filter[status]=REQUEST`; the count per filter is read from `meta.total`.
+        List items expose `attachmentCount` (no raw `attachmentIds`).
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/ArchiveSubmissionSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/ArchiveSubmissionFilterParam'
+      responses:
+        '200':
+          description: Paginated list of archive submissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveSubmissionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions/thumbnail:
+    post:
+      tags: [ArchiveSubmissions]
+      operationId: uploadArchiveSubmissionThumbnail
+      summary: Upload a submission thumbnail (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous).
+        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
+        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
+        synchronously via `sharp`.
+
+        `entityType` is **hardcoded server-side** to `archive-submission` and is
+        never read from the request body. The returned `url` is later passed as the
+        `thumbnail` field of `POST /archive-submissions`. Rate-limited per IP to
+        **10 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+      responses:
+        '201':
+          description: Uploaded image metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions/attachments:
+    post:
+      tags: [ArchiveSubmissions]
+      operationId: uploadArchiveSubmissionAttachment
+      summary: Upload a submission PDF attachment (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous).
+        `multipart/form-data` with field `file` (mime `application/pdf` only,
+        validated by magic bytes `%PDF-`; max `UPLOAD_DOCUMENT_MAX_SIZE_MB`,
+        default 10 MB). The document is stored with
+        `entityType=archive-submission`, `entityId=null`; its `id` is later sent in
+        the `attachments` array of `POST /archive-submissions`. `entityType` is
+        **hardcoded server-side** and is never read from the request body.
+        Rate-limited per IP to **10 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'PDF only (`application/pdf`, validated by magic bytes `%PDF-`). Max size `UPLOAD_DOCUMENT_MAX_SIZE_MB` (default 10 MB).'
+      responses:
+        '201':
+          description: Uploaded document metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentUploadResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions/{id}:
+    get:
+      tags: [ArchiveSubmissions]
+      operationId: getArchiveSubmission
+      summary: Get archive submission by id (admin)
+      description: |
+        Permission `archive-submission:read`. Detail hydrates `attachments`
+        (`Document[]`) in stored order; raw `attachmentIds` are never returned.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Archive submission detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions/{id}/approve:
+    post:
+      tags: [ArchiveSubmissions]
+      operationId: approveArchiveSubmission
+      summary: Approve a submission (recreates a DRAFT archive)
+      description: |
+        Permission `archive-submission:approve`. Transitions `REQUEST → APPROVED`
+        and atomically **recreates** an `Archive` with `status=DRAFT`
+        (`publishedAt=null`); it does **not** publish. The submission is kept as
+        audit (`archiveId` linked). Already-final (`APPROVED`/`REJECTED`) row →
+        **409**. Optional JSON body `{ adminNote? }`; invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewArchiveSubmissionRequest'
+      responses:
+        '200':
+          description: Submission approved; draft archive recreated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveSubmissionApproveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archive-submissions/{id}/reject:
+    post:
+      tags: [ArchiveSubmissions]
+      operationId: rejectArchiveSubmission
+      summary: Reject a submission
+      description: |
+        Permission `archive-submission:reject`. Transitions `REQUEST → REJECTED`
+        (no `Archive` is created). Already-final row → **409**. Optional JSON body
+        `{ adminNote? }`; invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewArchiveSubmissionRequest'
+      responses:
+        '200':
+          description: Submission rejected.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ArchiveSubmissionListItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions:
+    post:
+      tags: [StorySubmissions]
+      operationId: createStorySubmission
+      summary: Create a story submission (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous). Creates a
+        submission with `status=REQUEST` for admin review. `content` is rich HTML
+        and is **sanitized server-side** (strict allowlist) before storage; a
+        payload that becomes empty after sanitization → **422**. Body is validated
+        with the global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` +
+        `transform`), so unknown fields (e.g. `status`, `reviewedBy`, `postId`,
+        `shortDescription`) → **422**.
+
+        Only a compact `{ id, status }` is returned — the full row is never echoed
+        to the anonymous caller. Duplicate identical submission (`name`) within
+        ~10 minutes → **409**. Rate-limited per IP to **5 requests/minute** → **429**
+        on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStorySubmissionRequest'
+      responses:
+        '201':
+          description: Submission created (`REQUEST`). Returns only `{ id, status }`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          status:
+                            $ref: '#/components/schemas/StorySubmissionStatus'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [StorySubmissions]
+      operationId: listStorySubmissions
+      summary: List story submissions (paginated, admin)
+      description: |
+        Permission `story-submission:read`. Dashboard queue: filter by status with
+        `filter[status]=REQUEST`; the count per filter is read from `meta.total`.
+        List items expose resolved `categories` + `galleryCount`/`flyerCount` (no
+        raw `content`/ids).
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StorySubmissionSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/StorySubmissionFilterParam'
+      responses:
+        '200':
+          description: Paginated list of story submissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorySubmissionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/thumbnail:
+    post:
+      tags: [StorySubmissions]
+      operationId: uploadStorySubmissionThumbnail
+      summary: Upload a submission thumbnail (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous).
+        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
+        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
+        synchronously via `sharp`.
+
+        `entityType` is **hardcoded server-side** to `story-submission` and is
+        never read from the request body. The returned `url` is later passed as the
+        `thumbnail` field of `POST /story-submissions`. Rate-limited per IP to
+        **10 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+      responses:
+        '201':
+          description: Uploaded image metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/images:
+    post:
+      tags: [StorySubmissions]
+      operationId: uploadStorySubmissionImage
+      summary: Upload a submission gallery/flyer image (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous).
+        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
+        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
+        synchronously via `sharp`. Used for both gallery and flyer images.
+
+        `entityType` is **hardcoded server-side** to `story-submission` and is
+        never read from the request body. The returned `id` is later sent in
+        `galleryImageIds` / `flyerImageIds` of `POST /story-submissions`.
+        Rate-limited per IP to **10 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+      responses:
+        '201':
+          description: Uploaded image metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/categories:
+    get:
+      tags: [StorySubmissions]
+      operationId: listStorySubmissionCategories
+      summary: List STORY categories for the public form
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — reference data for the
+        public story-submission form. Returns the `STORY` categories ordered by
+        `name` (max 100), shaped as `{ id, name }`. Not gated by `category:read`.
+      security: []
+      responses:
+        '200':
+          description: STORY categories for the submission form.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorySubmissionCategoryListResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/{id}:
+    get:
+      tags: [StorySubmissions]
+      operationId: getStorySubmission
+      summary: Get story submission by id (admin)
+      description: |
+        Permission `story-submission:read`. Detail includes `content`,
+        `categoryIds` and resolves `gallery` / `flyer` (`ImageResponse[]`) in
+        stored order.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Story submission detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorySubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/{id}/approve:
+    post:
+      tags: [StorySubmissions]
+      operationId: approveStorySubmission
+      summary: Approve a submission (recreates a DRAFT Post/Story)
+      description: |
+        Permission `story-submission:approve`. Transitions `REQUEST → APPROVED`
+        and atomically **recreates** a `Post` with `status=DRAFT`
+        (`publishedAt=null`); it does **not** publish. `content` is re-sanitized
+        (defense in depth) and gallery/flyer images are re-owned and bound to the
+        new post. The submission is kept as audit (`postId` linked). Already-final
+        (`APPROVED`/`REJECTED`) row → **409**. Optional JSON body `{ adminNote? }`;
+        invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewStorySubmissionRequest'
+      responses:
+        '200':
+          description: Submission approved; draft story recreated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorySubmissionApproveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /story-submissions/{id}/reject:
+    post:
+      tags: [StorySubmissions]
+      operationId: rejectStorySubmission
+      summary: Reject a submission
+      description: |
+        Permission `story-submission:reject`. Transitions `REQUEST → REJECTED`
+        (no `Post` is created). Already-final row → **409**. Optional JSON body
+        `{ adminNote? }`; invalid body → 422.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewStorySubmissionRequest'
+      responses:
+        '200':
+          description: Submission rejected.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StorySubmissionListItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '500':
@@ -1380,6 +2232,117 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /countries:
+    get:
+      tags: [Countries]
+      operationId: listCountries
+      summary: List countries (paginated)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data. Not gated by RBAC. Filter with `filter[regionId]`,
+        `filter[iso2]`, `filter[iso3]`, `filter[name]`; see the `filter`
+        parameter for the full set of allowed keys.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CountrySortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/CountryFilterParam'
+      responses:
+        '200':
+          description: Paginated list of countries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryListResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /countries/{id}:
+    get:
+      tags: [Countries]
+      operationId: getCountry
+      summary: Get country by id
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data. Integer id (`ParseIntPipe`).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IntIdPath'
+      responses:
+        '200':
+          description: Country detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /states:
+    get:
+      tags: [States]
+      operationId: listStates
+      summary: List states (paginated)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data. Not gated by RBAC. Filter with `filter[countryId]`,
+        `filter[countryCode]` (ISO-2, case-sensitive), `filter[type]`,
+        `filter[level]`; see the `filter` parameter for the full set of allowed keys.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StateSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/StateFilterParam'
+      responses:
+        '200':
+          description: Paginated list of states.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateListResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /states/{id}:
+    get:
+      tags: [States]
+      operationId: getState
+      summary: Get state by id
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data. Integer id (`ParseIntPipe`). Detail additionally resolves
+        the owning `country`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IntIdPath'
+      responses:
+        '200':
+          description: State detail (with resolved `country`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     apiKeyAuth:
@@ -1400,6 +2363,13 @@ components:
       schema:
         type: string
         format: uuid
+    IntIdPath:
+      name: id
+      in: path
+      required: true
+      description: Resource integer id. Invalid → 400.
+      schema:
+        type: integer
     PageParam:
       name: page
       in: query
@@ -1526,6 +2496,75 @@ components:
       schema:
         type: object
         additionalProperties: true
+    EventSubmissionSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `title`, `status`, `startDate`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [title, status, startDate, createdAt, updatedAt]
+        default: createdAt
+    EventSubmissionFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `status` (`EventSubmissionStatus`),
+        `countryId`, `eventTypeId`, `createdAt`, `updatedAt` (ISO 8601; date
+        operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
+    ArchiveSubmissionSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `status`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, status, createdAt, updatedAt]
+        default: createdAt
+    ArchiveSubmissionFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `status` (`ArchiveSubmissionStatus`),
+        `reviewedAt`, `createdAt`, `updatedAt` (ISO 8601; date operators
+        supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
+    StorySubmissionSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `status`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, status, createdAt, updatedAt]
+        default: createdAt
+    StorySubmissionFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `status` (`StorySubmissionStatus`),
+        `reviewedAt`, `createdAt`, `updatedAt` (ISO 8601; date operators
+        supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
     ArchiveSortByParam:
       name: sortBy
       in: query
@@ -1570,6 +2609,53 @@ components:
         `filter[createdAt][gte]=2026-09-01T00:00:00Z`). Unknown keys / invalid
         enum / invalid date → 422. Empty values ignored. (`createdAt`/`updatedAt`
         are the date fields; `like` is rejected for date fields.)
+      schema:
+        type: object
+        additionalProperties: true
+    CountrySortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `iso2`, `iso3`, `regionName`, `population`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, iso2, iso3, regionName, population, createdAt, updatedAt]
+        default: createdAt
+    CountryFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `name`, `iso2`, `iso3`, `regionId`
+        (32-bit integer; `like` rejected), `createdAt`, `updatedAt` (ISO 8601;
+        date operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid value → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
+    StateSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `countryCode`, `type`, `level`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, countryCode, type, level, createdAt, updatedAt]
+        default: createdAt
+    StateFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `countryId` (32-bit integer),
+        `countryCode` (exact match, case-sensitive ISO-2), `type`, `level`
+        (32-bit integer), `createdAt`, `updatedAt` (ISO 8601; date operators
+        supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid value → 422. Empty values ignored.
       schema:
         type: object
         additionalProperties: true
@@ -1653,6 +2739,16 @@ components:
             statusCode: 500
             message: Internal server error
             errors: []
+    TooManyRequests:
+      description: Rate limit exceeded (429). Applies to public endpoints throttled per IP.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            statusCode: 429
+            message: 'ThrottlerException: Too Many Requests'
+            errors: []
 
   schemas:
     # ---------- primitives ----------
@@ -1671,6 +2767,9 @@ components:
     ArchiveStatus:
       type: string
       enum: [DRAFT, REQUEST, APPROVED, PUBLISHED]
+    EventSubmissionStatus:
+      type: string
+      enum: [REQUEST, APPROVED, REJECTED]
 
     # ---------- envelopes ----------
     SuccessMessage:
@@ -2282,6 +3381,8 @@ components:
         - visibility
         - createdBy
         - creator
+        - organizationId
+        - organization
         - dates
         - eventTypes
         - location
@@ -2316,6 +3417,15 @@ components:
           anyOf:
             - $ref: '#/components/schemas/EventCreatorRef'
             - type: 'null'
+        organizationId:
+          type: [string, 'null']
+          format: uuid
+          description: Scalar FK (`organization_id`); `null` when unset.
+        organization:
+          anyOf:
+            - $ref: '#/components/schemas/OrganizationRef'
+            - type: 'null'
+          description: Resolved organization (`Organization` row created on submission approve); `null` when unset.
         dates:
           type: array
           description: Ordered ascending by date.
@@ -2476,6 +3586,640 @@ components:
             $ref: '#/components/schemas/EventDateInput'
         location:
           $ref: '#/components/schemas/EventLocationInput'
+
+    # ---------- event submissions ----------
+    CreateEventSubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Public submission payload (anonymous). Validated by the global
+        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`):
+        unknown fields (e.g. `status`, `reviewedBy`, `eventId`) → 422.
+
+        Cross-field / server rules, all surfaced as 422 with
+        `errors: [{ field, message }]`:
+        - `endDate` must be >= `startDate`; the inclusive range must not exceed 31 days.
+        - `countryId` must exist.
+        - `stateId`, when sent, must belong to `countryId`.
+        - `eventTypeId` must exist.
+        - `thumbnail`, when sent, must be an EGS storage URL (prefix
+          `S3_PUBLIC_BASE_URL`) referencing an uploaded, still-unbound image with
+          `entityType=event-submission` (from `POST /event-submissions/thumbnail`).
+      required: [title, startDate, endDate, countryId, organiser, eventTypeId, shortDescription]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        startDate:
+          type: string
+          format: date
+          description: Calendar date `YYYY-MM-DD` (stored as UTC midnight).
+        endDate:
+          type: string
+          format: date
+          description: Calendar date `YYYY-MM-DD`; >= `startDate`, max 31 inclusive days after it.
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+        organiser:
+          type: string
+          minLength: 1
+          maxLength: 200
+        eventTypeId:
+          type: string
+          format: uuid
+        shortDescription:
+          type: string
+          minLength: 1
+          maxLength: 500
+        thumbnail:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Optional EGS storage image URL from `POST /event-submissions/thumbnail`.
+    ReviewEventSubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: Optional body for `approve` / `reject`.
+      properties:
+        adminNote:
+          type: string
+          maxLength: 1000
+    EventSubmission:
+      type: object
+      required:
+        - id
+        - title
+        - startDate
+        - endDate
+        - countryId
+        - country
+        - stateId
+        - state
+        - organiser
+        - eventTypeId
+        - eventType
+        - shortDescription
+        - thumbnail
+        - status
+        - adminNote
+        - reviewedBy
+        - reviewedAt
+        - eventId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        countryId:
+          type: integer
+        country:
+          anyOf:
+            - type: object
+              required: [id, iso2, name]
+              properties:
+                id:
+                  type: integer
+                iso2:
+                  type: string
+                name:
+                  type: string
+            - type: 'null'
+        stateId:
+          type: [integer, 'null']
+        state:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+        organiser:
+          type: string
+        eventTypeId:
+          type: [string, 'null']
+          format: uuid
+        eventType:
+          anyOf:
+            - $ref: '#/components/schemas/EventTypeRef'
+            - type: 'null'
+        shortDescription:
+          type: string
+        thumbnail:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/EventSubmissionStatus'
+        adminNote:
+          type: [string, 'null']
+        reviewedBy:
+          type: [string, 'null']
+          format: uuid
+        reviewedAt:
+          type: [string, 'null']
+          format: date-time
+        eventId:
+          type: [string, 'null']
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EventSubmissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/EventSubmission'
+    EventSubmissionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventSubmission'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    EventSubmissionApproveResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [submission, event]
+              properties:
+                submission:
+                  $ref: '#/components/schemas/EventSubmission'
+                event:
+                  type: object
+                  required: [id, slug, status]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    slug:
+                      type: string
+                    status:
+                      type: string
+                      const: DRAFT
+
+    # ---------- archive submissions ----------
+    ArchiveSubmissionStatus:
+      type: string
+      enum: [REQUEST, APPROVED, REJECTED]
+    ArchiveSubmission:
+      type: object
+      description: |
+        Common archive-submission fields. Never echo a list's raw `attachmentIds`;
+        the list view exposes `attachmentCount` and the detail view resolves
+        `attachments` (see `ArchiveSubmissionListItem` / `ArchiveSubmissionResponse`).
+      required:
+        - id
+        - name
+        - description
+        - thumbnail
+        - externalLinks
+        - status
+        - adminNote
+        - reviewedBy
+        - reviewedAt
+        - archiveId
+        - archive
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        thumbnail:
+          type: [string, 'null']
+        externalLinks:
+          type: array
+          items:
+            type: string
+            format: uri
+        status:
+          $ref: '#/components/schemas/ArchiveSubmissionStatus'
+        adminNote:
+          type: [string, 'null']
+        reviewedBy:
+          type: [string, 'null']
+          format: uuid
+        reviewedAt:
+          type: [string, 'null']
+          format: date-time
+        archiveId:
+          type: [string, 'null']
+          format: uuid
+        archive:
+          anyOf:
+            - type: object
+              required: [id, status]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                status:
+                  $ref: '#/components/schemas/ArchiveStatus'
+            - type: 'null'
+          description: Recreated archive (`status=DRAFT` after approve); `null` until approved.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ArchiveSubmissionListItem:
+      allOf:
+        - $ref: '#/components/schemas/ArchiveSubmission'
+        - type: object
+          required: [attachmentCount]
+          properties:
+            attachmentCount:
+              type: integer
+              minimum: 0
+    ArchiveSubmissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/ArchiveSubmission'
+                - type: object
+                  required: [attachments]
+                  properties:
+                    attachments:
+                      type: array
+                      description: Bound documents resolved in stored order; raw `attachmentIds` are never returned.
+                      items:
+                        $ref: '#/components/schemas/Document'
+    ArchiveSubmissionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ArchiveSubmissionListItem'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    ArchiveSubmissionApproveResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [submission, archive]
+              properties:
+                submission:
+                  $ref: '#/components/schemas/ArchiveSubmissionListItem'
+                archive:
+                  type: object
+                  required: [id, status]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    status:
+                      $ref: '#/components/schemas/ArchiveStatus'
+                      description: Always `DRAFT` after approve (not published).
+    CreateArchiveSubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Public submission payload (anonymous). Validated by the global
+        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`):
+        unknown fields (e.g. `status`, `reviewedBy`, `archiveId`, `categoryIds`,
+        `documentIds`) → 422.
+
+        Cross-field / server rules, all surfaced as 422 with
+        `errors: [{ field, message }]`:
+        - `thumbnail`, when sent, must be an EGS storage URL (prefix
+          `S3_PUBLIC_BASE_URL`) referencing an uploaded, still-unbound image with
+          `entityType=archive-submission` (from `POST /archive-submissions/thumbnail`).
+        - each `attachments.N` must reference an uploaded, still-unbound `Document`
+          with `entityType=archive-submission` (from
+          `POST /archive-submissions/attachments`).
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        thumbnail:
+          type: string
+          maxLength: 2048
+          description: Optional EGS storage image URL from `POST /archive-submissions/thumbnail`.
+        externalLinks:
+          type: array
+          maxItems: 50
+          description: Ordered external links (order preserved).
+          items:
+            type: string
+            format: uri
+        attachments:
+          type: array
+          maxItems: 20
+          description: Ordered `Document` ids from `POST /archive-submissions/attachments`.
+          items:
+            type: string
+            format: uuid
+    ReviewArchiveSubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: Optional body for `approve` / `reject`.
+      properties:
+        adminNote:
+          type: string
+          maxLength: 1000
+
+    # ---------- story submissions ----------
+    StorySubmissionStatus:
+      type: string
+      enum: [REQUEST, APPROVED, REJECTED]
+    StorySubmission:
+      type: object
+      description: |
+        Common story-submission fields. Raw `content`/`categoryIds`/image ids are
+        never exposed on list items; the list view exposes resolved `categories`
+        and counts, the detail view adds `content`/`categoryIds` and resolves
+        `gallery`/`flyer` (see `StorySubmissionListItem` / `StorySubmissionResponse`).
+      required:
+        - id
+        - name
+        - thumbnail
+        - status
+        - adminNote
+        - reviewedBy
+        - reviewedAt
+        - postId
+        - post
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        thumbnail:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/StorySubmissionStatus'
+        adminNote:
+          type: [string, 'null']
+        reviewedBy:
+          type: [string, 'null']
+          format: uuid
+        reviewedAt:
+          type: [string, 'null']
+          format: date-time
+        postId:
+          type: [string, 'null']
+          format: uuid
+        post:
+          anyOf:
+            - type: object
+              required: [id, slug, status]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                slug:
+                  type: string
+                status:
+                  $ref: '#/components/schemas/ContentStatus'
+            - type: 'null'
+          description: Recreated post (`status=DRAFT` after approve); `null` until approved.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    StorySubmissionListItem:
+      allOf:
+        - $ref: '#/components/schemas/StorySubmission'
+        - type: object
+          required: [categories, galleryCount, flyerCount]
+          properties:
+            categories:
+              type: array
+              description: Resolved STORY categories (`{ id, name }`).
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+            galleryCount:
+              type: integer
+              minimum: 0
+            flyerCount:
+              type: integer
+              minimum: 0
+    StorySubmissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/StorySubmission'
+                - type: object
+                  required: [categories, galleryCount, flyerCount, content, categoryIds, gallery, flyer]
+                  properties:
+                    categories:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, name]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          name:
+                            type: string
+                    galleryCount:
+                      type: integer
+                      minimum: 0
+                    flyerCount:
+                      type: integer
+                      minimum: 0
+                    content:
+                      type: string
+                      description: Sanitized rich HTML (strict allowlist).
+                    categoryIds:
+                      type: array
+                      items:
+                        type: string
+                        format: uuid
+                    gallery:
+                      type: array
+                      description: Resolved gallery images in stored order.
+                      items:
+                        $ref: '#/components/schemas/ImageResponse'
+                    flyer:
+                      type: array
+                      description: Resolved flyer images in stored order.
+                      items:
+                        $ref: '#/components/schemas/ImageResponse'
+    StorySubmissionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/StorySubmissionListItem'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    StorySubmissionApproveResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [submission, story]
+              properties:
+                submission:
+                  $ref: '#/components/schemas/StorySubmissionListItem'
+                story:
+                  type: object
+                  required: [id, slug, status]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    slug:
+                      type: string
+                    status:
+                      type: string
+                      const: DRAFT
+    StorySubmissionCategoryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    CreateStorySubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Public submission payload (anonymous). `content` is rich HTML and is
+        sanitized server-side (strict allowlist); a payload that becomes empty
+        after sanitization → 422. Validated by the global `ValidationPipe`
+        (`whitelist` + `forbidNonWhitelisted` + `transform`): unknown fields
+        (e.g. `status`, `reviewedBy`, `postId`) → 422.
+
+        Cross-field / server rules, all surfaced as 422 with
+        `errors: [{ field, message }]`:
+        - each `categoryIds.N` must exist and be a `STORY` category.
+        - each `galleryImageIds.N` / `flyerImageIds.N` must reference an uploaded,
+          still-unbound `Image` with `entityType=story-submission` (from
+          `POST /story-submissions/images`).
+        - `thumbnail`, when sent, must be an EGS storage URL referencing an
+          uploaded, still-unbound image with `entityType=story-submission`.
+      required: [name, content]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          minLength: 1
+          maxLength: 100000
+          description: Rich HTML; sanitized server-side before storage.
+        categoryIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            format: uuid
+        galleryImageIds:
+          type: array
+          maxItems: 50
+          description: Ordered `Image` ids from `POST /story-submissions/images`.
+          items:
+            type: string
+            format: uuid
+        flyerImageIds:
+          type: array
+          maxItems: 50
+          description: Ordered `Image` ids from `POST /story-submissions/images`.
+          items:
+            type: string
+            format: uuid
+        thumbnail:
+          type: string
+          maxLength: 2048
+          description: Optional EGS storage image URL from `POST /story-submissions/thumbnail`.
+    ReviewStorySubmissionRequest:
+      type: object
+      additionalProperties: false
+      description: Optional body for `approve` / `reject`.
+      properties:
+        adminNote:
+          type: string
+          maxLength: 1000
 
     # ---------- archives ----------
     PublishContentRequest:
@@ -2734,3 +4478,232 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/Document'
+
+    # ---------- countries ----------
+    Country:
+      type: object
+      description: |
+        Seeded geo reference row (source dr5hn, read-only). `population`/`gdp`
+        are `BigInt` in the DB and serialized as `number | null`;
+        `latitude`/`longitude` are Prisma `Decimal` serialized as strings.
+      required:
+        - id
+        - name
+        - iso2
+        - iso3
+        - numericCode
+        - phoneCode
+        - capital
+        - currency
+        - currencyName
+        - currencySymbol
+        - tld
+        - native
+        - population
+        - gdp
+        - regionName
+        - subregion
+        - nationality
+        - timezones
+        - translations
+        - latitude
+        - longitude
+        - emoji
+        - emojiU
+        - wikiDataId
+        - regionId
+        - region
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        iso2:
+          type: string
+        iso3:
+          type: [string, 'null']
+        numericCode:
+          type: [string, 'null']
+        phoneCode:
+          type: [string, 'null']
+        capital:
+          type: [string, 'null']
+        currency:
+          type: [string, 'null']
+        currencyName:
+          type: [string, 'null']
+        currencySymbol:
+          type: [string, 'null']
+        tld:
+          type: [string, 'null']
+        native:
+          type: [string, 'null']
+        population:
+          type: [number, 'null']
+        gdp:
+          type: [number, 'null']
+        regionName:
+          type: [string, 'null']
+          description: Denormalized upstream region name.
+        subregion:
+          type: [string, 'null']
+        nationality:
+          type: [string, 'null']
+        timezones:
+          type: [array, 'null']
+          items:
+            type: string
+        translations:
+          type: [object, 'null']
+          additionalProperties: true
+        latitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        longitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        emoji:
+          type: [string, 'null']
+        emojiU:
+          type: [string, 'null']
+        wikiDataId:
+          type: [string, 'null']
+        regionId:
+          type: [integer, 'null']
+          description: Scalar FK (`region_id`); `null` when unset.
+        region:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+          description: Resolved region; `null` when unset.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CountryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Country'
+    CountryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Country'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    # ---------- states ----------
+    State:
+      type: object
+      description: |
+        Seeded geo reference row (source dr5hn, read-only). List view — no
+        `country` relation. `latitude`/`longitude` are Prisma `Decimal`
+        serialized as strings.
+      required:
+        - id
+        - name
+        - countryCode
+        - iso2
+        - iso3166_2
+        - type
+        - level
+        - native
+        - latitude
+        - longitude
+        - timezone
+        - wikiDataId
+        - countryId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        countryCode:
+          type: string
+          description: ISO-2 code (denormalized); exact match, case-sensitive.
+        iso2:
+          type: [string, 'null']
+        iso3166_2:
+          type: [string, 'null']
+        type:
+          type: [string, 'null']
+        level:
+          type: [integer, 'null']
+        native:
+          type: [string, 'null']
+        latitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        longitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        timezone:
+          type: [string, 'null']
+        wikiDataId:
+          type: [string, 'null']
+        countryId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    StateWithCountry:
+      allOf:
+        - $ref: '#/components/schemas/State'
+        - type: object
+          description: Detail view — additionally resolves the owning `country`.
+          required: [country]
+          properties:
+            country:
+              type: object
+              required: [id, iso2, name]
+              properties:
+                id:
+                  type: integer
+                iso2:
+                  type: string
+                name:
+                  type: string
+    StateResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/StateWithCountry'
+    StateListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/State'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'

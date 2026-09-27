@@ -13,6 +13,12 @@ export class CountryRepository {
     return toCountryEntity(country);
   }
 
+  // Non-throwing existence check (validasi body trust boundary, mis. event-submission).
+  async findByIdOrNull(id: number): Promise<CountryEntity | null> {
+    const country = await this.prisma.country.findUnique({ where: { id }, select: countrySelect });
+    return country ? toCountryEntity(country) : null;
+  }
+
   async findMany(params: {
     where: Prisma.CountryWhereInput;
     skip: number;

@@ -31,7 +31,7 @@
     },
     "pendingEvents": {
       "title": "Events Awaiting Approval",
-      "subtitle": "Events submitted by members and organizations.",
+      "subtitle": "Events submitted by members and the public.",
       "viewAll": "View all",
       "empty": "No events awaiting approval.",
       "error": "Failed to load data."
@@ -41,6 +41,29 @@
       "subtitle": "Archives submitted by members and organizations.",
       "viewAll": "View all",
       "empty": "No archives awaiting approval.",
+      "error": "Failed to load data.",
+      "publicEmpty": "No public archive submissions yet."
+    },
+    "pendingSubmissions": {
+      "empty": "No event submissions awaiting review.",
+      "error": "Failed to load data."
+    },
+    "pendingArchiveSubmissions": {
+      "title": "Public Archive Submissions",
+      "subtitle": "Archive submissions from the public awaiting review.",
+      "empty": "No public archive submissions awaiting review.",
+      "error": "Failed to load data."
+    },
+    "pendingStorySubmissions": {
+      "title": "Public Story Submissions",
+      "subtitle": "Story submissions from the public awaiting review.",
+      "empty": "No public story submissions awaiting review.",
+      "error": "Failed to load data."
+    },
+    "pendingStories": {
+      "title": "Stories Awaiting Approval",
+      "subtitle": "Stories submitted by members and the public.",
+      "empty": "No stories awaiting approval.",
       "error": "Failed to load data."
     },
     "archives": {
@@ -51,11 +74,65 @@
       "error": "Failed to load data."
     }
   },
+  "column": {
+    "member": "Member Submissions",
+    "public": "Public Submissions"
+  },
   "pending": {
     "approve": "Approve",
     "reject": "Reject",
     "viewDetail": "View detail",
     "unknown": "Unknown organizer"
+  },
+  "pendingSubmission": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "statusRequest": "Request",
+    "unknown": "Unknown organizer",
+    "approved": "Submission approved.",
+    "rejected": "Submission rejected.",
+    "approveFailed": "Failed to approve submission.",
+    "rejectFailed": "Failed to reject submission.",
+    "confirmApproveTitle": "Approve this submission?",
+    "confirmApproveDescription": "An event draft will be created. You will be redirected to its editor.",
+    "confirmRejectTitle": "Reject this submission?",
+    "confirmRejectDescription": "This cannot be undone. No event will be created.",
+    "confirmCancel": "Cancel",
+    "confirmSubmit": "Confirm"
+  },
+  "pendingArchiveSubmission": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "unknown": "Unknown",
+    "statusRequest": "Request",
+    "attachments": "{{count}} attachments",
+    "approved": "Archive submission approved.",
+    "rejected": "Archive submission rejected.",
+    "approveFailed": "Failed to approve archive submission.",
+    "rejectFailed": "Failed to reject archive submission.",
+    "confirmApproveTitle": "Approve this archive submission?",
+    "confirmApproveDescription": "An archive draft will be created. You will be redirected to its editor.",
+    "confirmRejectTitle": "Reject this archive submission?",
+    "confirmRejectDescription": "This cannot be undone. No archive will be created.",
+    "confirmCancel": "Cancel",
+    "confirmSubmit": "Confirm"
+  },
+  "pendingStorySubmission": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "statusRequest": "Request",
+    "galleryCount": "Gallery images",
+    "flyerCount": "Flyers",
+    "approved": "Story submission approved.",
+    "rejected": "Story submission rejected.",
+    "approveFailed": "Failed to approve story submission.",
+    "rejectFailed": "Failed to reject story submission.",
+    "confirmApproveTitle": "Approve this story submission?",
+    "confirmApproveDescription": "A story draft will be created. You will be redirected to its editor.",
+    "confirmRejectTitle": "Reject this story submission?",
+    "confirmRejectDescription": "This cannot be undone. No story will be created.",
+    "confirmCancel": "Cancel",
+    "confirmSubmit": "Confirm"
   },
   "card": {
     "noThumbnail": "No thumbnail",

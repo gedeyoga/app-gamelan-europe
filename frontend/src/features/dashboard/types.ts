@@ -19,7 +19,20 @@ export interface DashboardPendingEventItem {
   thumbnail: string | null
   /** Nama organisasi, fallback fullName penyelenggara. */
   creatorName: string | null
+  /** Nama lokasi event, null bila tidak ada. */
+  locationName?: string | null
   /** Label tanggal pertama yang sudah diformat, null bila tidak ada. */
+  dateLabel: string | null
+}
+
+export interface DashboardPendingSubmissionItem {
+  id: string
+  title: string
+  thumbnail: string | null
+  organiser: string
+  country: string | null
+  state: string | null
+  /** Label tanggal rentang (mulai – selesai) yang sudah diformat, null bila tidak ada. */
   dateLabel: string | null
 }
 
@@ -31,6 +44,42 @@ export interface DashboardPendingArchiveItem {
   creatorName: string | null
   description: string | null
   categories: string[]
+}
+
+export interface DashboardPendingArchiveSubmissionItem {
+  id: string
+  name: string
+  thumbnail: string | null
+  description: string | null
+  /** Tautan eksternal; entri pertama dipakai sebagai fallback bila `description` kosong. */
+  externalLinks: string[]
+  /** Jumlah lampiran PDF (server-derived); `0` → sembunyikan. */
+  attachmentCount: number
+  /** Label tanggal `createdAt` yang sudah diformat, null bila tidak ada. */
+  dateLabel: string | null
+}
+
+export interface DashboardPendingStoryItem {
+  id: string
+  name: string
+  thumbnail: string | null
+  /** Nama pembuat story (`creator.fullName`). */
+  creatorName: string | null
+  categories: string[]
+}
+
+export interface DashboardPendingStorySubmissionItem {
+  id: string
+  name: string
+  thumbnail: string | null
+  /** Nama kategori usulan (dari `categories[].name`). */
+  categories: string[]
+  /** Jumlah gambar galeri (server-derived); `0` → sembunyikan. */
+  galleryCount: number
+  /** Jumlah flyer (server-derived); `0` → sembunyikan. */
+  flyerCount: number
+  /** Label tanggal `createdAt` yang sudah diformat, null bila tidak ada. */
+  dateLabel: string | null
 }
 
 export interface DashboardStoryItem {

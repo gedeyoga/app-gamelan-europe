@@ -8,7 +8,7 @@ Menu: [rbac.md](./rbac.md) (master) · [user.md](./user.md)
 
 ## 1. Deskripsi & Lokasi
 
-Modul **`organization`** mengelola `Organization` (organisasi/lembaga). Relasi: `User.organizationId → Organization.id` (1 : N, nullable). Organization dipakai sebagai batas **row-level scoping**: user ber-role `organization` hanya boleh membaca/menulis konten milik anggota organisasinya, dan saat membuat user dipaksa masuk organisasinya sendiri (lihat [rbac.md §10](./rbac.md#10-row-level-scoping) + [user.md §7](./user.md#7-endpoint)).
+Modul **`organization`** mengelola `Organization` (organisasi/lembaga). Relasi: `User.organizationId → Organization.id` (1 : N, nullable), `Event.organizationId → Organization.id` (1 : N, nullable; event.md §2 — organisasi penyelenggara event). Organization dipakai sebagai batas **row-level scoping**: user ber-role `organization` hanya boleh membaca/menulis konten milik anggota organisasinya, dan saat membuat user dipaksa masuk organisasinya sendiri (lihat [rbac.md §10](./rbac.md#10-row-level-scoping) + [user.md §7](./user.md#7-endpoint)).
 
 Pengelolaan organization sendiri **admin-only**: endpoint butuh permission `organization:create/read/update/delete` — role `organization`/`member` tidak memilikinya.
 
@@ -50,6 +50,7 @@ model Organization {
   lng       Decimal?  @db.Decimal(10, 7)
   users     User[]
   billings  Billing[]
+  events    Event[]
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
@@ -57,7 +58,8 @@ model Organization {
 }
 ```
 
-- `name` **tidak unik** → boleh ada nama organisasi sama (tidak ada `P2002`).
+- `name` **tidak unik** → boleh ada nama organisasi sama (tidak ada `P2002`). Implikasi: `findByNameInsensitive` (case-insensitive) bisa cocok ke lebih dari satu row → `findFirst` (ambil yang pertama); typo/varian nama membuat org duplikat (merge/dedupe = backlog).
+- `events Event[]` — back-relation dari `Event.organizationId` (nullable, `onDelete: SetNull`; event.md §2). Menghapus organization tidak menghapus event, hanya melepas `organizationId`.
 - `lat`/`lng` `Decimal(10, 7)` nullable; dikonversi ke `number | null` saat mapping (Decimal tidak bisa di-`JSON.stringify` dengan bentuk yang diinginkan FE).
 - `User.organizationId` dan `Billing.organizationId` memakai `onDelete: SetNull` → menghapus organization tidak menghapus user/billing, hanya melepas relasinya.
 
@@ -198,6 +200,7 @@ export class ListOrganizationsQueryDto extends ListQueryDto {}
 | Method | Fungsi |
 | --- | --- |
 | `findById(id)` | Detail; `select: organizationSelect`; tidak ada → `NotFoundException('Organization not found')`. |
+| `findByNameInsensitive(name)` | `findFirst({ where: { name: { equals: name, mode: 'insensitive' } }, select: organizationSelect })`. Trim input sebelum panggil. `name` tidak unik → ambil row pertama. |
 | `findMany({ where, skip, take, orderBy })` | List paginated (`$transaction`: `findMany` + `count`); map `mapOrganization`. |
 | `create(data)` | Insert; `data` = `Prisma.OrganizationCreateInput`. |
 | `update(id, data)` | Pre-check `findUnique({ select: { id: true } })` → tidak ada = 404; lalu update. |
@@ -209,11 +212,14 @@ export class ListOrganizationsQueryDto extends ListQueryDto {}
 | --- | --- |
 | `list(query)` | `buildWhere` (filter + date) + `buildSearch` + `combineWhere` + `buildOrderBy`; delegasi ke repo. |
 | `findOne(id)` | `repository.findById`. |
+| `findOrCreateByName(name, { state?, country? })` | Find-or-create untuk approve submission publik (event-submission §5.2.1): `findByNameInsensitive(name)` → bila ada kembalikan; bila tidak → `repository.create({ name, state: state ?? null, country: country ?? null })`. Dipanggil di dalam transaksi approve. `name` tidak unik → bisa duplikat (typo); dedupe/merge = backlog. |
 | `create(dto)` | Petakan field DTO → `repository.create`. |
 | `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; body kosong → kembalikan `findOne(id)` tanpa update. |
 | `remove(id)` | `repository.remove`. |
 
 > Tidak ada row-level scoping di modul ini — CRUD organization murni admin-only lewat permission. Scoping berbasis `organizationId` diterapkan di modul `post`/`event`/`user` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)).
+
+> **Inter-module:** modul `event-submission` mengimpor `OrganizationModule` dan memanggil `OrganizationService.findOrCreateByName` saat approve — **bukan** query Prisma lintas modul. `OrganizationModule` wajib meng-`exports` service/repository agar bisa di-inject (RULES bab 3/11).
 
 ---
 

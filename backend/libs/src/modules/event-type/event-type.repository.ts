@@ -7,6 +7,11 @@ import { eventTypeSelect, EventTypeEntity } from './entities/event-type.entity';
 export class EventTypeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Non-throwing lookup (validasi body trust boundary, mis. event-submission).
+  async findByIdOrNull(id: string): Promise<EventTypeEntity | null> {
+    return this.prisma.eventType.findUnique({ where: { id }, select: eventTypeSelect });
+  }
+
   async findMany(params: {
     where: Prisma.EventTypeWhereInput;
     skip: number;

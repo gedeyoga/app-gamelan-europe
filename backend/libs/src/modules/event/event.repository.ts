@@ -26,6 +26,7 @@ export interface CreateEventData {
   publishedAt?: Date;
   approvedAt?: Date;
   createdBy?: string;
+  organizationId?: string;
   eventTypeIds?: string[];
   dates?: EventDateData[];
   location: EventLocationData;
@@ -40,6 +41,7 @@ export interface UpdateEventData {
   visibility?: ContentVisibility;
   publishedAt?: Date;
   approvedAt?: Date;
+  organizationId?: string | null;
   eventTypeIds?: string[];
   dates?: EventDateData[];
   location?: EventLocationData;
@@ -48,6 +50,10 @@ export interface UpdateEventData {
 @Injectable()
 export class EventRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private client(tx?: Prisma.TransactionClient): Prisma.TransactionClient | PrismaService {
+    return tx ?? this.prisma;
+  }
 
   private mapUnique(e: unknown): void {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -96,8 +102,8 @@ export class EventRepository {
     return mapEvent(event);
   }
 
-  async existsBySlug(slug: string): Promise<boolean> {
-    const found = await this.prisma.event.findUnique({ where: { slug }, select: { id: true } });
+  async existsBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<boolean> {
+    const found = await this.client(tx).event.findUnique({ where: { slug }, select: { id: true } });
     return Boolean(found);
   }
 
@@ -114,43 +120,54 @@ export class EventRepository {
     return { items: items.map(mapEvent), total };
   }
 
+  private async createWith(tx: Prisma.TransactionClient, data: CreateEventData): Promise<EventEntity> {
+    const event = await tx.event.create({
+      data: {
+        name: data.name,
+        slug: data.slug,
+        content: data.content,
+        thumbnail: data.thumbnail,
+        status: data.status,
+        visibility: data.visibility,
+        publishedAt: data.publishedAt,
+        approvedAt: data.approvedAt,
+        createdBy: data.createdBy,
+        organizationId: data.organizationId,
+      },
+      select: { id: true },
+    });
+    if (data.eventTypeIds !== undefined) await this.setEventTypes(tx, event.id, data.eventTypeIds);
+    if (data.dates !== undefined) await this.setDates(tx, event.id, data.dates);
+    await this.setLocation(tx, event.id, data.location);
+    return mapEvent(await tx.event.findUniqueOrThrow({ where: { id: event.id }, select: eventSelect }));
+  }
+
   async create(data: CreateEventData): Promise<EventEntity> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const event = await tx.event.create({
-          data: {
-            name: data.name,
-            slug: data.slug,
-            content: data.content,
-            thumbnail: data.thumbnail,
-            status: data.status,
-            visibility: data.visibility,
-            publishedAt: data.publishedAt,
-            approvedAt: data.approvedAt,
-            createdBy: data.createdBy,
-          },
-          select: { id: true },
-        });
-        if (data.eventTypeIds !== undefined) await this.setEventTypes(tx, event.id, data.eventTypeIds);
-        if (data.dates !== undefined) await this.setDates(tx, event.id, data.dates);
-        await this.setLocation(tx, event.id, data.location);
-        return mapEvent(await tx.event.findUniqueOrThrow({ where: { id: event.id }, select: eventSelect }));
-      });
+      return await this.prisma.$transaction((tx) => this.createWith(tx, data));
     } catch (e) {
       this.mapUnique(e);
       throw e;
     }
   }
 
+  // Dipakai lintas modul (event-submission approve) di dalam transaksi milik caller.
+  // P2002 TIDAK dimap di sini agar caller bisa retry slug tanpa tx aborted.
+  async createInTransaction(tx: Prisma.TransactionClient, data: CreateEventData): Promise<EventEntity> {
+    return this.createWith(tx, data);
+  }
+
   // Update status atomik (conditional). true = tepat 1 row berubah → guard anti-TOCTOU.
+  // `from` boleh array (mis. `publish` dari DRAFT atau APPROVED legacy).
   async updateStatusIf(
     id: string,
-    from: ContentStatus,
+    from: ContentStatus | ContentStatus[],
     to: ContentStatus,
     extra: { approvedAt?: Date; publishedAt?: Date } = {},
   ): Promise<boolean> {
+    const statuses = Array.isArray(from) ? from : [from];
     const res = await this.prisma.event.updateMany({
-      where: { id, status: from },
+      where: { id, status: { in: statuses } },
       data: { status: to, ...extra },
     });
     return res.count === 1;
@@ -171,6 +188,7 @@ export class EventRepository {
         if (data.visibility !== undefined) update.visibility = data.visibility;
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
+        if (data.organizationId !== undefined) update.organization = data.organizationId ? { connect: { id: data.organizationId } } : { disconnect: true };
         if (Object.keys(update).length > 0) {
           await tx.event.update({ where: { id }, data: update });
         }

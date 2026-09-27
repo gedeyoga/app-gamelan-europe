@@ -7,6 +7,8 @@ import { ImageProcessor } from '@app/libs/integrations/storage/image-processor';
 import { ImageRepository } from './image.repository';
 import { ImageEntity, ImageVariant } from './entities/image.entity';
 
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp'];
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
@@ -63,6 +65,23 @@ export class ImageService {
     };
   }
 
+  // Trust check thumbnail submission (§8.4): URL harus prefix S3_PUBLIC_BASE_URL DAN
+  // menunjuk key milik row Image (entityType cocok, entityId null = belum ditautkan).
+  // Lookup terarah via uuid di key → PK, bukan scan seluruh row tipe.
+  async isTrustedUnboundUrl(url: string, entityType: string): Promise<boolean> {
+    const base = this.config.getOrThrow<string>('S3_PUBLIC_BASE_URL').replace(/\/+$/, '');
+    const prefix = `${base}/`;
+    if (!url.startsWith(prefix)) return false;
+    const key = url.slice(prefix.length);
+    if (!key) return false;
+    const id = UUID_RE.exec(key)?.[0];
+    if (!id) return false;
+    const image = await this.imageRepository.findUnboundById(id, entityType);
+    if (!image) return false;
+    const variants = (image.variants as unknown as ImageVariant[] | null) ?? [];
+    return image.key === key || variants.some((v) => v.key === key);
+  }
+
   async upload(file: Express.Multer.File | undefined, entityType = 'post'): Promise<ImageResponse> {
     if (!file) throw this.invalid('file is required');
     if (!ALLOWED_MIME.includes(file.mimetype)) throw this.invalid('unsupported mime type');
@@ -90,6 +109,7 @@ export class ImageService {
     ]);
 
     const image = await this.imageRepository.create({
+      id, // = uuid di key; jaga invariant id row == uuid URL (trust check PK lookup).
       entityType,
       entityId: null,
       key: originalKey,

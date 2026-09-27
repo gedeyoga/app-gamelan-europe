@@ -115,4 +115,9 @@ export class CreateEventDto {
   @ValidateNested()
   @Type(() => EventLocationDto)
   location: EventLocationDto;
+
+  // Organisasi penyelenggara (opsional). Tidak ada → null; service cek existence → 422.
+  @IsOptional()
+  @IsUUID('4')
+  organizationId?: string;
 }

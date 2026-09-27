@@ -349,13 +349,13 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 
 | Konstanta | Isi |
 | --- | --- |
-| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 53 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 2 (`create,read`), `organization:*` 4, `subscription:*` 4, `billing:*` 4, `apikey:*` 4, `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
-| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `organization` (`story:read`; event create·read·update·delete + `event:submit`; `event-type:read`, `category:read`, `user:create`, `user:read` — **tanpa story write**), `member` (`story:read`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `category:read` — tanpa story write). Struktur array siap tambah role baru. |
+| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 71 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 2 (`create,read`), `organization:*` 4, `subscription:*` 4, `billing:*` 4, `apikey:*` 4, `archive:*` 9, `event-submission:*` 3 (`read,approve,reject`), `archive-submission:*` 3 (`read,approve,reject`), `story-submission:*` 3 (`read,approve,reject`), `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
+| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `organization` (`story:read`; event create·read·update·delete + `event:submit`; archive create·read·update·delete + `archive:submit`; `event-type:read`, `category:read`, `user:create`, `user:read` — **tanpa story write**), `member` (`story:read`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `category:read`, `archive:read`, `archive:create`, `archive:update`, `archive:submit` — tanpa story write). Struktur array siap tambah role baru. |
 | User admin | Dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` → role `admin`, status `ACTIVE`. |
 
 ### Matriks role → permission
 
-53 permission dibagi ke 3 role. `admin` = seluruh 53 code; `organization` = 10 code; `member` = 7 code.
+71 permission dibagi ke 3 role. `admin` = seluruh 71 code; `organization` = 15 code; `member` = 11 code.
 
 | Resource | Code | admin | organization | member |
 | --- | --- | :---: | :---: | :---: |
@@ -393,6 +393,24 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | subscription | `subscription:create/read/update/delete` (4) | ✅ | — | — |
 | billing | `billing:create/read/update/delete` (4) | ✅ | — | — |
 | apikey | `apikey:create/read/update/delete` (4) | ✅ | — | — |
+| archive | `archive:create` | ✅ | ✅ | ✅ |
+| archive | `archive:read` | ✅ | ✅ | ✅ |
+| archive | `archive:update` | ✅ | ✅ | ✅ |
+| archive | `archive:delete` | ✅ | ✅ | — |
+| archive | `archive:submit` | ✅ | ✅ | ✅ |
+| archive | `archive:approve` | ✅ | — | — |
+| archive | `archive:reject` | ✅ | — | — |
+| archive | `archive:publish` | ✅ | — | — |
+| archive | `archive:unpublish` | ✅ | — | — |
+| event-submission | `event-submission:read` | ✅ | — | — |
+| event-submission | `event-submission:approve` | ✅ | — | — |
+| event-submission | `event-submission:reject` | ✅ | — | — |
+| archive-submission | `archive-submission:read` | ✅ | — | — |
+| archive-submission | `archive-submission:approve` | ✅ | — | — |
+| archive-submission | `archive-submission:reject` | ✅ | — | — |
+| story-submission | `story-submission:read` | ✅ | — | — |
+| story-submission | `story-submission:approve` | ✅ | — | — |
+| story-submission | `story-submission:reject` | ✅ | — | — |
 | admin | `admin:access` | ✅ | — | — |
 
 > `organization` & `member` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`). Keduanya **tidak** punya story write. Row-level scoping (konten milik organisasi/creator) dijelaskan di [§10](#10-row-level-scoping).
@@ -402,7 +420,7 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 // libs/prisma/seed.ts (ringkas) — deklaratif + upsert dalam satu $transaction
 const DEFAULT_PERMISSIONS = [
   { code: 'user:create', description: 'Membuat user baru' },
-  // ... 53 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 2 + organization 4 + subscription 4 + billing 4 + apikey 4 + admin:access 1
+  // ... 71 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 2 + organization 4 + subscription 4 + billing 4 + apikey 4 + archive 9 + event-submission 3 + archive-submission 3 + story-submission 3 + admin:access 1
 ];
 
 const DEFAULT_ROLES = [
@@ -411,9 +429,12 @@ const DEFAULT_ROLES = [
   { name: 'organization', description: 'Pengelola event milik anggota organisasinya (tanpa story write)',
     permissions: ['story:read',
       'event:create', 'event:read', 'event:update', 'event:delete', 'event:submit',
-      'event-type:read', 'category:read', 'user:create', 'user:read'] },
+      'event-type:read', 'category:read',
+      'archive:create', 'archive:read', 'archive:update', 'archive:delete', 'archive:submit',
+      'user:create', 'user:read'] },
   { name: 'member', description: 'Anggota organisasi — mengelola event (sampai REQUEST), tanpa story write',
-    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read'] },
+    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read',
+      'archive:read', 'archive:create', 'archive:update', 'archive:submit'] },
 ];
 
 // Targeted delete (bukan deleteMany global): copot story-write dari role `organization` saja.

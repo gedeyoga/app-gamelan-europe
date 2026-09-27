@@ -66,4 +66,20 @@ export class DocumentRepository {
       data: { entityId: null },
     });
   }
+
+  // Pindahkan ownership baris dokumen yang belum ter-bind dari satu `entityType` ke `entityType` lain.
+  // Dipakai approve archive-submission: attachment ber-`entityType='archive-submission'`/`entityId=null`
+  // dipindah menjadi `entityType='archive'` (entityId tetap null) agar `bind()` berikutnya menyukseskan.
+  async reassignEntityType(
+    ids: string[],
+    fromEntityType: string,
+    toEntityType: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (ids.length === 0) return;
+    await this.client(tx).document.updateMany({
+      where: { id: { in: ids }, entityType: fromEntityType, entityId: null },
+      data: { entityType: toEntityType },
+    });
+  }
 }

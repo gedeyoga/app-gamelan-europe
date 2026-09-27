@@ -59,6 +59,8 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const isStoryDetail = /^\/stories\/(?!new$)[^/]+$/.test(pathname)
   // `/events/:id`: halaman detail read-only — pola sama, tanpa sidebar/header.
   const isEventDetail = /^\/events\/(?!new$)[^/]+$/.test(pathname)
+  // `/story-submissions/:id`: halaman detail usulan story (reuse layout `StoryDetail`) — pola sama.
+  const isStorySubmissionDetail = /^\/story-submissions\/[^/]+$/.test(pathname)
 
   const dashboardNavItems: NavItem[] = useMemo(
     () => [
@@ -122,8 +124,8 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
       ? { title: t('userMenu.profile'), url: '/profile', icon: Home }
       : undefined)
 
-  // Route detail story/event: benar-benar kosong — tanpa sidebar, tanpa header/breadcrumb, tanpa padding.
-  if (isStoryDetail || isEventDetail) {
+  // Route detail story/event/submission: benar-benar kosong — tanpa sidebar, tanpa header/breadcrumb, tanpa padding.
+  if (isStoryDetail || isEventDetail || isStorySubmissionDetail) {
     return <Outlet />
   }
 

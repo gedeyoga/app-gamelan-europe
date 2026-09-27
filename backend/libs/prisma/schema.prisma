@@ -60,6 +60,24 @@ enum ArchiveStatus {
   PUBLISHED
 }
 
+enum EventSubmissionStatus {
+  REQUEST
+  APPROVED
+  REJECTED
+}
+
+enum ArchiveSubmissionStatus {
+  REQUEST
+  APPROVED
+  REJECTED
+}
+
+enum StorySubmissionStatus {
+  REQUEST
+  APPROVED
+  REJECTED
+}
+
 model User {
   id             String         @id @default(uuid())
   email          String         @unique
@@ -150,6 +168,7 @@ model Organization {
   lng       Decimal?  @db.Decimal(10, 7)
   users     User[]
   billings  Billing[]
+  events    Event[]
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
@@ -225,13 +244,17 @@ model Event {
   visibility  ContentVisibility @default(PUBLIC)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  organizationId String?        @map("organization_id")
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   dates       EventDate[]
   eventTypes  AssignEventType[]
   locations   EventLocation[]
+  submission  EventSubmission?
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
   @@index([createdBy])
+  @@index([organizationId])
   @@map("events")
 }
 
@@ -253,6 +276,7 @@ model EventType {
   id          String            @id @default(uuid())
   name        String
   assignments AssignEventType[]
+  eventSubmissions EventSubmission[]
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
@@ -289,6 +313,34 @@ model EventLocation {
   @@map("event_locations")
 }
 
+model EventSubmission {
+  id               String                @id @default(uuid())
+  title            String
+  startDate        DateTime              @map("start_date") @db.Date
+  endDate          DateTime              @map("end_date") @db.Date
+  countryId        Int                   @map("country_id")
+  country          Country               @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  stateId          Int?                  @map("state_id")
+  state            State?                @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  organiser        String
+  eventTypeId      String?               @map("event_type_id")
+  eventType        EventType?            @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  shortDescription String                @map("short_description")
+  thumbnail        String?
+  status           EventSubmissionStatus @default(REQUEST)
+  adminNote        String?               @map("admin_note")
+  reviewedBy       String?               @map("reviewed_by")
+  reviewedAt       DateTime?             @map("reviewed_at")
+  eventId          String?               @unique @map("event_id")
+  event            Event?                @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([countryId])
+  @@map("event_submissions")
+}
+
 model Image {
   id         String   @id @default(uuid())
   entityType String   @map("entity_type")
@@ -323,6 +375,7 @@ model Post {
   createdBy       String?        @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories      PostCategory[]
+  submission      StorySubmission?
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
@@ -371,6 +424,7 @@ model Archive {
   createdBy     String?           @map("created_by")
   creator       User?             @relation("ArchiveCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories    ArchiveCategory[]
+  submission    ArchiveSubmission?
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -391,6 +445,49 @@ model ArchiveCategory {
   @@index([archiveId])
   @@index([categoryId])
   @@map("archive_categories")
+}
+
+model ArchiveSubmission {
+  id            String                  @id @default(uuid())
+  name          String
+  description   String?
+  thumbnail     String?
+  externalLinks String[]                @default([]) @map("external_links")
+  // id baris Document, berurut (mirror Archive.documentIds). Scalar String[] menunjuk
+  // Document — BUKAN relasi Prisma.
+  attachmentIds String[]                @default([]) @map("attachment_ids")
+  status        ArchiveSubmissionStatus @default(REQUEST)
+  adminNote     String?                 @map("admin_note")
+  reviewedBy    String?                 @map("reviewed_by")
+  reviewedAt    DateTime?               @map("reviewed_at")
+  archiveId     String?                 @unique @map("archive_id")
+  archive       Archive?                @relation(fields: [archiveId], references: [id], onDelete: SetNull)
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("archive_submissions")
+}
+
+model StorySubmission {
+  id              String                @id @default(uuid())
+  name            String
+  content         String                @db.Text
+  categoryIds     String[]              @default([]) @map("category_ids")
+  galleryImageIds String[]              @default([]) @map("gallery_image_ids")
+  flyerImageIds   String[]              @default([]) @map("flyer_image_ids")
+  thumbnail       String?
+  status          StorySubmissionStatus @default(REQUEST)
+  adminNote       String?               @map("admin_note")
+  reviewedBy      String?               @map("reviewed_by")
+  reviewedAt      DateTime?             @map("reviewed_at")
+  postId          String?               @unique @map("post_id")
+  post            Post?                 @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("story_submissions")
 }
 
 // Tabel dokumen terpisah (mirror `images` minus kolom image-specific).
@@ -450,6 +547,7 @@ model Country {
   region         Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
   users          User[]
   states         State[]
+  eventSubmissions EventSubmission[]
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
@@ -503,6 +601,7 @@ model State {
   wikiDataId   String?  @map("wiki_data_id")
   countryId    Int      @map("country_id")
   country      Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  eventSubmissions EventSubmission[]
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

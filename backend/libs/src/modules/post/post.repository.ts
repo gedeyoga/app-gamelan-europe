@@ -40,6 +40,10 @@ export interface UpdatePostData {
 export class PostRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private client(tx?: Prisma.TransactionClient): Prisma.TransactionClient | PrismaService {
+    return tx ?? this.prisma;
+  }
+
   private mapUnique(e: unknown): void {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
       throw new ConflictException('Slug already exists');
@@ -96,8 +100,8 @@ export class PostRepository {
     return mapPost(post);
   }
 
-  async existsBySlug(slug: string): Promise<boolean> {
-    const found = await this.prisma.post.findUnique({ where: { slug }, select: { id: true } });
+  async existsBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<boolean> {
+    const found = await this.client(tx).post.findUnique({ where: { slug }, select: { id: true } });
     return Boolean(found);
   }
 
@@ -114,43 +118,51 @@ export class PostRepository {
     return { items: items.map(mapPost), total };
   }
 
+  private async createWith(tx: Prisma.TransactionClient, data: CreatePostData): Promise<PostEntity> {
+    const post = await tx.post.create({
+      data: {
+        name: data.name,
+        slug: data.slug,
+        content: data.content,
+        thumbnail: data.thumbnail,
+        status: data.status,
+        visibility: data.visibility,
+        publishedAt: data.publishedAt,
+        approvedAt: data.approvedAt,
+        createdBy: data.createdBy,
+        galleryImageIds: data.galleryImageIds,
+        flyerImageIds: data.flyerImageIds,
+      },
+      select: { id: true },
+    });
+    if (data.categoryIds !== undefined) await this.setCategories(tx, post.id, data.categoryIds);
+    if (
+      data.imageIds !== undefined ||
+      data.galleryImageIds !== undefined ||
+      data.flyerImageIds !== undefined
+    ) {
+      await this.bindImages(tx, post.id, [
+        ...(data.imageIds ?? []),
+        ...(data.galleryImageIds ?? []),
+        ...(data.flyerImageIds ?? []),
+      ]);
+    }
+    return mapPost(await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: postSelect }));
+  }
+
   async create(data: CreatePostData): Promise<PostEntity> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const post = await tx.post.create({
-          data: {
-            name: data.name,
-            slug: data.slug,
-            content: data.content,
-            thumbnail: data.thumbnail,
-            status: data.status,
-            visibility: data.visibility,
-            publishedAt: data.publishedAt,
-            approvedAt: data.approvedAt,
-            createdBy: data.createdBy,
-            galleryImageIds: data.galleryImageIds,
-            flyerImageIds: data.flyerImageIds,
-          },
-          select: { id: true },
-        });
-        if (data.categoryIds !== undefined) await this.setCategories(tx, post.id, data.categoryIds);
-        if (
-          data.imageIds !== undefined ||
-          data.galleryImageIds !== undefined ||
-          data.flyerImageIds !== undefined
-        ) {
-          await this.bindImages(tx, post.id, [
-            ...(data.imageIds ?? []),
-            ...(data.galleryImageIds ?? []),
-            ...(data.flyerImageIds ?? []),
-          ]);
-        }
-        return mapPost(await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: postSelect }));
-      });
+      return await this.prisma.$transaction((tx) => this.createWith(tx, data));
     } catch (e) {
       this.mapUnique(e);
       throw e;
     }
+  }
+
+  // Dipakai lintas modul (story-submission approve) di dalam transaksi milik caller.
+  // P2002 TIDAK dimap di sini agar caller bisa retry slug tanpa tx aborted.
+  async createInTransaction(tx: Prisma.TransactionClient, data: CreatePostData): Promise<PostEntity> {
+    return this.createWith(tx, data);
   }
 
   // Update status atomik (conditional). true = tepat 1 row berubah → guard anti-TOCTOU.

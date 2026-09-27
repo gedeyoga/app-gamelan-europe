@@ -24,6 +24,9 @@ import { ArchiveModule } from './modules/archive/archive.module';
 import { OrganizationModule } from './modules/organization/organization.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { EventSubmissionModule } from './modules/event-submission/event-submission.module';
+import { ArchiveSubmissionModule } from './modules/archive-submission/archive-submission.module';
+import { StorySubmissionModule } from './modules/story-submission/story-submission.module';
 
 const redisProvider = {
   provide: REDIS_CLIENT,
@@ -56,6 +59,9 @@ const redisProvider = {
     OrganizationModule,
     SubscriptionModule,
     BillingModule,
+    EventSubmissionModule,
+    ArchiveSubmissionModule,
+    StorySubmissionModule,
   ],
   providers: [redisProvider, PrismaService, CacheService, InternalAuthGuard, AccessScopeService],
   exports: [
@@ -82,6 +88,9 @@ const redisProvider = {
     OrganizationModule,
     SubscriptionModule,
     BillingModule,
+    EventSubmissionModule,
+    ArchiveSubmissionModule,
+    StorySubmissionModule,
   ],
 })
 export class LibsModule {}

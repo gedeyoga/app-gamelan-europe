@@ -31,7 +31,7 @@
     },
     "pendingEvents": {
       "title": "Event Menunggu Persetujuan",
-      "subtitle": "Event yang diajukan member dan organisasi.",
+      "subtitle": "Event yang diajukan member dan publik.",
       "viewAll": "Lihat semua",
       "empty": "Tidak ada event yang menunggu persetujuan.",
       "error": "Gagal memuat data."
@@ -41,6 +41,29 @@
       "subtitle": "Arsip yang diajukan member dan organisasi.",
       "viewAll": "Lihat semua",
       "empty": "Tidak ada arsip yang menunggu persetujuan.",
+      "error": "Gagal memuat data.",
+      "publicEmpty": "Belum ada usulan arsip publik."
+    },
+    "pendingSubmissions": {
+      "empty": "Tidak ada usulan event yang menunggu review.",
+      "error": "Gagal memuat data."
+    },
+    "pendingArchiveSubmissions": {
+      "title": "Usulan Arsip Publik",
+      "subtitle": "Usulan arsip dari publik yang menunggu review.",
+      "empty": "Tidak ada usulan arsip publik yang menunggu review.",
+      "error": "Gagal memuat data."
+    },
+    "pendingStorySubmissions": {
+      "title": "Usulan Story Publik",
+      "subtitle": "Usulan story dari publik yang menunggu review.",
+      "empty": "Tidak ada usulan story publik yang menunggu review.",
+      "error": "Gagal memuat data."
+    },
+    "pendingStories": {
+      "title": "Story Menunggu Persetujuan",
+      "subtitle": "Story yang diajukan member dan publik.",
+      "empty": "Tidak ada story yang menunggu persetujuan.",
       "error": "Gagal memuat data."
     },
     "archives": {
@@ -51,11 +74,65 @@
       "error": "Gagal memuat data."
     }
   },
+  "column": {
+    "member": "Pengajuan Member",
+    "public": "Usulan Publik"
+  },
   "pending": {
     "approve": "Setujui",
     "reject": "Tolak",
     "viewDetail": "Lihat detail",
     "unknown": "Penyelenggara tidak diketahui"
+  },
+  "pendingSubmission": {
+    "approve": "Setujui",
+    "reject": "Tolak",
+    "statusRequest": "Diajukan",
+    "unknown": "Penyelenggara tidak diketahui",
+    "approved": "Usulan event disetujui.",
+    "rejected": "Usulan event ditolak.",
+    "approveFailed": "Gagal menyetujui usulan.",
+    "rejectFailed": "Gagal menolak usulan.",
+    "confirmApproveTitle": "Setujui usulan ini?",
+    "confirmApproveDescription": "Draft event akan dibuat. Anda akan diarahkan ke editornya.",
+    "confirmRejectTitle": "Tolak usulan ini?",
+    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada event yang dibuat.",
+    "confirmCancel": "Batal",
+    "confirmSubmit": "Konfirmasi"
+  },
+  "pendingArchiveSubmission": {
+    "approve": "Setujui",
+    "reject": "Tolak",
+    "unknown": "Tidak diketahui",
+    "statusRequest": "Diajukan",
+    "attachments": "{{count}} lampiran",
+    "approved": "Usulan arsip disetujui.",
+    "rejected": "Usulan arsip ditolak.",
+    "approveFailed": "Gagal menyetujui usulan arsip.",
+    "rejectFailed": "Gagal menolak usulan arsip.",
+    "confirmApproveTitle": "Setujui usulan arsip ini?",
+    "confirmApproveDescription": "Draft arsip akan dibuat. Anda akan diarahkan ke editornya.",
+    "confirmRejectTitle": "Tolak usulan arsip ini?",
+    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada arsip yang dibuat.",
+    "confirmCancel": "Batal",
+    "confirmSubmit": "Konfirmasi"
+  },
+  "pendingStorySubmission": {
+    "approve": "Setujui",
+    "reject": "Tolak",
+    "statusRequest": "Diajukan",
+    "galleryCount": "Gambar galeri",
+    "flyerCount": "Flyer",
+    "approved": "Usulan story disetujui.",
+    "rejected": "Usulan story ditolak.",
+    "approveFailed": "Gagal menyetujui usulan story.",
+    "rejectFailed": "Gagal menolak usulan story.",
+    "confirmApproveTitle": "Setujui usulan story ini?",
+    "confirmApproveDescription": "Draft story akan dibuat. Anda akan diarahkan ke editornya.",
+    "confirmRejectTitle": "Tolak usulan story ini?",
+    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada story yang dibuat.",
+    "confirmCancel": "Batal",
+    "confirmSubmit": "Konfirmasi"
   },
   "card": {
     "noThumbnail": "Tanpa thumbnail",
