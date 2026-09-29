@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { hash as argon2Hash } from '@node-rs/argon2';
 import { Prisma } from '@prisma/client';
@@ -11,7 +15,7 @@ import { UserEntity } from './entities/user.entity';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { RoleRepository } from '@app/libs/modules/role/role.repository';
+import { StateRepository } from '@app/libs/modules/state/state.repository';
 
 export const USER_FILTER_FIELDS = ['email', 'fullName', 'status', 'roleId', 'countryId', 'createdAt', 'updatedAt'];
 export const USER_DATE_FIELDS = ['createdAt', 'updatedAt'];
@@ -28,8 +32,45 @@ export class UserService {
     private readonly userRepository: UserRepository,
     private readonly config: ConfigService,
     private readonly permissionService: PermissionService,
-    private readonly roleRepository: RoleRepository,
+    private readonly stateRepository: StateRepository,
   ) {}
+
+  // Trust boundary: state harus milik country (State.countryCode == User.countryId ISO-2).
+  // `== null` menangkap undefined & null (FE kirim `stateId: null`); findByIdOrNull(null)
+  // → PrismaClientValidationError. stateId non-null tanpa countryId ditolak (bukan di-skip).
+  private async assertStateCountryMatch(
+    stateId?: number | null,
+    countryId?: string | null,
+  ): Promise<void> {
+    if (stateId == null) return;
+    if (!countryId) {
+      throw new UnprocessableEntityException({
+        message: 'Validation failed',
+        errors: [{ field: 'stateId', message: 'stateId requires countryId' }],
+      });
+    }
+    const state = await this.stateRepository.findByIdOrNull(stateId);
+    if (!state || state.countryCode !== countryId) {
+      throw new UnprocessableEntityException({
+        message: 'Validation failed',
+        errors: [{ field: 'stateId', message: 'stateId must belong to countryId' }],
+      });
+    }
+  }
+
+  // Update parsial: baca row existing lalu merge dengan dto, agar perubahan country/state
+  // sepihak (hanya salah satu dikirim) tetap divalidasi sebagai pasangan final.
+  // Dipakai admin update() maupun self updateProfile().
+  async assertStateCountryOnUpdate(
+    userId: string,
+    dto: { countryId?: string | null; stateId?: number | null },
+  ): Promise<void> {
+    if (dto.countryId === undefined && dto.stateId === undefined) return;
+    const existing = await this.userRepository.findById(userId);
+    const countryId = dto.countryId !== undefined ? dto.countryId : existing.countryId;
+    const stateId = dto.stateId !== undefined ? dto.stateId : existing.stateId;
+    await this.assertStateCountryMatch(stateId, countryId);
+  }
 
   // Gerbang manajemen user berbasis permission eksplisit `admin:access` — BUKAN scope konten
   // (cegah eskalasi: role dengan `event:publish`/`user:create` bukan admin).
@@ -48,6 +89,7 @@ export class UserService {
   }
 
   async register(dto: RegisterUserDto): Promise<UserEntity> {
+    await this.assertStateCountryMatch(dto.stateId, dto.countryId);
     const passwordHash = await argon2Hash(dto.password, this.argon2Options());
     const base: Prisma.UserUncheckedCreateInput = {
       email: dto.email,
@@ -55,19 +97,15 @@ export class UserService {
       passwordHash,
       phone: dto.phone,
       countryId: dto.countryId,
+      stateId: dto.stateId,
     };
-
-    if (dto.organizationName) {
-      const role = await this.roleRepository.findByCode('organization');
-      if (!role) throw new InternalServerErrorException('Organization role not configured');
-      return this.userRepository.createWithOrganization({ ...base, roleId: role.id }, dto.organizationName);
-    }
 
     return this.userRepository.create(base);
   }
 
   async create(dto: CreateUserDto, userId: string): Promise<UserEntity> {
     await this.assertAdmin(userId);
+    await this.assertStateCountryMatch(dto.stateId, dto.countryId);
     const passwordHash = await argon2Hash(dto.password, this.argon2Options());
     return this.userRepository.create({
       email: dto.email,
@@ -75,8 +113,9 @@ export class UserService {
       passwordHash,
       status: dto.status,
       countryId: dto.countryId,
+      stateId: dto.stateId,
       roleId: dto.roleId,
-      organizationId: dto.organizationId,
+      networkId: dto.networkId,
     });
   }
 
@@ -118,6 +157,10 @@ export class UserService {
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.countryId !== undefined) data.countryId = dto.countryId;
+    if (dto.stateId !== undefined) data.stateId = dto.stateId;
+    if (dto.countryId !== undefined || dto.stateId !== undefined) {
+      await this.assertStateCountryOnUpdate(id, dto);
+    }
     if (dto.password !== undefined) {
       data.passwordHash = await argon2Hash(dto.password, this.argon2Options());
     }
@@ -134,6 +177,10 @@ export class UserService {
 
   async remove(id: string, userId: string): Promise<UserEntity> {
     await this.assertAdmin(userId);
+    // Hardening: tolak hapus akun sendiri (lockout permanen). Cek existence lebih dulu agar 404
+    // tetap menang atas 403 bila row target memang tidak ada (mis. token masih valid pasca hapus).
+    await this.userRepository.findById(id);
+    if (id === userId) throw new ForbiddenException('Cannot delete your own account');
     return this.userRepository.remove(id);
   }
 }

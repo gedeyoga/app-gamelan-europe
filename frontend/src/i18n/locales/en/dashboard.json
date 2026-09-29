@@ -4,8 +4,7 @@
   "welcome": "Welcome, {{name}}",
   "subtitle": "Keep up with the latest events and stories from the gamelan community.",
   "role": {
-    "member": "Member",
-    "organization": "Organization"
+    "member": "Member"
   },
   "stats": {
     "upcomingEvents": "Upcoming Events",
@@ -38,7 +37,7 @@
     },
     "pendingArchives": {
       "title": "Archives Awaiting Approval",
-      "subtitle": "Archives submitted by members and organizations.",
+      "subtitle": "Archives submitted by members and networks.",
       "viewAll": "View all",
       "empty": "No archives awaiting approval.",
       "error": "Failed to load data.",
@@ -46,12 +45,6 @@
     },
     "pendingSubmissions": {
       "empty": "No event submissions awaiting review.",
-      "error": "Failed to load data."
-    },
-    "pendingArchiveSubmissions": {
-      "title": "Public Archive Submissions",
-      "subtitle": "Archive submissions from the public awaiting review.",
-      "empty": "No public archive submissions awaiting review.",
       "error": "Failed to load data."
     },
     "pendingStorySubmissions": {
@@ -100,23 +93,6 @@
     "confirmCancel": "Cancel",
     "confirmSubmit": "Confirm"
   },
-  "pendingArchiveSubmission": {
-    "approve": "Approve",
-    "reject": "Reject",
-    "unknown": "Unknown",
-    "statusRequest": "Request",
-    "attachments": "{{count}} attachments",
-    "approved": "Archive submission approved.",
-    "rejected": "Archive submission rejected.",
-    "approveFailed": "Failed to approve archive submission.",
-    "rejectFailed": "Failed to reject archive submission.",
-    "confirmApproveTitle": "Approve this archive submission?",
-    "confirmApproveDescription": "An archive draft will be created. You will be redirected to its editor.",
-    "confirmRejectTitle": "Reject this archive submission?",
-    "confirmRejectDescription": "This cannot be undone. No archive will be created.",
-    "confirmCancel": "Cancel",
-    "confirmSubmit": "Confirm"
-  },
   "pendingStorySubmission": {
     "approve": "Approve",
     "reject": "Reject",
@@ -148,7 +124,7 @@
     "archives": "Archives",
     "event": "Event",
     "myBilling": "My Billing",
-    "organizations": "Organizations",
+    "networks": "Networks",
     "apiKey": "API Keys",
     "subscription": "Subscription",
     "billing": "Billing Management"

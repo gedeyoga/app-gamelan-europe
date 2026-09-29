@@ -9,7 +9,7 @@
   "errors": {
     "loadData": "Gagal memuat data billing. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data billing.",
-    "loadOptions": "Gagal memuat opsi form (user/organisasi/subscription)."
+    "loadOptions": "Gagal memuat opsi form (user/network/subscription)."
   },
   "table": {
     "code": "Kode",
@@ -46,9 +46,9 @@
     "code": "Kode",
     "user": "User",
     "selectUser": "Pilih user",
-    "organization": "Organisasi",
-    "selectOrganization": "Pilih organisasi",
-    "noOrganization": "Tanpa organisasi",
+    "network": "Network",
+    "selectNetwork": "Pilih network",
+    "noNetwork": "Tanpa network",
     "subscription": "Subscription",
     "selectSubscription": "Pilih subscription",
     "status": "Status",

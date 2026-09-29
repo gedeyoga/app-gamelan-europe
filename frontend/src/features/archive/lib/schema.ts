@@ -20,6 +20,7 @@ export function createArchiveSchema(t: TFunction) {
     status: z.enum(ARCHIVE_STATUSES, { message: t('validation:archiveStatusInvalid') }),
     publishedAt: z.string(),
     categoryIds: z.array(z.string()),
+    authorIds: z.array(z.string().uuid()),
     externalLinks: z.array(
       z
         .string()

@@ -513,7 +513,7 @@ export class ListCategoriesQueryDto extends ListQueryDto {}
 | `content` | opsional, `@IsString()` | 422 `{ field: 'content', message }` |
 | `thumbnail` | opsional, `@IsString()`, `@MaxLength(2048)`; pada `UpdatePostDto` boleh `null` (hapus) | 422 `{ field: 'thumbnail', message }` |
 | `status` | opsional, `@IsEnum(ContentStatus)` | 422 `{ field: 'status', message }` |
-| `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `organization` | 422 `{ field: 'visibility', message }` |
+| `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `network` | 422 `{ field: 'visibility', message }` |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` ([§6](#6-aturan-status)) | 422 `{ field: 'publishedAt', message }` |
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })` | 422 `{ field: 'categoryIds.0', message }` |
 | `imageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)` | 422 `{ field: 'imageIds.0', message }` |
@@ -652,7 +652,7 @@ Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terda
 - `submit`/`reject`/`unpublish`: **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
 - Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
 - **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish`/`approve` memakai `existing.publishedAt ?? now`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama) kecuali `publishedAt` eksplisit dikirim di body.
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`organization`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik story-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`network`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik story-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role bawaan `member` & `author` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
 
 ### Scoping Baca & Tulis
 
@@ -661,21 +661,21 @@ Row-level scoping (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)
 | Scope (`kind`) | `canViewPrivate` | Baca | Tulis |
 | --- | --- | --- | --- |
 | `all` (status-manager: `<story>:approve\|publish\|reject\|unpublish`) | ya | Semua status + PRIVATE. | Bebas. |
-| `organization` | ya | Hanya `creator.organizationId === scope.organizationId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
+| `network` | ya | Hanya `creator.networkId === scope.networkId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
 | `own` | ya | Miliknya (`createdBy === scope.userId`) **atau** konten terbit (M5). | create diizinkan; update/remove/transition hanya konten miliknya. |
 | `published` (punya tulis/status story) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
 | `published` (tanpa tulis) | tidak | Sama di atas **dan** `visibility = PUBLIC`. | **403**. |
 | `none` | tidak | **List kosong**; `findOne` **403**. | **403**. |
 
-- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `organizationId` — **bukan** nama/`role.code` (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)). `all` = salah satu `story:approve/publish/reject/unpublish`; `organization` = `organizationId` + `story:create/update/submit`; `own` = tulis story tanpa `organizationId`. **`event:*` tidak memberi scope story** (M2).
-- `canViewPrivate` = punya permission **tulis** (`story:create/update/submit`) atau **status** (`story:approve/publish/reject/unpublish`) pada story/event — **bukan** sekadar `*:read` (H1). `admin`/`organization`/`member` lama punya tulis konten → tetap boleh baca PRIVATE.
-- **Seed**: role `organization` & `member` **tidak** punya story write (`story:create/update/delete/submit`); hanya `story:read`. `member` justru mengelola **event** (`event:create/update/submit`). Lihat [rbac.md §7](../modules/rbac.md#7-seed-default).
-- **List** (`GET /posts`): scope di-`AND` ke filter — `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
-- **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
-- **Tulis**: `organization`/`own` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**.
-- **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body — **kecuali** `status: DRAFT` pada post miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
+- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `networkId` — **bukan** nama/`role.code` (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)). `all` = salah satu `story:approve/publish/reject/unpublish`; `network` = `networkId` + `story:create/update/submit`; `own` = tulis story tanpa `networkId`. **`event:*` tidak memberi scope story** (M2).
+- `canViewPrivate` = punya permission **tulis** (`story:create/update/submit`) atau **status** (`story:approve/publish/reject/unpublish`) pada story/event — **bukan** sekadar `*:read` (H1). `admin`/`member`/`author` punya tulis konten → tetap boleh baca PRIVATE.
+- **Seed**: role `member` & `author` **tidak** punya story write (`story:create/update/delete/submit`); hanya `story:read`. Keduanya mengelola **event** (`event:create/update/submit`). Lihat [rbac.md §7](../modules/rbac.md#7-seed-default).
+- **List** (`GET /posts`): scope di-`AND` ke filter — `network` → `{ creator: { networkId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
+- **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `network` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
+- **Tulis**: `network`/`own` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**. **Pengecualian:** `PostService.remove(id, userId, { skipScopeCheck: true })` — dipakai purge cascade hapus user (`DELETE /users/:id?cascadeContent=true`; sudah otorisasi `user:delete` + `admin:access`) — melewati `assertWritable` **hanya** agar purge tidak berhenti separuh jalan. Tanpa opsi, perilaku `remove` identik seperti di atas.
+- **Bypass ditutup**: scope `!= all` → `create` paksa `DRAFT` (buang `publishedAt`); `update`/`transition` mengabaikan `status`/`publishedAt` dari body — **kecuali** `status: DRAFT` pada post miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `network` boleh mengubahnya. Lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping).
 
-Contoh 403 (detail post milik organisasi lain oleh user `organization`):
+Contoh 403 (detail post milik network lain oleh user ber-`networkId` berbeda):
 
 ```json
 { "statusCode": 403, "message": "Forbidden resource", "errors": [] }
@@ -999,7 +999,7 @@ Usulan penambahan ke `DEFAULT_PERMISSIONS` di `libs/prisma/seed.ts`:
 
 ```typescript
 const DEFAULT_PERMISSIONS = [
-  // ... (seed existing: user/role/permission 12, story 9, category 4, event 9, organization 4; total 38) ...
+  // ... (seed existing: user/role/permission 12, story 9, category 4, event 9, network 4; total 38) ...
   { code: 'story:create', description: 'Membuat story baru' },
   { code: 'story:read', description: 'Melihat daftar/detail story' },
   { code: 'story:update', description: 'Mengubah story' },

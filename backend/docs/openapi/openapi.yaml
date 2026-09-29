@@ -7,7 +7,7 @@ info:
     identifier: LicenseRef-Proprietary
   description: |
     Static OpenAPI 3.1.0 contract for the Story (`post`), Category, Event,
-    EventType, Organization, EventSubmission, Archive, Document and Image
+    EventType, Network, EventSubmission, Archive, Document and Image
     endpoints of the NestJS backend.
 
     All endpoints require the `x-api-key` header (global `JwtAuthGuard`) and are
@@ -21,8 +21,15 @@ info:
     `POST /story-submissions`, `POST /story-submissions/thumbnail`,
     `POST /story-submissions/images`, `GET /story-submissions/categories`,
     `GET /event-types`, `GET /countries`, `GET /countries/{id}`, `GET /states`,
-    `GET /states/{id}`. The submission write/upload endpoints (event, archive and
-    story submissions) are rate-limited per IP (`429` on excess).
+    `GET /states/{id}`, `GET /stats/summary`. The public submission **create**
+    endpoints (`POST /event-submissions`, `POST /archive-submissions`,
+    `POST /story-submissions`) are rate-limited per IP (`429` on excess) — as are
+    the **archive** upload endpoints (`POST /archive-submissions/thumbnail`,
+    `POST /archive-submissions/attachments`). The public **image-upload**
+    endpoints (`POST /event-submissions/thumbnail`,
+    `POST /story-submissions/thumbnail`, `POST /story-submissions/images`) are
+    **not** throttled by decision: they instead accept **at most 10 files** per
+    request (multipart field `files`).
 
     `story-submission` `content` is sanitized server-side with a strict allowlist
     before it is stored, and the global JSON body limit is `1mb` (larger JSON
@@ -58,11 +65,12 @@ tags:
       queue; approve recreates an `Archive` with `status=DRAFT` (not published).
   - name: StorySubmissions
     description: |
-      Story proposals submitted by the public (no account), including rich
-      `content` (sanitized server-side). Admins review the queue; approve
-      recreates a `Post` with `status=DRAFT` (not published).
-  - name: Organizations
-    description: Organizations (admin-only). Used as the row-level scoping boundary for organization users. No row-level scoping in this module.
+      Story proposals submitted by the public (no account), including a required
+      `submitter` contact section and rich `content` (sanitized server-side).
+      Admins review the queue; approve recreates a `Post` with `status=DRAFT`
+      (not published).
+  - name: Networks
+    description: Networks (admin-only). Used as the row-level scoping boundary for network users. No row-level scoping in this module.
   - name: Images
     description: S3 image upload (multipart).
   - name: Archives
@@ -79,6 +87,8 @@ tags:
     description: |
       Public geo reference data (read-only, source dr5hn/countries-states-cities-database).
       No create/update/delete; served from the seeded `State` table.
+  - name: Stats
+    description: "Ringkasan publik: event published, user aktif, jumlah negara terlibat."
 security:
   - apiKeyAuth: []
 paths:
@@ -89,7 +99,7 @@ paths:
       summary: List posts (paginated)
       description: |
         Permission `story:read`. Row-level scoping applied server-side
-        (`all` / `organization` / `published` / `none`).
+        (`all` / `network` / `published` / `none`).
 
         Member-only (`visibility=PRIVATE`) rows are never returned to callers lacking
         member access — the list filters them out.
@@ -542,7 +552,7 @@ paths:
       summary: List events (paginated)
       description: |
         Permission `event:read`. Row-level scoping applied server-side
-        (`all` / `organization` / `published` / `none`).
+        (`all` / `network` / `published` / `none`).
 
         Member-only (`visibility=PRIVATE`) rows are never returned to callers lacking
         member access — the list filters them out.
@@ -991,14 +1001,23 @@ paths:
       summary: Upload a submission thumbnail (public)
       description: |
         **Public** (`@Public()`, no `x-api-key` required, anonymous).
-        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
-        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
-        synchronously via `sharp`.
+        `multipart/form-data` with field `files` (**1–10** files per request; per-file
+        mime `image/png` | `image/jpeg` | `image/webp`, max `UPLOAD_MAX_SIZE_MB`,
+        default 5 MB). Resized/compressed synchronously via `sharp`. Not rate-limited.
+
+        **Breaking change for external consumers:** the request field was `file`
+        (single) and the response was a single object; both are now arrays —
+        send `files`, receive `data: ImageResponse[]`. At most 10 files may be
+        uploaded per request (11+ → `422`).
+
+        **The batch is not atomic:** each file is uploaded independently, so if a
+        later file fails, earlier files in the same request may already be stored
+        (and can be orphaned); `201` returns one entry per successfully uploaded
+        file in request order.
 
         `entityType` is **hardcoded server-side** to `event-submission` and is
-        never read from the request body. The returned `url` is later passed as the
-        `thumbnail` field of `POST /event-submissions`. Rate-limited per IP to
-        **10 requests/minute** → **429** on excess.
+        never read from the request body. The returned `url` of the first item is
+        later passed as the `thumbnail` field of `POST /event-submissions`.
       security: []
       requestBody:
         required: true
@@ -1006,23 +1025,25 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [files]
               properties:
-                file:
-                  type: string
-                  format: binary
-                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB) per file. At most 10 files may be sent per request.'
       responses:
         '201':
-          description: Uploaded image metadata.
+          description: Uploaded image metadata (one entry per uploaded file, same order as the request).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageUploadResponse'
+                $ref: '#/components/schemas/ImageUploadListResponse'
         '422':
           $ref: '#/components/responses/ValidationFailed'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1506,14 +1527,23 @@ paths:
       summary: Upload a submission thumbnail (public)
       description: |
         **Public** (`@Public()`, no `x-api-key` required, anonymous).
-        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
-        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
-        synchronously via `sharp`.
+        `multipart/form-data` with field `files` (**1–10** files per request; per-file
+        mime `image/png` | `image/jpeg` | `image/webp`, max `UPLOAD_MAX_SIZE_MB`,
+        default 5 MB). Resized/compressed synchronously via `sharp`. Not rate-limited.
+
+        **Breaking change for external consumers:** the request field was `file`
+        (single) and the response was a single object; both are now arrays —
+        send `files`, receive `data: ImageResponse[]`. At most 10 files may be
+        uploaded per request (11+ → `422`).
+
+        **The batch is not atomic:** each file is uploaded independently, so if a
+        later file fails, earlier files in the same request may already be stored
+        (and can be orphaned); `201` returns one entry per successfully uploaded
+        file in request order.
 
         `entityType` is **hardcoded server-side** to `story-submission` and is
-        never read from the request body. The returned `url` is later passed as the
-        `thumbnail` field of `POST /story-submissions`. Rate-limited per IP to
-        **10 requests/minute** → **429** on excess.
+        never read from the request body. The returned `url` of the first item is
+        later passed as the `thumbnail` field of `POST /story-submissions`.
       security: []
       requestBody:
         required: true
@@ -1521,23 +1551,25 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [files]
               properties:
-                file:
-                  type: string
-                  format: binary
-                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB) per file. At most 10 files may be sent per request.'
       responses:
         '201':
-          description: Uploaded image metadata.
+          description: Uploaded image metadata (one entry per uploaded file, same order as the request).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageUploadResponse'
+                $ref: '#/components/schemas/ImageUploadListResponse'
         '422':
           $ref: '#/components/responses/ValidationFailed'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1548,14 +1580,24 @@ paths:
       summary: Upload a submission gallery/flyer image (public)
       description: |
         **Public** (`@Public()`, no `x-api-key` required, anonymous).
-        `multipart/form-data` with field `file` (mime `image/png` | `image/jpeg`
-        | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
-        synchronously via `sharp`. Used for both gallery and flyer images.
+        `multipart/form-data` with field `files` (**1–10** files per request; per-file
+        mime `image/png` | `image/jpeg` | `image/webp`, max `UPLOAD_MAX_SIZE_MB`,
+        default 5 MB). Resized/compressed synchronously via `sharp`. Used for both
+        gallery and flyer images. Not rate-limited.
+
+        **Breaking change for external consumers:** the request field was `file`
+        (single) and the response was a single object; both are now arrays —
+        send `files`, receive `data: ImageResponse[]`. At most 10 files may be
+        uploaded per request (11+ → `422`).
+
+        **The batch is not atomic:** each file is uploaded independently, so if a
+        later file fails, earlier files in the same request may already be stored
+        (and can be orphaned); `201` returns one entry per successfully uploaded
+        file in request order.
 
         `entityType` is **hardcoded server-side** to `story-submission` and is
-        never read from the request body. The returned `id` is later sent in
-        `galleryImageIds` / `flyerImageIds` of `POST /story-submissions`.
-        Rate-limited per IP to **10 requests/minute** → **429** on excess.
+        never read from the request body. The returned `id` of each item is later
+        sent in `galleryImageIds` / `flyerImageIds` of `POST /story-submissions`.
       security: []
       requestBody:
         required: true
@@ -1563,23 +1605,25 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [files]
               properties:
-                file:
-                  type: string
-                  format: binary
-                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB).'
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+                  description: 'Allowed mime types: `image/png`, `image/jpeg`, `image/webp`. Max size `UPLOAD_MAX_SIZE_MB` (default 5 MB) per file. At most 10 files may be sent per request.'
       responses:
         '201':
-          description: Uploaded image metadata.
+          description: Uploaded image metadata (one entry per uploaded file, same order as the request).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageUploadResponse'
+                $ref: '#/components/schemas/ImageUploadListResponse'
         '422':
           $ref: '#/components/responses/ValidationFailed'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1720,28 +1764,28 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /organizations:
+  /networks:
     get:
-      tags: [Organizations]
-      operationId: listOrganizations
-      summary: List organizations (paginated)
+      tags: [Networks]
+      operationId: listNetworks
+      summary: List networks (paginated)
       description: |
-        Permission `organization:read`. CRUD is admin-only; no row-level scoping
+        Permission `network:read`. CRUD is admin-only; no row-level scoping
         is applied in this module.
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/LimitParam'
-        - $ref: '#/components/parameters/OrganizationSortByParam'
+        - $ref: '#/components/parameters/NetworkSortByParam'
         - $ref: '#/components/parameters/SortOrderParam'
         - $ref: '#/components/parameters/SearchParam'
-        - $ref: '#/components/parameters/OrganizationFilterParam'
+        - $ref: '#/components/parameters/NetworkFilterParam'
       responses:
         '200':
-          description: Paginated list of organizations.
+          description: Paginated list of networks.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationListResponse'
+                $ref: '#/components/schemas/NetworkListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1751,23 +1795,23 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
     post:
-      tags: [Organizations]
-      operationId: createOrganization
-      summary: Create organization
-      description: Permission `organization:create`.
+      tags: [Networks]
+      operationId: createNetwork
+      summary: Create network
+      description: Permission `network:create`.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateOrganizationRequest'
+              $ref: '#/components/schemas/CreateNetworkRequest'
       responses:
         '201':
-          description: Organization created.
+          description: Network created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationResponse'
+                $ref: '#/components/schemas/NetworkResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1777,21 +1821,21 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /organizations/{id}:
+  /networks/{id}:
     get:
-      tags: [Organizations]
-      operationId: getOrganization
-      summary: Get organization by id
-      description: Permission `organization:read`.
+      tags: [Networks]
+      operationId: getNetwork
+      summary: Get network by id
+      description: Permission `network:read`.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
-          description: Organization detail.
+          description: Network detail.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationResponse'
+                $ref: '#/components/schemas/NetworkResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1803,10 +1847,10 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
     patch:
-      tags: [Organizations]
-      operationId: updateOrganization
-      summary: Update organization
-      description: Permission `organization:update`.
+      tags: [Networks]
+      operationId: updateNetwork
+      summary: Update network
+      description: Permission `network:update`.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       requestBody:
@@ -1814,14 +1858,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateOrganizationRequest'
+              $ref: '#/components/schemas/UpdateNetworkRequest'
       responses:
         '200':
-          description: Organization updated.
+          description: Network updated.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationResponse'
+                $ref: '#/components/schemas/NetworkResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1835,19 +1879,19 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
-      tags: [Organizations]
-      operationId: deleteOrganization
-      summary: Delete organization
-      description: Permission `organization:delete`. Deleting an organization does not delete its users/billing (relations set to null).
+      tags: [Networks]
+      operationId: deleteNetwork
+      summary: Delete network
+      description: Permission `network:delete`. Deleting a network does not delete its users/billing (relations set to null).
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
         '200':
-          description: Deleted organization.
+          description: Deleted network.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationResponse'
+                $ref: '#/components/schemas/NetworkResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2343,6 +2387,30 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /stats/summary:
+    get:
+      tags: [Stats]
+      operationId: getStatsSummary
+      summary: Public stats summary
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — no RBAC. Aggregate
+        counts: `events.published` counts `Event` with `status=PUBLISHED` and
+        `publishedAt <= now` (`latestPublishedAt` is the newest of those, or
+        `null`); `users.active` counts `User` with `status=ACTIVE`;
+        `countries.*` counts distinct countries involved — `organization` matches
+        `Network.country` against `Country.name` case-insensitively, `total` is
+        the distinct union of all four categories.
+      security: []
+      responses:
+        '200':
+          description: Stats summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsSummaryResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     apiKeyAuth:
@@ -2588,16 +2656,16 @@ components:
       schema:
         type: object
         additionalProperties: true
-    OrganizationSortByParam:
+    NetworkSortByParam:
       name: sortBy
       in: query
       required: false
-      description: 'Allowed: `name`, `state`, `country`, `address`, `createdAt`, `updatedAt`. Unknown → 422.'
+      description: 'Allowed: `name`, `state`, `country`, `address`, `website`, `contact`, `createdAt`, `updatedAt`. Unknown → 422.'
       schema:
         type: string
-        enum: [name, state, country, address, createdAt, updatedAt]
+        enum: [name, state, country, address, website, contact, createdAt, updatedAt]
         default: createdAt
-    OrganizationFilterParam:
+    NetworkFilterParam:
       name: filter
       in: query
       required: false
@@ -2605,7 +2673,8 @@ components:
       explode: true
       description: |
         Deep-object filter. Allowed keys: `name`, `state`, `country`,
-        `createdAt`, `updatedAt` (ISO 8601; date operators supported, e.g.
+        `website`, `contact`, `createdAt`, `updatedAt` (ISO 8601; date operators
+        supported, e.g.
         `filter[createdAt][gte]=2026-09-01T00:00:00Z`). Unknown keys / invalid
         enum / invalid date → 422. Empty values ignored. (`createdAt`/`updatedAt`
         are the date fields; `like` is rejected for date fields.)
@@ -2847,7 +2916,7 @@ components:
           format: uuid
         fullName:
           type: string
-    OrganizationRef:
+    NetworkRef:
       type: object
       required: [id, name]
       properties:
@@ -2858,16 +2927,16 @@ components:
           type: string
     EventCreatorRef:
       type: object
-      required: [id, fullName, organization]
+      required: [id, fullName, network]
       properties:
         id:
           type: string
           format: uuid
         fullName:
           type: string
-        organization:
+        network:
           anyOf:
-            - $ref: '#/components/schemas/OrganizationRef'
+            - $ref: '#/components/schemas/NetworkRef'
             - type: 'null'
     EventTypeRef:
       type: object
@@ -2934,6 +3003,16 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ImageResponse'
+    ImageUploadListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ImageResponse'
 
     # ---------- posts ----------
     Post:
@@ -3238,8 +3317,20 @@ components:
           minLength: 1
           maxLength: 100
 
-    # ---------- organizations ----------
-    Organization:
+    # ---------- networks ----------
+    NetworkSocialMedia:
+      type: object
+      required: [platform, url]
+      properties:
+        platform:
+          type: string
+          minLength: 1
+          maxLength: 50
+        url:
+          type: string
+          minLength: 1
+          maxLength: 500
+    Network:
       type: object
       required: [id, name, state, country, address, lat, lng, createdAt, updatedAt]
       properties:
@@ -3254,6 +3345,19 @@ components:
           type: [string, 'null']
         address:
           type: [string, 'null']
+        content:
+          type: [string, 'null']
+          description: Rich HTML, sanitized server-side. `null` when never set.
+        website:
+          type: [string, 'null']
+        contact:
+          type: [string, 'null']
+        socialMedia:
+          anyOf:
+            - type: array
+              items:
+                $ref: '#/components/schemas/NetworkSocialMedia'
+            - type: 'null'
         lat:
           type: [number, 'null']
         lng:
@@ -3264,15 +3368,15 @@ components:
         updatedAt:
           type: string
           format: date-time
-    OrganizationResponse:
+    NetworkResponse:
       allOf:
         - $ref: '#/components/schemas/SuccessMessage'
         - type: object
           required: [data]
           properties:
             data:
-              $ref: '#/components/schemas/Organization'
-    OrganizationListResponse:
+              $ref: '#/components/schemas/Network'
+    NetworkListResponse:
       allOf:
         - $ref: '#/components/schemas/SuccessMessage'
         - type: object
@@ -3281,10 +3385,10 @@ components:
             data:
               type: array
               items:
-                $ref: '#/components/schemas/Organization'
+                $ref: '#/components/schemas/Network'
             meta:
               $ref: '#/components/schemas/PaginationMeta'
-    CreateOrganizationRequest:
+    CreateNetworkRequest:
       type: object
       additionalProperties: false
       required: [name]
@@ -3302,6 +3406,23 @@ components:
         address:
           type: string
           maxLength: 500
+        content:
+          type: string
+          maxLength: 100000
+          description: Rich HTML, sanitized server-side.
+        website:
+          type: [string, 'null']
+          maxLength: 500
+        contact:
+          type: [string, 'null']
+          maxLength: 200
+        socialMedia:
+          anyOf:
+            - type: array
+              maxItems: 10
+              items:
+                $ref: '#/components/schemas/NetworkSocialMedia'
+            - type: 'null'
         lat:
           type: number
           minimum: -90
@@ -3310,11 +3431,12 @@ components:
           type: number
           minimum: -180
           maximum: 180
-    UpdateOrganizationRequest:
+    UpdateNetworkRequest:
       type: object
       additionalProperties: false
       description: |
         All fields optional; omit a field to leave it untouched. Sending `{}` returns the resource unchanged.
+        `website`/`contact`/`socialMedia` accept explicit `null` to clear the value.
       properties:
         name:
           type: string
@@ -3329,6 +3451,23 @@ components:
         address:
           type: string
           maxLength: 500
+        content:
+          type: string
+          maxLength: 100000
+          description: Rich HTML, sanitized server-side.
+        website:
+          type: [string, 'null']
+          maxLength: 500
+        contact:
+          type: [string, 'null']
+          maxLength: 200
+        socialMedia:
+          anyOf:
+            - type: array
+              maxItems: 10
+              items:
+                $ref: '#/components/schemas/NetworkSocialMedia'
+            - type: 'null'
         lat:
           type: number
           minimum: -90
@@ -3381,8 +3520,8 @@ components:
         - visibility
         - createdBy
         - creator
-        - organizationId
-        - organization
+        - networkId
+        - network
         - dates
         - eventTypes
         - location
@@ -3417,15 +3556,15 @@ components:
           anyOf:
             - $ref: '#/components/schemas/EventCreatorRef'
             - type: 'null'
-        organizationId:
+        networkId:
           type: [string, 'null']
           format: uuid
-          description: Scalar FK (`organization_id`); `null` when unset.
-        organization:
+          description: Scalar FK (`network_id`); `null` when unset.
+        network:
           anyOf:
-            - $ref: '#/components/schemas/OrganizationRef'
+            - $ref: '#/components/schemas/NetworkRef'
             - type: 'null'
-          description: Resolved organization (`Organization` row created on submission approve); `null` when unset.
+          description: Resolved network (`Network` row created on submission approve); `null` when unset.
         dates:
           type: array
           description: Ordered ascending by date.
@@ -3587,6 +3726,77 @@ components:
         location:
           $ref: '#/components/schemas/EventLocationInput'
 
+    # ---------- event submission author ----------
+    EventSubmissionAuthor:
+      type: object
+      additionalProperties: false
+      description: |
+        Nested `author` section ("data pengirim") of a public event submission — its own
+        section, separate from the event's own `countryId`/`stateId`/`organiser`.
+        Required on `CreateEventSubmissionRequest`.
+      required: [fullName, email, countryId]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+    EventSubmissionAuthorResolved:
+      type: object
+      additionalProperties: false
+      description: |
+        Resolved `author` section as returned by the admin read paths. The flat
+        `authorFullName`/`authorEmail`/`authorCountryId`/`authorStateId` columns are never
+        exposed at the top level of the response. `country` is FK-required on write, so it is
+        populated in practice; it stays nullable to match the mapper's null guard (same shape as
+        the top-level `country`/`state`).
+      required: [fullName, email, countryId, stateId, country, state]
+      properties:
+        fullName:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          maxLength: 200
+          description: |
+            Plain string (no `format: email`): rows backfilled by the `author` migration carry
+            `author_email = ''`. Only the request schema enforces `format: email`.
+        countryId:
+          type: integer
+        stateId:
+          type: [integer, 'null']
+        country:
+          anyOf:
+            - type: object
+              required: [id, iso2, name]
+              properties:
+                id:
+                  type: integer
+                iso2:
+                  type: string
+                name:
+                  type: string
+            - type: 'null'
+        state:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+
     # ---------- event submissions ----------
     CreateEventSubmissionRequest:
       type: object
@@ -3601,11 +3811,13 @@ components:
         - `endDate` must be >= `startDate`; the inclusive range must not exceed 31 days.
         - `countryId` must exist.
         - `stateId`, when sent, must belong to `countryId`.
+        - `author.countryId` must exist.
+        - `author.stateId`, when sent, must belong to `author.countryId`.
         - `eventTypeId` must exist.
         - `thumbnail`, when sent, must be an EGS storage URL (prefix
           `S3_PUBLIC_BASE_URL`) referencing an uploaded, still-unbound image with
           `entityType=event-submission` (from `POST /event-submissions/thumbnail`).
-      required: [title, startDate, endDate, countryId, organiser, eventTypeId, shortDescription]
+      required: [title, startDate, endDate, countryId, organiser, author, eventTypeId, shortDescription]
       properties:
         title:
           type: string
@@ -3629,6 +3841,8 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        author:
+          $ref: '#/components/schemas/EventSubmissionAuthor'
         eventTypeId:
           type: string
           format: uuid
@@ -3661,6 +3875,7 @@ components:
         - stateId
         - state
         - organiser
+        - author
         - eventTypeId
         - eventType
         - shortDescription
@@ -3712,6 +3927,8 @@ components:
             - type: 'null'
         organiser:
           type: string
+        author:
+          $ref: '#/components/schemas/EventSubmissionAuthorResolved'
         eventTypeId:
           type: [string, 'null']
           format: uuid
@@ -3973,6 +4190,78 @@ components:
     StorySubmissionStatus:
       type: string
       enum: [REQUEST, APPROVED, REJECTED]
+    StorySubmissionSubmitter:
+      type: object
+      additionalProperties: false
+      description: |
+        Nested `submitter` section ("data pengirim") of a public story submission — its own
+        section, audit-only (never copied into the recreated `Post`). Required on
+        `CreateStorySubmissionRequest`.
+      required: [fullName, email, countryId]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+    StorySubmissionSubmitterResolved:
+      type: object
+      additionalProperties: false
+      description: |
+        Resolved `submitter` section as returned by the admin read paths. The flat
+        `submitterFullName`/`submitterEmail`/`submitterCountryId`/`submitterStateId` columns are
+        never exposed at the top level. The request always requires a plain integer `countryId`,
+        so `countryId`/`country` are `null` only for pre-existing legacy rows, and `stateId`/
+        `state` are `null` when unset.
+      required: [fullName, email, countryId, stateId, country, state]
+      properties:
+        fullName:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          maxLength: 200
+          description: |
+            Plain string (no `format: email`): rows backfilled by the `submitter` migration carry
+            `submitter_email = ''`. Only the request schema enforces `format: email`.
+        countryId:
+          type: [integer, 'null']
+          description: |
+            `null` only for pre-existing (legacy) rows, which carry no submitter geo. The
+            request schema always requires a plain integer `countryId` on write.
+        stateId:
+          type: [integer, 'null']
+        country:
+          anyOf:
+            - type: object
+              required: [id, iso2, name]
+              properties:
+                id:
+                  type: integer
+                iso2:
+                  type: string
+                name:
+                  type: string
+            - type: 'null'
+        state:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
     StorySubmission:
       type: object
       description: |
@@ -3984,6 +4273,7 @@ components:
         - id
         - name
         - thumbnail
+        - submitter
         - status
         - adminNote
         - reviewedBy
@@ -4000,6 +4290,8 @@ components:
           type: string
         thumbnail:
           type: [string, 'null']
+        submitter:
+          $ref: '#/components/schemas/StorySubmissionSubmitterResolved'
         status:
           $ref: '#/components/schemas/StorySubmissionStatus'
         adminNote:
@@ -4171,13 +4463,15 @@ components:
 
         Cross-field / server rules, all surfaced as 422 with
         `errors: [{ field, message }]`:
+        - `submitter.countryId` must exist.
+        - `submitter.stateId`, when sent, must belong to `submitter.countryId`.
         - each `categoryIds.N` must exist and be a `STORY` category.
         - each `galleryImageIds.N` / `flyerImageIds.N` must reference an uploaded,
           still-unbound `Image` with `entityType=story-submission` (from
           `POST /story-submissions/images`).
         - `thumbnail`, when sent, must be an EGS storage URL referencing an
           uploaded, still-unbound image with `entityType=story-submission`.
-      required: [name, content]
+      required: [name, content, submitter]
       properties:
         name:
           type: string
@@ -4188,6 +4482,10 @@ components:
           minLength: 1
           maxLength: 100000
           description: Rich HTML; sanitized server-side before storage.
+        submitter:
+          $ref: '#/components/schemas/StorySubmissionSubmitter'
+          description: |
+            Required. Submitter identity (audit-only); never copied into the recreated `Post`.
         categoryIds:
           type: array
           maxItems: 20
@@ -4707,3 +5005,57 @@ components:
                 $ref: '#/components/schemas/State'
             meta:
               $ref: '#/components/schemas/PaginationMeta'
+    StatsEventSummary:
+      type: object
+      required: [published, latestPublishedAt]
+      properties:
+        published:
+          type: integer
+          minimum: 0
+        latestPublishedAt:
+          type: [string, 'null']
+          format: date-time
+    StatsUserSummary:
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: integer
+          minimum: 0
+    StatsCountrySummary:
+      type: object
+      required: [story, event, organization, member, total]
+      properties:
+        story:
+          type: integer
+          minimum: 0
+        event:
+          type: integer
+          minimum: 0
+        organization:
+          type: integer
+          minimum: 0
+        member:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+    StatsSummary:
+      type: object
+      required: [events, users, countries]
+      properties:
+        events:
+          $ref: '#/components/schemas/StatsEventSummary'
+        users:
+          $ref: '#/components/schemas/StatsUserSummary'
+        countries:
+          $ref: '#/components/schemas/StatsCountrySummary'
+    StatsSummaryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/StatsSummary'

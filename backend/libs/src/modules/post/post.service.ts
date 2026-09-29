@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
@@ -6,6 +6,7 @@ import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy 
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { ImageService } from '@app/libs/modules/image/image.service';
+import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { PostRepository, CreatePostData, UpdatePostData } from './post.repository';
 import { PostEntity, PostResponse } from './entities/post.entity';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -36,17 +37,37 @@ export class PostService {
     private readonly postRepository: PostRepository,
     private readonly imageRepository: ImageRepository,
     private readonly imageService: ImageService,
+    private readonly userRepository: UserRepository,
     private readonly storage: StorageService,
     private readonly accessScope: AccessScopeService,
   ) {}
+
+  private validationError(field: string, message: string): UnprocessableEntityException {
+    return new UnprocessableEntityException({
+      message: 'Validation failed',
+      errors: [{ field, message }],
+    });
+  }
+
+  // Cek existence setiap authorIds (user) → 422 per-field (cegah P2003 FK saat createMany).
+  private async assertAuthors(authorIds?: string[]): Promise<void> {
+    if (!authorIds || authorIds.length === 0) return;
+    const users = await this.userRepository.findByIds(authorIds);
+    const found = new Set(users.map((user) => user.id));
+    for (let i = 0; i < authorIds.length; i++) {
+      if (!found.has(authorIds[i])) {
+        throw this.validationError(`authorIds.${i}`, 'authorId must reference an existing user');
+      }
+    }
+  }
 
   // Scope baca. `none` tidak pernah sampai sini (list early-return); dikembalikan kosong agar aman.
   private scopeWhere(scope: AccessScope): Prisma.PostWhereInput | undefined {
     switch (scope.kind) {
       case 'all':
         return undefined;
-      case 'organization':
-        return { creator: { organizationId: scope.organizationId } };
+      case 'network':
+        return { creator: { networkId: scope.networkId } };
       case 'own':
         return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.PostWhereInput;
       case 'published': {
@@ -62,13 +83,13 @@ export class PostService {
     }
   }
 
-  // Baca: org hanya konten organisasinya; published hanya status PUBLISHED; none tolak.
+  // Baca: org hanya konten network-nya; published hanya status PUBLISHED; none tolak.
   private assertReadable(post: PostEntity, scope: AccessScope): void {
     if (scope.kind === 'none') throw new ForbiddenException('Forbidden resource');
     if (post.visibility === ContentVisibility.PRIVATE && !scope.canViewPrivate) {
       throw new ForbiddenException('Forbidden resource');
     }
-    if (scope.kind === 'organization' && post.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network' && post.creator?.networkId !== scope.networkId) {
       throw new ForbiddenException('Forbidden resource');
     }
     if (scope.kind === 'own') {
@@ -95,11 +116,11 @@ export class PostService {
     }
   }
 
-  // Tulis: admin bebas; organization hanya konten organisasinya; none/published tolak (defensif,
+  // Tulis: admin bebas; network hanya konten network-nya; none/published tolak (defensif,
   // guard permission biasanya sudah memblok lebih dulu).
   private assertWritable(post: PostEntity, scope: AccessScope): void {
-    if (scope.kind === 'organization') {
-      if (post.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network') {
+      if (post.creator?.networkId !== scope.networkId) {
         throw new ForbiddenException('Forbidden resource');
       }
       return;
@@ -127,7 +148,7 @@ export class PostService {
         .map((image) => this.imageService.toImageResponse(image));
     return posts.map(({ galleryImageIds, flyerImageIds, creator, ...post }) => ({
       ...post,
-      // Buang `creator.organizationId` (tenancy internal) dari response.
+      // Buang `creator.networkId` (tenancy internal) dari response.
       creator: creator ? { id: creator.id, fullName: creator.fullName } : null,
       gallery: resolve(galleryImageIds),
       flyer: resolve(flyerImageIds),
@@ -216,6 +237,7 @@ export class PostService {
       // Audit marker "pertama kali terbit" (dibuat langsung PUBLISHED), bukan status APPROVED.
       approvedAt: autoPublish || status === ContentStatus.PUBLISHED ? now : undefined,
       categoryIds: dto.categoryIds,
+      authorIds: dto.authorIds,
       imageIds: dto.imageIds,
       galleryImageIds: dto.galleryImageIds,
       flyerImageIds: dto.flyerImageIds,
@@ -224,13 +246,14 @@ export class PostService {
 
   async create(dto: CreatePostDto, userId: string): Promise<PostResponse> {
     const scope = await this.accessScope.resolve(userId, 'story');
-    if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
+    if (scope.kind !== 'all' && scope.kind !== 'network' && scope.kind !== 'own') {
       throw new ForbiddenException('Forbidden resource');
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
     const scoped = scope.kind === 'all' ? dto : { ...dto, status: ContentStatus.DRAFT, publishedAt: undefined };
     // Buang id gambar asing (post belum ada → hanya gambar tak terikat / entityType `post`).
     const prepared = { ...scoped, ...(await this.sanitizeImageIds(scoped, null)) };
+    await this.assertAuthors(prepared.authorIds);
     const status = prepared.status ?? ContentStatus.DRAFT;
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
@@ -265,6 +288,10 @@ export class PostService {
     if (dto.content !== undefined) data.content = dto.content;
     if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail;
     if (dto.categoryIds !== undefined) data.categoryIds = dto.categoryIds;
+    if (dto.authorIds !== undefined) {
+      await this.assertAuthors(dto.authorIds);
+      data.authorIds = dto.authorIds;
+    }
     // Sanitasi id gambar: buang milik entity lain (IDOR). entityId = post ini.
     const { imageIds, galleryImageIds, flyerImageIds } = await this.sanitizeImageIds(dto, id);
     if (imageIds !== undefined) data.imageIds = imageIds;
@@ -282,7 +309,7 @@ export class PostService {
         (imageId) => !flyerImageIds.includes(imageId),
       );
     }
-    // Visibility boleh diubah scope `all` maupun `organization` (assertWritable sudah membatasi).
+    // Visibility boleh diubah scope `all` maupun `network` (assertWritable sudah membatasi).
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
@@ -342,10 +369,15 @@ export class PostService {
   }
 
   // DB dulu (sumber kebenaran); objek S3 dihapus best-effort.
-  async remove(id: string, userId: string): Promise<PostResponse> {
+  // `skipScopeCheck` hanya untuk purge cascade hapus user (pemanggil sudah otorisasi `admin:access`).
+  async remove(
+    id: string,
+    userId: string,
+    options?: { skipScopeCheck?: boolean },
+  ): Promise<PostResponse> {
     const post = await this.postRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'story');
-    this.assertWritable(post, scope);
+    if (!options?.skipScopeCheck) this.assertWritable(post, scope);
     // Resolve galeri sebelum row images dihapus.
     const response = (await this.hydrate([post]))[0];
     const keys = await this.imageRepository.deleteByEntity('post', id);

@@ -5,6 +5,7 @@ import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
+import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -40,6 +41,12 @@ export interface ProfileCardProps {
   onSubmit: (values: ProfileFormValues) => void
   /** Increment untuk trigger form reset dari container saat mutation sukses. */
   resetSignal?: number
+  /** URL avatar saat ini (dari `me`). */
+  avatar: string | null
+  isUploadingAvatar?: boolean
+  avatarError?: string | null
+  onAvatarUpload: (file: File) => void
+  onAvatarRemove: () => void
   className?: string
 }
 
@@ -55,6 +62,11 @@ export function ProfileCard({
   submissionError,
   onSubmit,
   resetSignal,
+  avatar,
+  isUploadingAvatar = false,
+  avatarError,
+  onAvatarUpload,
+  onAvatarRemove,
   className,
 }: ProfileCardProps) {
   const { t } = useTranslation('profile')
@@ -208,6 +220,21 @@ export function ProfileCard({
                   {globalMessage}
                 </p>
               )}
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium leading-none">{t('avatar.label')}</p>
+                <ThumbnailUpload
+                  value={avatar}
+                  isUploading={isUploadingAvatar}
+                  error={avatarError}
+                  disabled={isPending}
+                  onUpload={onAvatarUpload}
+                  onRemove={onAvatarRemove}
+                  i18nPrefix="profile"
+                  shape="circle"
+                  className="max-w-48"
+                />
+              </div>
 
               <FormField
                 control={form.control}

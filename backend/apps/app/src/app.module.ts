@@ -15,7 +15,7 @@ import {
   ImageModule,
   JwtAuthGuard,
   LibsModule,
-  OrganizationModule,
+  NetworkModule,
   PermissionsGuard,
   PostModule,
   StorageModule,
@@ -40,10 +40,11 @@ import { StorySubmissionsController } from './controllers/story-submissions.cont
 import { ImagesController } from './controllers/images.controller';
 import { ArchivesController } from './controllers/archives.controller';
 import { DocumentsController } from './controllers/documents.controller';
-import { OrganizationsController } from './controllers/organizations.controller';
+import { NetworksController } from './controllers/networks.controller';
 import { SubscriptionsController } from './controllers/subscriptions.controller';
 import { BillingsController } from './controllers/billings.controller';
 import { ApiKeysController } from './controllers/api-keys.controller';
+import { StatsController } from './controllers/stats.controller';
 
 @Module({
   imports: [
@@ -83,10 +84,11 @@ import { ApiKeysController } from './controllers/api-keys.controller';
     ImagesController,
     ArchivesController,
     DocumentsController,
-    OrganizationsController,
+    NetworksController,
     SubscriptionsController,
     BillingsController,
     ApiKeysController,
+    StatsController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

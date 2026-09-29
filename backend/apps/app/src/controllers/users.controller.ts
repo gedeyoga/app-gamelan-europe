@@ -3,16 +3,21 @@ import {
   AuthenticatedUser,
   CreateUserDto,
   CurrentUser,
+  DeleteUserQueryDto,
   ListQueryDto,
   Permissions,
   UpdateUserDto,
   UpdateUserRoleDto,
+  UserContentPurgeService,
   UserService,
 } from '@app/libs';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly userContentPurgeService: UserContentPurgeService,
+  ) {}
 
   @Post()
   @Permissions('user:create')
@@ -51,7 +56,11 @@ export class UsersController {
 
   @Delete(':id')
   @Permissions('user:delete')
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.userService.remove(id, user.id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: DeleteUserQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.userContentPurgeService.remove(id, user.id, query.cascadeContent);
   }
 }

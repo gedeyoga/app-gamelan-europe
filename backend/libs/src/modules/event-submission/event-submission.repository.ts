@@ -4,7 +4,7 @@ import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { EventRepository, CreateEventData } from '@app/libs/modules/event/event.repository';
 import { slugify } from '@app/libs/modules/event/utils/slug.util';
 import { escapeHtml } from '@app/libs/common/utils/html.util';
-import { OrganizationService } from '@app/libs/modules/organization/organization.service';
+import { NetworkService } from '@app/libs/modules/network/network.service';
 import { eventSubmissionSelect, EventSubmissionEntity, mapEventSubmission } from './entities/event-submission.entity';
 import { MAX_EVENT_SUBMISSION_RANGE_DAYS } from './dto/create-event-submission.dto';
 
@@ -15,6 +15,10 @@ export interface CreateEventSubmissionData {
   countryId: number;
   stateId?: number | null;
   organiser: string;
+  authorFullName: string;
+  authorEmail: string;
+  authorCountryId: number;
+  authorStateId?: number | null;
   eventTypeId?: string | null;
   shortDescription: string;
   thumbnail?: string | null;
@@ -37,7 +41,7 @@ export class EventSubmissionRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventRepository: EventRepository,
-    private readonly organizationService: OrganizationService,
+    private readonly networkService: NetworkService,
   ) {}
 
   async findById(id: string): Promise<EventSubmissionEntity> {
@@ -83,6 +87,10 @@ export class EventSubmissionRepository {
               countryId: data.countryId,
               stateId: data.stateId ?? null,
               organiser: data.organiser,
+              authorFullName: data.authorFullName,
+              authorEmail: data.authorEmail,
+              authorCountryId: data.authorCountryId,
+              authorStateId: data.authorStateId ?? null,
               eventTypeId: data.eventTypeId ?? null,
               shortDescription: data.shortDescription,
               thumbnail: data.thumbnail ?? null,
@@ -127,7 +135,7 @@ export class EventSubmissionRepository {
     }
   }
 
-  // Approve = transaksi atomik: conditional update → find-or-create Organization → create Event DRAFT
+  // Approve = transaksi atomik: conditional update → find-or-create Network → create Event DRAFT
   // + relasi → tautkan eventId (§5.2.1). Gagal → rollback, submission tetap REQUEST.
   async approve(
     id: string,
@@ -156,7 +164,7 @@ export class EventSubmissionRepository {
             await tx.eventSubmission.findUniqueOrThrow({ where: { id }, select: eventSubmissionSelect }),
           );
 
-          const organization = await this.organizationService.findOrCreateByName(submission.organiser, {
+          const network = await this.networkService.findOrCreateByName(submission.organiser, {
             state: submission.state?.name ?? null,
             country: submission.country?.name ?? null,
             tx,
@@ -170,7 +178,7 @@ export class EventSubmissionRepository {
 
           const event = await this.eventRepository.createInTransaction(
             tx,
-            this.buildEventData(submission, reviewerUserId, organization.id, slug),
+            this.buildEventData(submission, reviewerUserId, network.id, slug),
           );
 
           await tx.eventSubmission.update({ where: { id }, data: { eventId: event.id } });
@@ -196,7 +204,7 @@ export class EventSubmissionRepository {
   private buildEventData(
     submission: EventSubmissionEntity,
     reviewerUserId: string,
-    organizationId: string,
+    networkId: string,
     slug: string,
   ): CreateEventData {
     const countryName = submission.country?.name ?? '';
@@ -209,7 +217,7 @@ export class EventSubmissionRepository {
       status: ContentStatus.DRAFT,
       visibility: ContentVisibility.PUBLIC,
       createdBy: reviewerUserId,
-      organizationId,
+      networkId,
       eventTypeIds: submission.eventTypeId ? [submission.eventTypeId] : [],
       dates: enumerateDates(submission.startDate, submission.endDate).map((date) => ({
         date,

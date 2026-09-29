@@ -37,7 +37,7 @@ Struktur nested:
   - Group **Data Management** (`t('group.dataManagement')`):
     - **User** → `/users` (ikon `Users`, permission `user:read`).
     - **Role** → `/roles` (ikon `Shield`, permission `role:read`).
-    - **Organizations** → `/organizations` (ikon `Building2`, permission `organization:read`).
+    - **Networks** → `/networks` (ikon `Building2`, permission `network:read`).
   - Group **Payment** (`t('group.payment')`, dirender setelah Data Management):
     - **Subscription** → `/subscriptions` (ikon `CreditCard`, permission `subscription:read`).
     - **Billing** (`t('nav.billing')`) → `/billings` (ikon `Receipt`, permission `billing:read`).
@@ -101,7 +101,7 @@ src/features/dashboard/
 
 ## 10a. Konten Dashboard (member/org)
 
-Dashboard home (`/`, `src/app/routes/dashboard-home.tsx`) diisi konten untuk user **member** & **organization**: hero, kartu statistik, event akan datang, dan story terbaru.
+Dashboard home (`/`, `src/app/routes/dashboard-home.tsx`) diisi konten untuk user **member** (dan admin): hero, kartu statistik, event akan datang, dan story terbaru.
 
 ### Routing & data source
 
@@ -129,7 +129,7 @@ Dashboard home (`/`, `src/app/routes/dashboard-home.tsx`) diisi konten untuk use
 
 ### i18n (namespace `dashboard`, `en`/`id`)
 
-`welcome`, `subtitle`, `role.{member,organization}`, `stats.{upcomingEvents,publishedStories}`, `section.upcomingEvents.{title,subtitle,viewAll,empty}`, `section.stories.{title,subtitle,viewAll,empty}`, `card.{noThumbnail,openStory}`. Key lama (`nav.*`, `group.*`, `userMenu.*`, `title`, `empty`) tetap.
+`welcome`, `subtitle`, `role.member`, `stats.{upcomingEvents,publishedStories}`, `section.upcomingEvents.{title,subtitle,viewAll,empty}`, `section.stories.{title,subtitle,viewAll,empty}`, `card.{noThumbnail,openStory}`. Key lama (`nav.*`, `group.*`, `userMenu.*`, `title`, `empty`) tetap.
 
 ## 10b. Konten Dashboard (admin)
 
@@ -163,7 +163,7 @@ Semua query admin-gated dengan `enabled: isAdmin` (query key tidak berubah; `ena
   - Props (exported `interface`): `items: DashboardPendingEventItem[]`, `isPending`, `isError`, `canApprove`, `canReject`, `isRefreshing?`, `onViewDetail(id)`, `onApprove(id)`, `onReject(id)`, `busyId?`, `className?`.
   - Tiap baris: thumbnail (fallback `ImageOff`), nama, `creatorName`, `dateLabel`, `Badge` "Diajukan" (`event:statusOptions.REQUEST`); tombol **Lihat detail** (`Eye`, selalu), **Setujui** (`Check`, gate `canApprove`), **Tolak** (`X`, gate `canReject`).
   - Loading → `Skeleton`; kosong → `section.pendingEvents.empty`; error → `section.pendingEvents.error` (muted).
-- View type `DashboardPendingEventItem` di `features/dashboard/types.ts` (dashboard tetap bebas import lintas domain). Mapping di route: `creatorName = event.creator?.organization?.name ?? event.creator?.fullName ?? null`; `dateLabel = event.dates[0] ? formatEventDate(event.dates[0]) : null`.
+- View type `DashboardPendingEventItem` di `features/dashboard/types.ts` (dashboard tetap bebas import lintas domain). Mapping di route: `creatorName = event.creator?.network?.name ?? event.creator?.fullName ?? null`; `dateLabel = event.dates[0] ? formatEventDate(event.dates[0]) : null`.
 
 ### i18n (namespace `dashboard`, `en`/`id`)
 

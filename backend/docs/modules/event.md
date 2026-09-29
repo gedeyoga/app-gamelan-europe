@@ -66,8 +66,8 @@ model Event {
   visibility  ContentVisibility @default(PUBLIC)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  organizationId String?        @map("organization_id")
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  networkId   String?
+  network     Network?          @relation(fields: [networkId], references: [id], onDelete: SetNull)
   dates       EventDate[]
   eventTypes  AssignEventType[]
   locations   EventLocation[]
@@ -115,7 +115,7 @@ model EventLocation {
 - Relasi anak `EventDate`/`AssignEventType`/`EventLocation` `onDelete: Cascade`.
 - `event_locations.name` **wajib** (satu event = satu lokasi secara logis).
 - `visibility` enum `ContentVisibility` (`PUBLIC`/`PRIVATE`), default `PUBLIC`. Migration `20260920130000_add_content_visibility`.
-- `organizationId` **opsional/nullable** → `Event.organization` adalah organisasi penyelenggara event (hasil approve submission publik via `OrganizationService.findOrCreateByName`, atau di-set admin internal). Relasi `onDelete: SetNull` → hapus `Organization` tidak menghapus event, hanya melepas relasi. Back-relation: `Organization.events Event[]` (organization.md §2). **Migration baru** (mis. `add_event_organization`) wajib; belum ada saat catatan ini ditulis = RENCANA bila belum diimplementasi.
+- `networkId` **opsional/nullable** → `Event.network` adalah organisasi penyelenggara event (hasil approve submission publik via `NetworkService.findOrCreateByName`, atau di-set admin internal). Relasi `onDelete: SetNull` → hapus `Network` tidak menghapus event, hanya melepas relasi. Back-relation: `Network.events Event[]` (network.md §2). **Migration baru** (mis. `add_event_network`) wajib; belum ada saat catatan ini ditulis = RENCANA bila belum diimplementasi.
 
 ---
 
@@ -129,14 +129,14 @@ export const eventSelect = {
     select: {
       id: true,
       fullName: true,
-      organizationId: true, // internal (row-level scoping); tidak keluar ke FE
-      organization: { select: { id: true, name: true } }, // name keluar ke FE
+      networkId: true, // internal (row-level scoping); tidak keluar ke FE
+      network: { select: { id: true, name: true } }, // name keluar ke FE
     },
   },
   dates: { select: { date: true, startTime: true, endTime: true }, orderBy: { date: 'asc' } },
   eventTypes: { select: { eventType: { select: { id: true, name: true } } } },
   locations: { select: { name: true, address: true, lat: true, lng: true } },
-  organization: { select: { id: true, name: true } }, // org event (approve submission / di-set admin); keluar ke FE
+  network: { select: { id: true, name: true } }, // network event (approve submission / di-set admin); keluar ke FE
 } satisfies Prisma.EventSelect;
 
 export type EventDateEntity = { date: string; startTime: string | null; endTime: string | null };
@@ -145,14 +145,14 @@ export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations'> &
   dates: EventDateEntity[];              // date ISO 8601 UTC, startTime/endTime "HH:mm" | null, asc
   eventTypes: { id: string; name: string }[];
   location: { name: string; address: string | null; lat: number | null; lng: number | null } | null;
-  organization: { id: string; name: string } | null;
+  network: { id: string; name: string } | null;
 };
 
-// `creator.organizationId` internal (scope); `creator.organization` ({ id, name } | null) keluar ke FE.
+// `creator.networkId` internal (scope); `creator.network` ({ id, name } | null) keluar ke FE.
 export type EventCreatorRef = {
   id: string;
   fullName: string;
-  organization: { id: string; name: string } | null;
+  network: { id: string; name: string } | null;
 };
 
 export type EventResponse = Omit<EventEntity, 'creator'> & {
@@ -160,20 +160,20 @@ export type EventResponse = Omit<EventEntity, 'creator'> & {
 };
 ```
 
-`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`), `organization` → `{ id, name } | null`. Join shape tidak pernah bocor ke service/controller.
+`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`), `network` → `{ id, name } | null`. Join shape tidak pernah bocor ke service/controller.
 
-`EventService.toResponse()` membuang `creator.organizationId` dan memetakan `creator` → `{ id, fullName, organization: { id, name } | null }`. `organizationId` **milik creator** tetap ada pada entity mentah (`EventEntity.creator.organizationId`) untuk `assertReadable`/`assertWritable`/`scopeWhere` (row-level scoping), tetapi **tidak pernah** masuk response. Scalar `Event.organizationId` (top-level, milik event) **tetap** dikirim — bukan data sensitif; FE utamanya memakai `Event.organization`. `Event.organization` diisi dari approve submission publik atau admin internal (§7).
+`EventService.toResponse()` membuang `creator.networkId` dan memetakan `creator` → `{ id, fullName, network: { id, name } | null }`. `networkId` **milik creator** tetap ada pada entity mentah (`EventEntity.creator.networkId`) untuk `assertReadable`/`assertWritable`/`scopeWhere` (row-level scoping), tetapi **tidak pernah** masuk response. Scalar `Event.networkId` (top-level, milik event) **tetap** dikirim — bukan data sensitif; FE utamanya memakai `Event.network`. `Event.network` diisi dari approve submission publik atau admin internal (§7).
 
 **Precedence tampilan organisasi (kontrak FE).** Backend menyediakan datanya; FE merender:
 
 ```ts
-event.organization?.name            // 1. org event (approve submission publik / di-set admin)
-  ?? event.creator?.organization?.name  // 2. org milik user pembuat (fallback, perilaku lama)
+event.network?.name            // 1. org event (approve submission publik / di-set admin)
+  ?? event.creator?.network?.name  // 2. org milik user pembuat (fallback, perilaku lama)
   ?? event.creator?.fullName            // 3. nama user pembuat
   ?? '—';
 ```
 
-`Event.organization` = sumber utama (organisasi penyelenggara). `creator.organization` **tetap dipertahankan** sebagai fallback agar event internal lama (tanpa `Event.organization`) tidak regresi. Bila keduanya null → tampil `creator.fullName`.
+`Event.network` = sumber utama (organisasi penyelenggara). `creator.network` **tetap dipertahankan** sebagai fallback agar event internal lama (tanpa `Event.network`) tidak regresi. Bila keduanya null → tampil `creator.fullName`.
 
 
 ---
@@ -189,11 +189,11 @@ event.organization?.name            // 1. org event (approve submission publik /
 | `content` | opsional, `@IsString()` (default `''`) |
 | `thumbnail` | opsional, `@IsString()`, `@MaxLength(2048)` |
 | `status` | opsional, `@IsEnum(ContentStatus)` |
-| `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `organization` |
+| `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `network` |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` |
 | `eventTypeIds` | opsional, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` |
 | `dates` | opsional, `@IsArray()`, `@ValidateNested({ each: true })` + `@Type(() => EventDateDto)`, `@ArrayMaxSize(100)`; array kosong `[]` valid → clear/replace-all relasi `event_dates` |
-| `organizationId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Organization` → tidak ada = **422** per-field (`organizationId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.organization`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
+| `networkId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Network` → tidak ada = **422** per-field (`networkId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.network`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
 | `location` | **wajib**, nested `EventLocationDto` (`@ValidateNested` + `@Type`) |
 
 `EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`.
@@ -231,7 +231,7 @@ export class UpdateEventDto extends PartialType(OmitType(CreateEventDto, ['thumb
 }
 ```
 
-`organizationId` ikut menjadi opsional lewat `PartialType` (kirim `null` untuk melepas relasi; kirim UUID untuk pindah org). Service tetap cek existence → **422** bila UUID tidak ada. Skema perlu migration baru `add_event_organization` sebelum kolom ini ada (RENCANA bila belum diimplementasi).
+`networkId` ikut menjadi opsional lewat `PartialType` (kirim `null` untuk melepas relasi; kirim UUID untuk pindah org). Service tetap cek existence → **422** bila UUID tidak ada. Skema perlu migration baru `add_event_network` sebelum kolom ini ada (RENCANA bila belum diimplementasi).
 
 ### Contoh 422
 
@@ -282,12 +282,12 @@ dates: { some: { date: { gte: Date.UTC(Y, M-1, 1), lt: Date.UTC(Y, M, 1) } } }
 
 ```typescript
 // EventService.mineWhere — selalu di-AND dengan scopeWhere (scope tidak diganti)
-scope.kind === 'organization'
-  ? { creator: { organizationId: scope.organizationId } } // (a) satu organisasi
+scope.kind === 'network'
+  ? { creator: { networkId: scope.networkId } } // (a) satu organisasi
   : { createdBy: userId }; // (b) tanpa organisasi → hanya buatan sendiri
 ```
 
-- Menggantikan perilaku scope `own` (`ownReadWhere`, M5) yang memunculkan konten PUBLISHED milik orang lain; `mine=true` hanya event user sendiri (atau satu organisasi bila ber-`organizationId`).
+- Menggantikan perilaku scope `own` (`ownReadWhere`, M5) yang memunculkan konten PUBLISHED milik orang lain; `mine=true` hanya event user sendiri (atau satu organisasi bila ber-`networkId`).
 - Komposisi penuh: `scopeWhere ∧ filter ∧ eventMonth ∧ upcoming ∧ mine ∧ search`. Nilai selain `true`/`false` → **422**.
 
 **Filter "Upcoming" (`upcoming`)** — opsional, string `true`/`false` (query param). `upcoming=true` menyaring event yang punya **minimal satu** `EventDate.date` pada hari ini atau setelahnya (UTC, batas = awal hari UTC sekarang):
@@ -348,7 +348,7 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 
 Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin` otomatis mendapat semuanya.
 
-> **Perubahan skema (RENCANA bila belum diimplementasi):** `Event.organizationId` (nullable) + relasi `Event.organization` + back-relation `Organization.events Event[]` (organization.md §2) → migration baru `add_event_organization`. Diisi dari approve submission publik (`OrganizationService.findOrCreateByName`) atau admin internal via DTO `organizationId` (§4). Tidak ada permission baru untuk field ini.
+> **Perubahan skema (RENCANA bila belum diimplementasi):** `Event.networkId` (nullable) + relasi `Event.network` + back-relation `Network.events Event[]` (network.md §2) → migration baru `add_event_network`. Diisi dari approve submission publik (`NetworkService.findOrCreateByName`) atau admin internal via DTO `networkId` (§4). Tidak ada permission baru untuk field ini.
 
 ### Permission action (transisi status) — DI-ENFORCE
 
@@ -368,8 +368,8 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 - `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `organization`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik event-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role `organization` & `member` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
-- **`Event` `DRAFT` dari approve `event-submission`.** Modul `event-submission` (`event-submission.md` §5.2) membuat `Event` `DRAFT` saat admin approve submission, langsung lewat service modul tersebut (bukan `POST /events`); `createdBy` = admin penyetuju, `organizationId` = hasil find-or-create `Organization` dari `organiser` submission (event belum ada sebelum approve). Alur `event:submit`/`REQUEST` **dilewati** — event sudah `DRAFT`, jadi admin mengedit (`PATCH /events/:id`) lalu mem-publish lewat `event:publish`. Transisi `publish: DRAFT → PUBLISHED` **sudah diputuskan/ditambahkan** ke `EVENT_TRANSITIONS` (lihat tabel di atas; `APPROVED` deprecated tetap legacy). **RENCANA — belum ada di kode** saat catatan ini ditulis; tandai saat implementasi. Submission sumber **tetap menyimpan `eventId`** untuk audit (`EventSubmission.eventId`, `onDelete: SetNull`), bahkan setelah event diterbitkan.
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `network`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik event-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role bawaan `member`/`author` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
+- **`Event` `DRAFT` dari approve `event-submission`.** Modul `event-submission` (`event-submission.md` §5.2) membuat `Event` `DRAFT` saat admin approve submission, langsung lewat service modul tersebut (bukan `POST /events`); `createdBy` = admin penyetuju, `networkId` = hasil find-or-create `Network` dari `organiser` submission (event belum ada sebelum approve). Alur `event:submit`/`REQUEST` **dilewati** — event sudah `DRAFT`, jadi admin mengedit (`PATCH /events/:id`) lalu mem-publish lewat `event:publish`. Transisi `publish: DRAFT → PUBLISHED` **sudah diputuskan/ditambahkan** ke `EVENT_TRANSITIONS` (lihat tabel di atas; `APPROVED` deprecated tetap legacy). **RENCANA — belum ada di kode** saat catatan ini ditulis; tandai saat implementasi. Submission sumber **tetap menyimpan `eventId`** untuk audit (`EventSubmission.eventId`, `onDelete: SetNull`), bahkan setelah event diterbitkan.
 
 ### Scoping Baca & Tulis
 
@@ -378,18 +378,18 @@ Row-level scoping (`AccessScopeService.resolve(userId, 'event')`, per-resource; 
 | Scope (`kind`) | `canViewPrivate` | Baca | Tulis |
 | --- | --- | --- | --- |
 | `all` (status-manager: `<event>:approve\|publish\|reject\|unpublish`) | ya | Semua status + PRIVATE. | Bebas. |
-| `organization` | ya | Hanya `creator.organizationId === scope.organizationId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
+| `network` | ya | Hanya `creator.networkId === scope.networkId` (termasuk PRIVATE). | create diizinkan; update/remove/transition hanya konten org-nya. |
 | `own` | ya | Miliknya (`createdBy === scope.userId`) **atau** konten terbit (M5). | create diizinkan; update/remove/transition hanya konten miliknya. |
 | `published` (punya tulis/status event) | ya | Hanya **sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now` (PRIVATE boleh). Scheduled future belum terlihat. | **403**. |
 | `published` (tanpa tulis) | tidak | Sama di atas **dan** `visibility = PUBLIC`. | **403**. |
 | `none` | tidak | **List kosong**; `findOne` **403**. | **403**. |
 
-- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `organizationId` — **bukan** nama/`role.code` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)). `all` = salah satu `event:approve/publish/reject/unpublish`; `organization` = `organizationId` + `event:create/update/submit`; `own` = tulis event tanpa `organizationId`. **`story:*` tidak memberi scope event** (M2).
-- `canViewPrivate` = punya permission **tulis** (`event:create/update/submit`) atau **status** (`event:approve/publish/reject/unpublish`) pada event/story — **bukan** sekadar `*:read` (H1). `admin`/`organization`/`member` lama punya tulis konten → tetap boleh baca PRIVATE.
-- **List** (`GET /events`): `organization` → `{ creator: { organizationId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
-- **Detail**: row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `organization` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
-- **Tulis**: `organization`/`own` bukan pemilik → **403** `ForbiddenException('Forbidden resource')`; `none`/`published` → **403**.
-- **Bypass ditutup**: scope `!= all` → create paksa `DRAFT` (buang `publishedAt`); update/transition mengabaikan `status`/`publishedAt` — **kecuali** `status: DRAFT` pada event miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `organization` boleh mengubahnya.
+- Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `networkId` — **bukan** nama/`role.code` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)). `all` = salah satu `event:approve/publish/reject/unpublish`; `network` = `networkId` + `event:create/update/submit`; `own` = tulis event tanpa `networkId`. **`story:*` tidak memberi scope event** (M2).
+- `canViewPrivate` = punya permission **tulis** (`event:create/update/submit`) atau **status** (`event:approve/publish/reject/unpublish`) pada event/story — **bukan** sekadar `*:read` (H1). `admin`/`member`/`author` punya tulis konten → tetap boleh baca PRIVATE.
+- **List** (`GET /events`): `network` → `{ creator: { networkId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
+- **Detail**: row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `network` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
+- **Tulis**: `network`/`own` bukan pemilik → **403** `ForbiddenException('Forbidden resource')`; `none`/`published` → **403**. **Pengecualian:** `EventService.remove(id, userId, { skipScopeCheck: true })` — dipakai purge cascade hapus user (`DELETE /users/:id?cascadeContent=true`; sudah otorisasi `user:delete` + `admin:access`) — melewati `assertWritable` **hanya** agar purge tidak berhenti separuh jalan. Tanpa opsi, perilaku `remove` identik seperti di atas.
+- **Bypass ditutup**: scope `!= all` → create paksa `DRAFT` (buang `publishedAt`); update/transition mengabaikan `status`/`publishedAt` — **kecuali** `status: DRAFT` pada event miliknya yang `PUBLISHED` (tarik ke `DRAFT`, `publishedAt`/`approvedAt` dipertahankan; nilai `status` lain & `publishedAt` tetap diabaikan). Field `visibility` **bukan** admin-only: scope `all` & `network` boleh mengubahnya.
 
 ```json
 { "statusCode": 403, "message": "Forbidden resource", "errors": [] }

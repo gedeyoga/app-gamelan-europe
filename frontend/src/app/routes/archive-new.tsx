@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +11,9 @@ import {
   toastError,
   toastSuccess,
 } from '@/lib/toast'
+import { useAuth } from '@/features/auth/auth-provider'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
+import { useUsers } from '@/features/user/hooks/use-users'
 import { ArchiveForm } from '@/features/archive/components/archive-form'
 import type { ArchiveFormValues } from '@/features/archive/lib/schema'
 import { useCategories } from '@/features/archive/hooks/use-categories'
@@ -27,31 +30,40 @@ import type {
   UpdateArchiveInput,
 } from '@/features/archive/types'
 
-const INITIAL_VALUES: ArchiveFormValues = {
-  name: '',
-  description: '',
-  thumbnail: '',
-  type: 'PUBLIC',
-  status: 'DRAFT',
-  publishedAt: '',
-  categoryIds: [],
-  externalLinks: [],
-}
-
 export function ArchiveNewPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { can } = useAuthPermissions()
+  const { user } = useAuth()
 
   const canCreate = can('archive:create')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canManageAuthors = can('user:create') && can('user:read')
+  const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishArchive = can('archive:publish')
   const canSubmitArchive = can('archive:submit')
   const canApproveArchive = can('archive:approve')
   const canRejectArchive = can('archive:reject')
 
+  // Default author = current user saat create. Edit tetap seed dari record.
+  const initialValues = useMemo<ArchiveFormValues>(
+    () => ({
+      name: '',
+      description: '',
+      thumbnail: '',
+      type: 'PUBLIC',
+      status: 'DRAFT',
+      publishedAt: '',
+      categoryIds: [],
+      authorIds: user ? [user.id] : [],
+      externalLinks: [],
+    }),
+    [user],
+  )
+
   const categoriesQuery = useCategories(canReadCategories)
+  const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const createArchive = useCreateArchive()
   const submitArchive = useSubmitArchive()
   const createCategory = useCreateCategory()
@@ -109,6 +121,12 @@ export function ArchiveNewPage() {
     navigate('/archives')
   }
 
+  const authorsOptions = (usersQuery.data?.items ?? []).map((user) => ({
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+  }))
+
   if (!canCreate) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
@@ -126,7 +144,7 @@ export function ArchiveNewPage() {
     <div className="flex flex-1 flex-col">
       <ArchiveForm
         mode="create"
-        initialValues={INITIAL_VALUES}
+        initialValues={initialValues}
         isPending={createArchive.isPending || submitArchive.isPending}
         submissionError={createArchive.error}
         onSubmit={handleSubmit}
@@ -140,6 +158,10 @@ export function ArchiveNewPage() {
         canApproveArchive={canApproveArchive}
         canRejectArchive={canRejectArchive}
         onCreateCategory={handleCreateCategory}
+        authors={authorsOptions}
+        isLoadingUsers={usersQuery.isPending}
+        canManageAuthors={canManageAuthors}
+        canDeleteAuthors={canDeleteAuthors}
         onUploadImage={uploadImage.mutateAsync}
         onUploadDocument={uploadDocument.mutateAsync}
         onUploadError={handleUploadError}

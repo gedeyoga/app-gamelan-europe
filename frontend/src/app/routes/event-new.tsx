@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +11,9 @@ import {
   toastError,
   toastSuccess,
 } from '@/lib/toast'
+import { useAuth } from '@/features/auth/auth-provider'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
+import { useUsers } from '@/features/user/hooks/use-users'
 import { EventForm } from '@/features/event/components/event-form'
 import { type EventFormValues, EMPTY_EVENT_VALUES } from '@/features/event/lib/schema'
 import { useCreateEvent } from '@/features/event/hooks/use-create-event'
@@ -20,25 +23,35 @@ import { useSubmitEvent } from '@/features/event/hooks/use-submit-event'
 import { useUploadImage } from '@/features/event/hooks/use-upload-image'
 import type { CreateEventInput, Event, EventType } from '@/features/event/types'
 
-const INITIAL_VALUES: EventFormValues = {
-  ...EMPTY_EVENT_VALUES,
-  location: { ...EMPTY_EVENT_VALUES.location },
-}
-
 export function EventNewPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { can } = useAuthPermissions()
+  const { user } = useAuth()
 
   const canCreate = can('event:create')
   const canReadEventTypes = can('event-type:read')
   const canCreateEventType = can('event-type:create')
+  const canManageAuthors = can('user:create') && can('user:read')
+  const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishEvent = can('event:publish')
   const canSubmitEvent = can('event:submit')
   const canApproveEvent = can('event:approve')
   const canRejectEvent = can('event:reject')
 
+  // Default author = current user bila tersedia; fallback `[]` (mis. storage korup
+  // sehingga `user` null walau status authenticated). `useMemo` agar identitas stabil untuk form.
+  const initialValues = useMemo<EventFormValues>(
+    () => ({
+      ...EMPTY_EVENT_VALUES,
+      location: { ...EMPTY_EVENT_VALUES.location },
+      authorIds: user ? [user.id] : [],
+    }),
+    [user],
+  )
+
   const eventTypesQuery = useEventTypes(canReadEventTypes)
+  const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const createEvent = useCreateEvent()
   const submitEvent = useSubmitEvent()
   const createEventType = useCreateEventType()
@@ -86,6 +99,12 @@ export function EventNewPage() {
     navigate('/events')
   }
 
+  const authorsOptions = (usersQuery.data?.items ?? []).map((user) => ({
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+  }))
+
   if (!canCreate) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
@@ -103,7 +122,7 @@ export function EventNewPage() {
     <div className="flex flex-1 flex-col lg:min-h-0">
       <EventForm
         mode="create"
-        initialValues={INITIAL_VALUES}
+        initialValues={initialValues}
         isPending={createEvent.isPending || submitEvent.isPending}
         submissionError={createEvent.error}
         onSubmit={handleSubmit}
@@ -117,6 +136,10 @@ export function EventNewPage() {
         canApproveEvent={canApproveEvent}
         canRejectEvent={canRejectEvent}
         onCreateEventType={handleCreateEventType}
+        authors={authorsOptions}
+        isLoadingUsers={usersQuery.isPending}
+        canManageAuthors={canManageAuthors}
+        canDeleteAuthors={canDeleteAuthors}
         onUploadImage={uploadImage.mutateAsync}
         onUploadError={handleUploadError}
       />

@@ -1,5 +1,5 @@
-import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Length, MaxLength, Min } from 'class-validator';
 
 export class UpdateProfileDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -22,4 +22,17 @@ export class UpdateProfileDto {
   @IsString()
   @Length(2, 2)
   countryId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  stateId?: number;
+
+  // Hanya `null` / string kosong (→ null) untuk hapus avatar. Set avatar via POST /auth/me/avatar.
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() === '' ? null : value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  avatar?: string | null;
 }

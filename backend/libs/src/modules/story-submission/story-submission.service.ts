@@ -3,6 +3,8 @@ import { CategoryType, Prisma, StorySubmissionStatus } from '@prisma/client';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
 import { CategoryRepository } from '@app/libs/modules/category/category.repository';
+import { CountryRepository } from '@app/libs/modules/country/country.repository';
+import { StateRepository } from '@app/libs/modules/state/state.repository';
 import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { ImageService, ImageResponse } from '@app/libs/modules/image/image.service';
 import { StorySubmissionRepository, CreateStorySubmissionData } from './story-submission.repository';
@@ -29,6 +31,8 @@ export class StorySubmissionService {
   constructor(
     private readonly storySubmissionRepository: StorySubmissionRepository,
     private readonly categoryRepository: CategoryRepository,
+    private readonly countryRepository: CountryRepository,
+    private readonly stateRepository: StateRepository,
     private readonly imageRepository: ImageRepository,
     private readonly imageService: ImageService,
   ) {}
@@ -38,6 +42,25 @@ export class StorySubmissionService {
       message: 'Validation failed',
       errors: [{ field, message }],
     });
+  }
+
+  // Relasi geo section `submitter` — 422 per-field (mirror event-submission author).
+  private async requireCountry(countryId: number, field: string): Promise<void> {
+    const country = await this.countryRepository.findByIdOrNull(countryId);
+    if (!country) throw this.validationError(field, `${field} does not exist`);
+  }
+
+  private async requireStateInCountry(
+    stateId: number | undefined,
+    countryId: number,
+    stateField: string,
+    countryField: string,
+  ): Promise<void> {
+    if (stateId === undefined) return;
+    const state = await this.stateRepository.findByIdOrNull(stateId);
+    if (!state || state.countryId !== countryId) {
+      throw this.validationError(stateField, `${stateField} must belong to ${countryField}`);
+    }
   }
 
   private categoryRefs(ids: string[], byId: Map<string, { id: string; name: string }>): SubmissionCategoryRef[] {
@@ -147,6 +170,15 @@ export class StorySubmissionService {
   }
 
   async create(dto: CreateStorySubmissionDto): Promise<{ id: string; status: StorySubmissionStatus }> {
+    // Section `submitter` (data pengirim) — geo wajib valid (422 per-field).
+    await this.requireCountry(dto.submitter.countryId, 'submitter.countryId');
+    await this.requireStateInCountry(
+      dto.submitter.stateId,
+      dto.submitter.countryId,
+      'submitter.stateId',
+      'submitter.countryId',
+    );
+
     // Setiap kategori wajib ada & bertipe STORY.
     if (dto.categoryIds && dto.categoryIds.length > 0) {
       const categories = await this.categoryRepository.findByIds(dto.categoryIds);
@@ -189,6 +221,10 @@ export class StorySubmissionService {
       galleryImageIds: dto.galleryImageIds ?? [],
       flyerImageIds: dto.flyerImageIds ?? [],
       thumbnail,
+      submitterFullName: dto.submitter.fullName,
+      submitterEmail: dto.submitter.email,
+      submitterCountryId: dto.submitter.countryId,
+      submitterStateId: dto.submitter.stateId ?? null,
     };
     const created = await this.storySubmissionRepository.create(data, DUPLICATE_WINDOW_MS);
     // Respons publik hanya { id, status } — tanpa echo row/PII (§8 poin 11).

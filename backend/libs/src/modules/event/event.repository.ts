@@ -26,10 +26,11 @@ export interface CreateEventData {
   publishedAt?: Date;
   approvedAt?: Date;
   createdBy?: string;
-  organizationId?: string;
+  networkId?: string;
   eventTypeIds?: string[];
   dates?: EventDateData[];
   location: EventLocationData;
+  authorIds?: string[];
 }
 
 export interface UpdateEventData {
@@ -41,10 +42,11 @@ export interface UpdateEventData {
   visibility?: ContentVisibility;
   publishedAt?: Date;
   approvedAt?: Date;
-  organizationId?: string | null;
+  networkId?: string | null;
   eventTypeIds?: string[];
   dates?: EventDateData[];
   location?: EventLocationData;
+  authorIds?: string[];
 }
 
 @Injectable()
@@ -71,6 +73,20 @@ export class EventRepository {
     if (eventTypeIds.length > 0) {
       await tx.assignEventType.createMany({
         data: eventTypeIds.map((eventTypeId) => ({ eventId, eventTypeId })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  private async setAuthors(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+    authorIds: string[],
+  ): Promise<void> {
+    await tx.eventAuthor.deleteMany({ where: { eventId } });
+    if (authorIds.length > 0) {
+      await tx.eventAuthor.createMany({
+        data: authorIds.map((authorId) => ({ eventId, authorId })),
         skipDuplicates: true,
       });
     }
@@ -107,6 +123,15 @@ export class EventRepository {
     return Boolean(found);
   }
 
+  // Id-only (tanpa hydrate) untuk purge cascade hapus user; cleanup diurus `EventService.remove` per id.
+  async findIdsByAuthorId(authorId: string): Promise<string[]> {
+    const rows = await this.prisma.event.findMany({
+      where: { authors: { some: { authorId } } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   async findMany(params: {
     where: Prisma.EventWhereInput;
     skip: number;
@@ -132,12 +157,13 @@ export class EventRepository {
         publishedAt: data.publishedAt,
         approvedAt: data.approvedAt,
         createdBy: data.createdBy,
-        organizationId: data.organizationId,
+        networkId: data.networkId,
       },
       select: { id: true },
     });
     if (data.eventTypeIds !== undefined) await this.setEventTypes(tx, event.id, data.eventTypeIds);
     if (data.dates !== undefined) await this.setDates(tx, event.id, data.dates);
+    if (data.authorIds !== undefined) await this.setAuthors(tx, event.id, data.authorIds);
     await this.setLocation(tx, event.id, data.location);
     return mapEvent(await tx.event.findUniqueOrThrow({ where: { id: event.id }, select: eventSelect }));
   }
@@ -188,12 +214,13 @@ export class EventRepository {
         if (data.visibility !== undefined) update.visibility = data.visibility;
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
-        if (data.organizationId !== undefined) update.organization = data.organizationId ? { connect: { id: data.organizationId } } : { disconnect: true };
+        if (data.networkId !== undefined) update.network = data.networkId ? { connect: { id: data.networkId } } : { disconnect: true };
         if (Object.keys(update).length > 0) {
           await tx.event.update({ where: { id }, data: update });
         }
         if (data.eventTypeIds !== undefined) await this.setEventTypes(tx, id, data.eventTypeIds);
         if (data.dates !== undefined) await this.setDates(tx, id, data.dates);
+        if (data.authorIds !== undefined) await this.setAuthors(tx, id, data.authorIds);
         if (data.location !== undefined) await this.setLocation(tx, id, data.location);
         return mapEvent(await tx.event.findUniqueOrThrow({ where: { id }, select: eventSelect }));
       });

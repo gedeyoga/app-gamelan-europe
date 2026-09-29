@@ -14,6 +14,7 @@ export interface CreatePostData {
   approvedAt?: Date;
   createdBy?: string;
   categoryIds?: string[];
+  authorIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
   flyerImageIds?: string[];
@@ -29,6 +30,7 @@ export interface UpdatePostData {
   publishedAt?: Date;
   approvedAt?: Date;
   categoryIds?: string[];
+  authorIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
   flyerImageIds?: string[];
@@ -59,6 +61,20 @@ export class PostRepository {
     if (categoryIds.length > 0) {
       await tx.postCategory.createMany({
         data: categoryIds.map((categoryId) => ({ postId, categoryId })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  private async setAuthors(
+    tx: Prisma.TransactionClient,
+    postId: string,
+    authorIds: string[],
+  ): Promise<void> {
+    await tx.postAuthor.deleteMany({ where: { postId } });
+    if (authorIds.length > 0) {
+      await tx.postAuthor.createMany({
+        data: authorIds.map((authorId) => ({ postId, authorId })),
         skipDuplicates: true,
       });
     }
@@ -105,6 +121,15 @@ export class PostRepository {
     return Boolean(found);
   }
 
+  // Id-only (tanpa hydrate) untuk purge cascade hapus user; cleanup gambar diurus `PostService.remove` per id.
+  async findIdsByAuthorId(authorId: string): Promise<string[]> {
+    const rows = await this.prisma.post.findMany({
+      where: { authors: { some: { authorId } } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   async findMany(params: {
     where: Prisma.PostWhereInput;
     skip: number;
@@ -136,6 +161,7 @@ export class PostRepository {
       select: { id: true },
     });
     if (data.categoryIds !== undefined) await this.setCategories(tx, post.id, data.categoryIds);
+    if (data.authorIds !== undefined) await this.setAuthors(tx, post.id, data.authorIds);
     if (
       data.imageIds !== undefined ||
       data.galleryImageIds !== undefined ||
@@ -200,6 +226,7 @@ export class PostRepository {
           await tx.post.update({ where: { id }, data: update });
         }
         if (data.categoryIds !== undefined) await this.setCategories(tx, id, data.categoryIds);
+        if (data.authorIds !== undefined) await this.setAuthors(tx, id, data.authorIds);
         if (
           data.imageIds !== undefined ||
           data.galleryImageIds !== undefined ||

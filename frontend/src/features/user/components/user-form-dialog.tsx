@@ -31,12 +31,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
+import { useCountries } from '@/features/geo/hooks/use-countries'
+import { useStates } from '@/features/geo/hooks/use-states'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { ApiError, isValidationError } from '@/lib/api-client'
 
 import type { CreateUserInput, RoleOption, UpdateUserInput, User, UserStatus } from '../types'
 
 const STATUS_VALUES: UserStatus[] = ['ACTIVE', 'INACTIVE', 'BLOCKED']
+
+/**
+ * Password acak untuk mode author (tidak pernah ditampilkan di UI).
+ * Ceiling: 32 hex char dari `crypto.randomUUID()` — cukup untuk lolos min 8.
+ * Konsekuensi: akun author buatan admin tidak bisa login sampai passwordnya direset.
+ */
+function generatePassword(): string {
+  return crypto.randomUUID().replaceAll('-', '')
+}
 
 export type UserFormMode = 'create' | 'edit'
 
@@ -52,6 +64,16 @@ export interface UserFormDialogProps {
    * Default `true`.
    */
   canAssignRole?: boolean
+  /** Override judul dialog (mis. mode author). Default: judul create/edit. */
+  title?: string
+  /** Override deskripsi dialog. Default: deskripsi create/edit. */
+  description?: string
+  /** Sembunyikan input password + generate password acak saat create. */
+  hidePassword?: boolean
+  /** Nilai awal role saat create. Default `''`. */
+  defaultRoleId?: string
+  /** Kunci select role (tampil tapi disabled). */
+  lockRole?: boolean
   onCreate: (payload: CreateUserInput, roleId: string) => void
   onUpdate: (payload: UpdateUserInput, roleId: string) => void
   onOpenChange: (open: boolean) => void
@@ -64,6 +86,11 @@ export function UserFormDialog({
   isSubmitting,
   submissionError,
   canAssignRole = true,
+  title,
+  description,
+  hidePassword = false,
+  defaultRoleId = '',
+  lockRole = false,
   onCreate,
   onUpdate,
   onOpenChange,
@@ -92,6 +119,8 @@ export function UserFormDialog({
         roleId: z
           .union([z.string().trim().uuid(t('validation:roleInvalid')), z.literal('')])
           .optional(),
+        countryId: z.string().trim().optional(),
+        stateId: z.string().trim().optional(),
       }),
       updateSchema: z.object({
         fullName: z
@@ -115,6 +144,8 @@ export function UserFormDialog({
         roleId: z
           .union([z.string().trim().uuid(t('validation:roleInvalid')), z.literal('')])
           .optional(),
+        countryId: z.string().trim().optional(),
+        stateId: z.string().trim().optional(),
       }),
     }),
     [t],
@@ -127,6 +158,11 @@ export function UserFormDialog({
   type UserFormValues = CreateUserFormValues & UpdateUserFormValues
 
   const schema = mode === 'edit' ? updateSchema : createSchema
+
+  // Password acak stabil per mount — `AuthorCreateDialog` mount dialog baru tiap dibuka.
+  // Lazy: hanya dibuat di mode author supaya `crypto.randomUUID()` tidak jalan di create/edit biasa
+  // (bisa throw di konteks non-secure).
+  const generatedPassword = useMemo(() => (hidePassword ? generatePassword() : ''), [hidePassword])
 
   const statusOptions = useMemo(
     () =>
@@ -145,10 +181,53 @@ export function UserFormDialog({
           password: '',
           status: user.status,
           roleId: user.roleId ?? '',
+          countryId: user.countryId ?? '',
+          stateId: user.stateId != null ? String(user.stateId) : '',
         }
-      : { fullName: '', email: '', password: '', status: 'ACTIVE', roleId: '' }
+      : {
+          fullName: '',
+          email: '',
+          password: hidePassword ? generatedPassword : '',
+          status: 'ACTIVE',
+          roleId: defaultRoleId,
+          countryId: '',
+          stateId: '',
+        }
 
   const form = useForm<UserFormValues>({ resolver: zodResolver(schema), defaultValues })
+
+  // Role default datang async (roles query) — isi begitu tersedia, jangan timpa pilihan manual admin.
+  useEffect(() => {
+    if (mode !== 'create' || !defaultRoleId) return
+    if (form.getValues('roleId')) return
+    form.setValue('roleId', defaultRoleId)
+  }, [defaultRoleId, mode, form])
+
+  const countryValue = form.watch('countryId') ?? ''
+
+  const countriesQuery = useCountries()
+  const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
+
+  const countryOptions = useMemo<SearchSelectOption[]>(
+    () => countries.map((country) => ({ value: country.iso2, label: country.name })),
+    [countries],
+  )
+
+  // countryId form sudah berisi iso2, langsung dipakai sebagai filter states.
+  const statesQuery = useStates(countryValue)
+  const states = useMemo(() => statesQuery.data ?? [], [statesQuery.data])
+
+  const stateOptions = useMemo<SearchSelectOption[]>(
+    () => states.map((state) => ({ value: String(state.id), label: state.name })),
+    [states],
+  )
+
+  // Ganti country -> reset state (state tidak berlaku lintas negara).
+  function handleCountryChange(next: string, onChange: (value: string) => void) {
+    if (next === form.getValues('countryId')) return
+    onChange(next)
+    form.setValue('stateId', '', { shouldDirty: true, shouldValidate: true })
+  }
 
   // 422 -> tampil per-field via setError; tanpa toast, tanpa banner list.
   useEffect(() => {
@@ -166,11 +245,16 @@ export function UserFormDialog({
       : null
 
   function handleSubmit(values: UserFormValues) {
+    // Field geo kosong dikirim `null` eksplisit (backend map null -> clear).
+    const countryId = values.countryId ? values.countryId : null
+    const stateId = values.stateId ? Number(values.stateId) : null
     if (mode === 'edit') {
       const payload: UpdateUserInput = {
         fullName: values.fullName,
         email: values.email,
         status: values.status,
+        countryId,
+        stateId,
         ...(values.password ? { password: values.password } : {}),
       }
       onUpdate(payload, values.roleId ?? '')
@@ -182,6 +266,8 @@ export function UserFormDialog({
         email: values.email,
         password: values.password,
         status: values.status,
+        countryId,
+        stateId,
       },
       values.roleId ?? '',
     )
@@ -191,14 +277,25 @@ export function UserFormDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === 'edit' ? t('user:form.editTitle') : t('user:form.createTitle')}</DialogTitle>
+          <DialogTitle>
+            {title ?? (mode === 'edit' ? t('user:form.editTitle') : t('user:form.createTitle'))}
+          </DialogTitle>
           <DialogDescription>
-            {mode === 'edit' ? t('user:form.editDescription') : t('user:form.createDescription')}
+            {description ??
+              (mode === 'edit' ? t('user:form.editDescription') : t('user:form.createDescription'))}
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={(event) => {
+              // Dialog ini diportal, tapi event React tetap bubble lewat React tree ke <form> induk
+              // (story/event/archive) → hentikan di sini agar form konten tidak ikut tersubmit.
+              event.stopPropagation()
+              void form.handleSubmit(handleSubmit)(event)
+            }}
+            className="space-y-4"
+          >
             {globalMessage && (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {globalMessage}
@@ -233,23 +330,77 @@ export function UserFormDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('user:form.password')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder={mode === 'edit' ? t('user:form.passwordEditPlaceholder') : undefined}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {hidePassword ? (
+              <p className="text-xs text-muted-foreground">{t('user:form.passwordAutoGenerated')}</p>
+            ) : (
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('user:form.password')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder={mode === 'edit' ? t('user:form.passwordEditPlaceholder') : undefined}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="countryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('user:form.country')}</FormLabel>
+                    <FormControl>
+                      <SearchSelect
+                        options={countryOptions}
+                        value={field.value ?? ''}
+                        onChange={(value) => handleCountryChange(value, field.onChange)}
+                        placeholder={t('user:form.countryPlaceholder')}
+                        searchPlaceholder={t('user:form.countrySearch')}
+                        emptyLabel={t('user:form.countryEmpty')}
+                        isLoading={countriesQuery.isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="stateId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('user:form.state')}</FormLabel>
+                    <FormControl>
+                      <SearchSelect
+                        options={stateOptions}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        placeholder={
+                          countryValue
+                            ? t('user:form.statePlaceholder')
+                            : t('user:form.stateSelectCountry')
+                        }
+                        searchPlaceholder={t('user:form.stateSearch')}
+                        emptyLabel={t('user:form.stateEmpty')}
+                        disabled={!countryValue || statesQuery.isLoading}
+                        isLoading={statesQuery.isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -260,7 +411,7 @@ export function UserFormDialog({
                   <Select
                     value={field.value || 'none'}
                     onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
-                    disabled={!canAssignRole}
+                    disabled={!canAssignRole || lockRole}
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">

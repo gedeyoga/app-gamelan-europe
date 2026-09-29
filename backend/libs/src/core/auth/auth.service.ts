@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes, randomUUID } from 'crypto';
@@ -7,6 +13,7 @@ import { CacheService } from '@app/libs/core/redis/cache.service';
 import { UserService } from '@app/libs/modules/user/user.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { PermissionService } from '@app/libs/modules/permission/permission.service';
+import { ImageService } from '@app/libs/modules/image/image.service';
 import { RegisterUserDto } from '@app/libs/modules/user/dto/register-user.dto';
 import { LoginDto } from '@app/libs/modules/user/dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -16,6 +23,8 @@ import { parseDurationToSeconds, sha256 } from './helpers/auth.util';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
 import { UserEntity } from '@app/libs/modules/user/entities/user.entity';
 import { RefreshTokenRepository } from './refresh-token.repository';
+
+const AVATAR_ENTITY_TYPE = 'user';
 
 export interface AuthUserEntity {
   accessToken: string;
@@ -33,6 +42,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly cache: CacheService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
+    private readonly imageService: ImageService,
   ) {}
 
   register(dto: RegisterUserDto) {
@@ -107,16 +117,25 @@ export class AuthService {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      avatar: user.avatar,
       status: user.status,
       role: user.role,
       countryId: user.countryId,
       country: user.country,
+      stateId: user.stateId,
+      state: user.state,
       permissions,
     };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    if (dto.fullName === undefined && dto.email === undefined && dto.countryId === undefined) {
+    if (
+      dto.fullName === undefined &&
+      dto.email === undefined &&
+      dto.countryId === undefined &&
+      dto.stateId === undefined &&
+      dto.avatar === undefined
+    ) {
       throw new BadRequestException('At least one field must be provided');
     }
     if (dto.email !== undefined && dto.email !== '') {
@@ -125,11 +144,40 @@ export class AuthService {
         throw new ConflictException('Email already in use');
       }
     }
-    const data: { fullName?: string; email?: string; countryId?: string } = {};
+    await this.userService.assertStateCountryOnUpdate(userId, dto);
+    // Avatar hanya bisa di-clear di sini; set/upload lewat POST /auth/me/avatar.
+    if (typeof dto.avatar === 'string') {
+      throw new UnprocessableEntityException({
+        message: 'Validation failed',
+        errors: [{ field: 'avatar', message: 'use POST /auth/me/avatar to set an avatar' }],
+      });
+    }
+    const data: {
+      fullName?: string;
+      email?: string;
+      countryId?: string;
+      stateId?: number;
+      avatar?: string | null;
+    } = {};
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.countryId !== undefined) data.countryId = dto.countryId;
+    if (dto.stateId !== undefined) data.stateId = dto.stateId;
+    if (dto.avatar === null) {
+      await this.imageService.removeByEntity(AVATAR_ENTITY_TYPE, userId);
+      data.avatar = null;
+    }
     await this.userRepository.update(userId, data);
+    return this.me(userId);
+  }
+
+  // Self-service avatar: upload → bind ownership → pindahkan User.avatar. Row lama dihapus
+  // setelah upload sukses (row baru masih unbound, jadi tidak ikut terhapus).
+  async updateAvatar(userId: string, file: Express.Multer.File | undefined) {
+    const image = await this.imageService.upload(file, AVATAR_ENTITY_TYPE, userId);
+    await this.imageService.removeByEntity(AVATAR_ENTITY_TYPE, userId);
+    await this.imageService.bindToOwner(image.id, AVATAR_ENTITY_TYPE, userId, userId);
+    await this.userRepository.update(userId, { avatar: image.url });
     return this.me(userId);
   }
 

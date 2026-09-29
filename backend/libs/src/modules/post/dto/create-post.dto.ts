@@ -49,6 +49,12 @@ export class CreatePostDto {
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(100)
+  authorIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
   imageIds?: string[];
 
   // Urutan galeri = urutan array ini. Diganti seluruhnya bila dikirim saat update.

@@ -45,6 +45,20 @@ export class ImageRepository {
     });
   }
 
+  // Bind baris unbound ke entity, hanya bila uploader (`createdBy`) = pemilik. Return jumlah row ter-update.
+  async bindOwnedById(
+    id: string,
+    entityType: string,
+    entityId: string,
+    createdBy: string,
+  ): Promise<number> {
+    const result = await this.prisma.image.updateMany({
+      where: { id, entityType, entityId: null, createdBy },
+      data: { entityId },
+    });
+    return result.count;
+  }
+
   // Hanya id gambar yang boleh di-bind: entityType cocok & belum terikat ATAU sudah milik entity ini.
   async filterBindableIds(ids: string[], entityType: string, entityId: string | null): Promise<string[]> {
     if (ids.length === 0) return [];

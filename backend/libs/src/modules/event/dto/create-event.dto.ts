@@ -102,6 +102,12 @@ export class CreateEventDto {
   @ArrayMaxSize(50)
   eventTypeIds?: string[];
 
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  authorIds?: string[];
+
   // Array kosong valid → clear/replace-all relasi event_dates.
   @IsOptional()
   @IsArray()
@@ -116,8 +122,8 @@ export class CreateEventDto {
   @Type(() => EventLocationDto)
   location: EventLocationDto;
 
-  // Organisasi penyelenggara (opsional). Tidak ada → null; service cek existence → 422.
+  // Network penyelenggara (opsional). Tidak ada → null; service cek existence → 422.
   @IsOptional()
   @IsUUID('4')
-  organizationId?: string;
+  networkId?: string;
 }

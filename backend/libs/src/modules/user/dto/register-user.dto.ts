@@ -1,5 +1,5 @@
-import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength, Min, MinLength } from 'class-validator';
 
 // Blank/whitespace → undefined agar `@IsOptional` melewati validasi (semantik: absent).
 const trimOrUndefined = ({ value }: { value: unknown }) => {
@@ -38,13 +38,12 @@ export class RegisterUserDto {
   @Transform(trimOrUndefined)
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @Length(2, 2)
   countryId?: string;
 
-  @Transform(trimOrUndefined)
   @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(200)
-  organizationName?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  stateId?: number;
 }

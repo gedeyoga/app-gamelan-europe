@@ -68,6 +68,7 @@
     "categoryAdd": "Add \"{{name}}\"",
     "categoryCreating": "Adding...",
     "categoryEmpty": "No category found",
+    "authors": "Authors",
     "save": "Save",
     "saveChanges": "Save changes",
     "saveAsDraft": "Save as draft",

@@ -895,6 +895,7 @@ export class HealthController {
 | GET | `/api/v1/countries/:id` | Detail negara (referensi). |
 | GET | `/api/v1/states` | Data referensi state/provinsi untuk dropdown pra-login. |
 | GET | `/api/v1/states/:id` | Detail state (referensi). |
+| GET | `/api/v1/stats/summary` | Ringkasan publik (event published, user aktif, jumlah negara). |
 
 **LOGIN-only** (tanpa dekorator, lolos karena ada `request.user` dari `JwtAuthGuard`):
 
@@ -1005,7 +1006,7 @@ async function bootstrap(): Promise<void> {
 
 ## 23. Seeding RBAC (Upsert)
 
-Lokasi tunggal: `libs/prisma/seed.ts` — berisi `DEFAULT_PERMISSIONS` (array `{ code, description }`), `DEFAULT_ROLES` (array `{ name, description, permissions: string[] }`, saat ini `admin`/`organization`/`member` — lihat [rbac.md §7](./modules/rbac.md#7-seed-default)), dan user admin dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` (role `admin`, status `ACTIVE`).
+Lokasi tunggal: `libs/prisma/seed.ts` — berisi `DEFAULT_PERMISSIONS` (array `{ code, description }`), `DEFAULT_ROLES` (array `{ name, description, permissions: string[] }`, saat ini `admin`/`member`/`author` — lihat [rbac.md §7](./modules/rbac.md#7-seed-default)), dan user admin dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` (role `admin`, status `ACTIVE`).
 
 Aturan wajib:
 

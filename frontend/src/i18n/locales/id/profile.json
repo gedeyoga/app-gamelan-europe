@@ -6,6 +6,19 @@
     "fullName": "Nama lengkap",
     "email": "Email"
   },
+  "avatar": {
+    "label": "Foto profil"
+  },
+  "form": {
+    "thumbnail": "Foto profil"
+  },
+  "thumbnail": {
+    "upload": "Unggah foto",
+    "uploading": "Mengunggah...",
+    "remove": "Hapus",
+    "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
+    "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB."
+  },
   "editProfile": {
     "cancel": "Batal",
     "save": "Simpan"
@@ -25,6 +38,8 @@
     "profileUpdated": "Profil berhasil diperbarui.",
     "updateProfileFailed": "Gagal memperbarui profil.",
     "passwordChanged": "Password berhasil diubah. Silakan login ulang.",
-    "changePasswordFailed": "Gagal mengubah password."
+    "changePasswordFailed": "Gagal mengubah password.",
+    "avatarUpdated": "Foto profil berhasil diperbarui.",
+    "avatarUpdateFailed": "Gagal memperbarui foto profil."
   }
 }

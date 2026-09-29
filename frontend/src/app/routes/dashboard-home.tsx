@@ -22,7 +22,6 @@ import { DashboardApprovalColumn } from '@/features/dashboard/components/dashboa
 import { EventHighlightCard } from '@/components/shared/event-highlight-card'
 import { DashboardHero } from '@/features/dashboard/components/dashboard-hero'
 import { DashboardPendingArchives } from '@/features/dashboard/components/dashboard-pending-archives'
-import { DashboardPendingArchiveSubmissions } from '@/features/dashboard/components/dashboard-pending-archive-submissions'
 import { DashboardPendingStorySubmissions } from '@/features/dashboard/components/dashboard-pending-story-submissions'
 import { DashboardPendingStories } from '@/features/dashboard/components/dashboard-pending-stories'
 import { DashboardPendingEvents } from '@/features/dashboard/components/dashboard-pending-events'
@@ -35,7 +34,6 @@ import type {
   DashboardArchiveItem,
   DashboardEventItem,
   DashboardPendingArchiveItem,
-  DashboardPendingArchiveSubmissionItem,
   DashboardPendingEventItem,
   DashboardPendingStoryItem,
   DashboardPendingStorySubmissionItem,
@@ -54,9 +52,6 @@ import { formatEventDate } from '@/features/event/lib/format'
 import { useApproveEventSubmission } from '@/features/event-submission/hooks/use-approve-event-submission'
 import { useEventSubmissions } from '@/features/event-submission/hooks/use-event-submissions'
 import { useRejectEventSubmission } from '@/features/event-submission/hooks/use-reject-event-submission'
-import { useApproveArchiveSubmission } from '@/features/archive-submission/hooks/use-approve-archive-submission'
-import { useArchiveSubmissions } from '@/features/archive-submission/hooks/use-archive-submissions'
-import { useRejectArchiveSubmission } from '@/features/archive-submission/hooks/use-reject-archive-submission'
 import { useApproveStorySubmission } from '@/features/story-submission/hooks/use-approve-story-submission'
 import { useStorySubmissions } from '@/features/story-submission/hooks/use-story-submissions'
 import { useRejectStorySubmission } from '@/features/story-submission/hooks/use-reject-story-submission'
@@ -96,7 +91,6 @@ export function DashboardHomePage() {
   const canReadUsers = can('user:read')
   const canReadArchives = can('archive:read')
   const canReadSubmissions = can('event-submission:read')
-  const canReadArchiveSubmissions = can('archive-submission:read')
   const canReadStorySubmissions = can('story-submission:read')
   const [storiesPage, setStoriesPage] = useState(1)
   const [archivesPage, setArchivesPage] = useState(1)
@@ -105,7 +99,6 @@ export function DashboardHomePage() {
   const [pendingArchivesPage, setPendingArchivesPage] = useState(1)
   const [pendingStoriesPage, setPendingStoriesPage] = useState(1)
   const [pendingSubmissionsPage, setPendingSubmissionsPage] = useState(1)
-  const [pendingArchiveSubmissionsPage, setPendingArchiveSubmissionsPage] = useState(1)
   const [pendingStorySubmissionsPage, setPendingStorySubmissionsPage] = useState(1)
   // Cutoff = awal hari ini UTC (bukan `Date.now()`) agar event "hari ini" tetap upcoming.
   // ponytail: cutoff diambil sekali per mount; upgrade ke live clock bila dashboard
@@ -169,12 +162,6 @@ export function DashboardHomePage() {
     filter: { status: 'REQUEST' },
     enabled: canReadSubmissions,
   })
-  const pendingArchiveSubmissionsQuery = useArchiveSubmissions({
-    page: pendingArchiveSubmissionsPage,
-    limit: PENDING_LIMIT,
-    filter: { status: 'REQUEST' },
-    enabled: canReadArchiveSubmissions,
-  })
   const pendingStorySubmissionsQuery = useStorySubmissions({
     page: pendingStorySubmissionsPage,
     limit: PENDING_LIMIT,
@@ -193,8 +180,6 @@ export function DashboardHomePage() {
   const rejectStory = useRejectStory()
   const approveEventSubmission = useApproveEventSubmission()
   const rejectEventSubmission = useRejectEventSubmission()
-  const approveArchiveSubmission = useApproveArchiveSubmission()
-  const rejectArchiveSubmission = useRejectArchiveSubmission()
   const approveStorySubmission = useApproveStorySubmission()
   const rejectStorySubmission = useRejectStorySubmission()
   const [approveTargetId, setApproveTargetId] = useState<string | null>(null)
@@ -202,8 +187,6 @@ export function DashboardHomePage() {
   const [storyApproveTargetId, setStoryApproveTargetId] = useState<string | null>(null)
   const [approveSubmissionId, setApproveSubmissionId] = useState<string | null>(null)
   const [rejectSubmissionId, setRejectSubmissionId] = useState<string | null>(null)
-  const [approveArchiveSubmissionId, setApproveArchiveSubmissionId] = useState<string | null>(null)
-  const [rejectArchiveSubmissionId, setRejectArchiveSubmissionId] = useState<string | null>(null)
   const [approveStorySubmissionId, setApproveStorySubmissionId] = useState<string | null>(null)
   const [rejectStorySubmissionId, setRejectStorySubmissionId] = useState<string | null>(null)
 
@@ -229,12 +212,6 @@ export function DashboardHomePage() {
     ? approveEventSubmission.variables
     : rejectEventSubmission.isPending
       ? rejectEventSubmission.variables
-      : undefined
-
-  const archiveSubmissionBusyId = approveArchiveSubmission.isPending
-    ? approveArchiveSubmission.variables
-    : rejectArchiveSubmission.isPending
-      ? rejectArchiveSubmission.variables
       : undefined
 
   const storySubmissionBusyId = approveStorySubmission.isPending
@@ -318,7 +295,7 @@ export function DashboardHomePage() {
         id: event.id,
         name: event.name,
         thumbnail: event.thumbnail,
-        creatorName: event.creator?.organization?.name ?? event.creator?.fullName ?? null,
+        creatorName: event.creator?.network?.name ?? event.creator?.fullName ?? null,
         locationName: event.location?.name ?? null,
         dateLabel: event.dates[0] ? formatEventDate(event.dates[0]) : null,
       })),
@@ -364,20 +341,6 @@ export function DashboardHomePage() {
     [pendingSubmissionsQuery.data],
   )
 
-  const pendingArchiveSubmissions = useMemo<DashboardPendingArchiveSubmissionItem[]>(
-    () =>
-      (pendingArchiveSubmissionsQuery.data?.items ?? []).map((submission) => ({
-        id: submission.id,
-        name: submission.name,
-        thumbnail: submission.thumbnail ?? null,
-        description: submission.description ?? null,
-        externalLinks: submission.externalLinks,
-        attachmentCount: submission.attachmentCount,
-        dateLabel: formatDate(submission.createdAt),
-      })),
-    [pendingArchiveSubmissionsQuery.data],
-  )
-
   const pendingStorySubmissions = useMemo<DashboardPendingStorySubmissionItem[]>(
     () =>
       (pendingStorySubmissionsQuery.data?.items ?? []).map((submission) => ({
@@ -403,11 +366,6 @@ export function DashboardHomePage() {
   const pendingSubmissionsPages = Math.max(
     1,
     Math.ceil(pendingSubmissionsTotal / PENDING_LIMIT),
-  )
-  const pendingArchiveSubmissionsTotal = pendingArchiveSubmissionsQuery.data?.total ?? 0
-  const pendingArchiveSubmissionsPages = Math.max(
-    1,
-    Math.ceil(pendingArchiveSubmissionsTotal / PENDING_LIMIT),
   )
   const pendingStorySubmissionsTotal = pendingStorySubmissionsQuery.data?.total ?? 0
   const pendingStorySubmissionsPages = Math.max(
@@ -450,13 +408,6 @@ export function DashboardHomePage() {
       setPendingSubmissionsPage(pendingSubmissionsPages)
     }
   }, [pendingSubmissionsPage, pendingSubmissionsPages])
-
-  useEffect(() => {
-    if (pendingArchiveSubmissionsPage > pendingArchiveSubmissionsPages) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPendingArchiveSubmissionsPage(pendingArchiveSubmissionsPages)
-    }
-  }, [pendingArchiveSubmissionsPage, pendingArchiveSubmissionsPages])
 
   useEffect(() => {
     if (pendingStorySubmissionsPage > pendingStorySubmissionsPages) {
@@ -577,35 +528,6 @@ export function DashboardHomePage() {
       onError: (err: unknown) => {
         if (isValidationError(err)) return
         toastError(getApiErrorMessage(err, t('pendingSubmission.rejectFailed')))
-      },
-    })
-  }
-
-  function handleConfirmApproveArchiveSubmission() {
-    if (!approveArchiveSubmissionId) return
-    approveArchiveSubmission.mutate(approveArchiveSubmissionId, {
-      onSuccess: (res) => {
-        setApproveArchiveSubmissionId(null)
-        toastSuccess(t('pendingArchiveSubmission.approved'))
-        navigate(`/archives/${res.archive.id}/edit`)
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingArchiveSubmission.approveFailed')))
-      },
-    })
-  }
-
-  function handleConfirmRejectArchiveSubmission() {
-    if (!rejectArchiveSubmissionId) return
-    rejectArchiveSubmission.mutate(rejectArchiveSubmissionId, {
-      onSuccess: () => {
-        setRejectArchiveSubmissionId(null)
-        toastSuccess(t('pendingArchiveSubmission.rejected'))
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingArchiveSubmission.rejectFailed')))
       },
     })
   }
@@ -744,78 +666,38 @@ export function DashboardHomePage() {
         </DashboardSection>
       )}
 
-      {(isArchiveModerator || canReadArchiveSubmissions) && (
+      {isArchiveModerator && (
         <DashboardSection
           title={t('section.pendingArchives.title')}
           subtitle={t('section.pendingArchives.subtitle')}
         >
-          <div
-            className={cn(
-              'grid gap-4',
-              isArchiveModerator && canReadArchiveSubmissions && 'lg:grid-cols-2',
-            )}
-          >
-            {isArchiveModerator && (
-              <DashboardApprovalColumn title={t('column.member')}>
-                <DashboardPendingArchives
-                  items={pendingArchives}
-                  isPending={pendingArchivesQuery.isPending}
-                  isError={pendingArchivesQuery.isError}
-                  canApprove={can('archive:approve')}
-                  canReject={can('archive:reject')}
-                  isRefreshing={pendingArchivesQuery.isFetching}
-                  onViewDetail={(id) => navigate(`/archives/${id}`)}
-                  onApprove={setArchiveApproveTargetId}
-                  onReject={handleRejectArchive}
-                  busyId={archiveBusyId}
+          <DashboardApprovalColumn title={t('column.member')}>
+            <DashboardPendingArchives
+              items={pendingArchives}
+              isPending={pendingArchivesQuery.isPending}
+              isError={pendingArchivesQuery.isError}
+              canApprove={can('archive:approve')}
+              canReject={can('archive:reject')}
+              isRefreshing={pendingArchivesQuery.isFetching}
+              onViewDetail={(id) => navigate(`/archives/${id}`)}
+              onApprove={setArchiveApproveTargetId}
+              onReject={handleRejectArchive}
+              busyId={archiveBusyId}
+            />
+            {!pendingArchivesQuery.isError &&
+              !pendingArchivesQuery.isPending &&
+              pendingArchivesTotal > 0 && (
+                <DataTablePagination
+                  page={pendingArchivesPage}
+                  limit={PENDING_LIMIT}
+                  total={pendingArchivesTotal}
+                  entityName={t('column.member')}
+                  isPending={pendingArchivesQuery.isFetching}
+                  onPrev={() => setPendingArchivesPage((page) => Math.max(1, page - 1))}
+                  onNext={() => setPendingArchivesPage((page) => page + 1)}
                 />
-                {!pendingArchivesQuery.isError &&
-                  !pendingArchivesQuery.isPending &&
-                  pendingArchivesTotal > 0 && (
-                    <DataTablePagination
-                      page={pendingArchivesPage}
-                      limit={PENDING_LIMIT}
-                      total={pendingArchivesTotal}
-                      entityName={t('column.member')}
-                      isPending={pendingArchivesQuery.isFetching}
-                      onPrev={() => setPendingArchivesPage((page) => Math.max(1, page - 1))}
-                      onNext={() => setPendingArchivesPage((page) => page + 1)}
-                    />
-                  )}
-              </DashboardApprovalColumn>
-            )}
-
-            {canReadArchiveSubmissions && (
-              <DashboardApprovalColumn title={t('column.public')}>
-                <DashboardPendingArchiveSubmissions
-                  items={pendingArchiveSubmissions}
-                  isPending={pendingArchiveSubmissionsQuery.isPending}
-                  isError={pendingArchiveSubmissionsQuery.isError}
-                  canApprove={can('archive-submission:approve')}
-                  canReject={can('archive-submission:reject')}
-                  isRefreshing={pendingArchiveSubmissionsQuery.isFetching}
-                  onApprove={setApproveArchiveSubmissionId}
-                  onReject={setRejectArchiveSubmissionId}
-                  busyId={archiveSubmissionBusyId}
-                />
-                {!pendingArchiveSubmissionsQuery.isError &&
-                  !pendingArchiveSubmissionsQuery.isPending &&
-                  pendingArchiveSubmissionsTotal > 0 && (
-                    <DataTablePagination
-                      page={pendingArchiveSubmissionsPage}
-                      limit={PENDING_LIMIT}
-                      total={pendingArchiveSubmissionsTotal}
-                      entityName={t('column.public')}
-                      isPending={pendingArchiveSubmissionsQuery.isFetching}
-                      onPrev={() =>
-                        setPendingArchiveSubmissionsPage((page) => Math.max(1, page - 1))
-                      }
-                      onNext={() => setPendingArchiveSubmissionsPage((page) => page + 1)}
-                    />
-                  )}
-              </DashboardApprovalColumn>
-            )}
-          </div>
+              )}
+          </DashboardApprovalColumn>
         </DashboardSection>
       )}
 
@@ -1121,75 +1003,6 @@ export function DashboardHomePage() {
                 onClick={handleConfirmRejectSubmission}
               >
                 {t('pendingSubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={approveArchiveSubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setApproveArchiveSubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('pendingArchiveSubmission.confirmApproveTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingArchiveSubmission.confirmApproveDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={approveArchiveSubmission.isPending}>
-                {t('pendingArchiveSubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                disabled={approveArchiveSubmission.isPending}
-                onClick={handleConfirmApproveArchiveSubmission}
-              >
-                {t('pendingArchiveSubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={rejectArchiveSubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setRejectArchiveSubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('pendingArchiveSubmission.confirmRejectTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingArchiveSubmission.confirmRejectDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={rejectArchiveSubmission.isPending}>
-                {t('pendingArchiveSubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={rejectArchiveSubmission.isPending}
-                onClick={handleConfirmRejectArchiveSubmission}
-              >
-                {t('pendingArchiveSubmission.confirmSubmit')}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

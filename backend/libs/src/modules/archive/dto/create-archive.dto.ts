@@ -49,6 +49,12 @@ export class CreateArchiveDto {
   @IsUUID('4', { each: true })
   categoryIds?: string[];
 
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  authorIds?: string[];
+
   // Urutan link = urutan array. Diganti seluruhnya bila dikirim saat update.
   @IsOptional()
   @IsArray()

@@ -7,7 +7,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -17,11 +17,13 @@ import {
   CreateEventSubmissionDto,
   CurrentUser,
   EventSubmissionService,
+  ImageResponse,
   ImageService,
   ListEventSubmissionsQueryDto,
-  MulterUploadInterceptor,
+  MulterUploadManyInterceptor,
   Permissions,
   Public,
+  requireUploadedFiles,
   ReviewEventSubmissionDto,
 } from '@app/libs';
 
@@ -43,14 +45,15 @@ export class EventSubmissionsController {
   }
 
   // `entityType` di-hardcode server-side (tidak diterima dari body publik).
+  // Multi-file: field `files` (maks 10), respons array `ImageResponse[]`.
   @Post('thumbnail')
   @Public()
   @HttpCode(201)
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UseInterceptors(MulterUploadInterceptor)
-  thumbnail(@UploadedFile() file: Express.Multer.File) {
-    return this.imageService.upload(file, 'event-submission');
+  @UseInterceptors(MulterUploadManyInterceptor)
+  thumbnail(@UploadedFiles() files: Express.Multer.File[]): Promise<ImageResponse[]> {
+    return Promise.all(
+      requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'event-submission')),
+    );
   }
 
   @Get()

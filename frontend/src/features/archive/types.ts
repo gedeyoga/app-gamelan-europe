@@ -50,6 +50,7 @@ export interface Archive {
   /** Daftar URL eksternal berurut. */
   externalLinks: string[]
   categories: ArchiveCategory[]
+  authors: { id: string; fullName: string }[]
   creator: ArchiveCreator | null
   /** Hanya ada pada detail (`GET /archives/:id`), terurut dari `documentIds`. */
   documents?: ArchiveDocument[]
@@ -66,6 +67,7 @@ export interface CreateArchiveInput {
   status?: ArchiveStatus
   publishedAt?: string
   categoryIds?: string[]
+  authorIds?: string[]
   /** Berurut; bila dikirim = replace seluruh array. */
   externalLinks?: string[]
   /** Berurut (`documents.map(d => d.id)`); bila dikirim = replace seluruh array. */

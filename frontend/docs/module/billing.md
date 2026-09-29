@@ -4,9 +4,9 @@ Dokumen ini mencatat desain/implementasi halaman **Billing Management** pada fro
 
 ## 1. Tujuan & Ruang Lingkup
 
-- Menyediakan **CRUD billing**: daftar (pagination), tambah, edit, hapus. Form mencakup relasi user/organization/subscription, status, tanggal bayar/batal, dan baris (`lines`).
+- Menyediakan **CRUD billing**: daftar (pagination), tambah, edit, hapus. Form mencakup relasi user/network/subscription, status, tanggal bayar/batal, dan baris (`lines`).
 - Konsumsi API `/api/v1/billings` (kontrak BE dibuat paralel), JWT Bearer + permission `billing:*`.
-- Data opsi form diambil dari feature lain di **container** (route), bukan di komponen fitur (menjaga larangan import lintas fitur): `useUsers`/`useOrganizations`/`useSubscriptions` (`{page:1,limit:100}`), **lazy** — `enabled: formOpen && can('<resource>:read')`, jadi user tanpa permission terkait tidak memicu 403 saat mount. Bila permission tak ada, select terkait di-disable + placeholder "—" (tidak fetch).
+- Data opsi form diambil dari feature lain di **container** (route), bukan di komponen fitur (menjaga larangan import lintas fitur): `useUsers`/`useNetworks`/`useSubscriptions` (`{page:1,limit:100}`), **lazy** — `enabled: formOpen && can('<resource>:read')`, jadi user tanpa permission terkait tidak memicu 403 saat mount. Bila permission tak ada, select terkait di-disable + placeholder "—" (tidak fetch).
 
 ## 2. Routing
 
@@ -20,7 +20,7 @@ Dokumen ini mencatat desain/implementasi halaman **Billing Management** pada fro
 ## 3. Struktur File
 
 ```
-src/app/routes/billings.tsx               # container + fetch opsi user/organization/subscription
+src/app/routes/billings.tsx               # container + fetch opsi user/network/subscription
 
 src/features/billing/
 ├── types.ts                              # Billing, BillingLine, Create/UpdateBillingInput, konstanta
@@ -40,13 +40,13 @@ src/features/billing/
 
 | Endpoint | Body | Keterangan |
 | --- | --- | --- |
-| `POST /billings` | `{ userId, organizationId?, subscriptionId, code, status?, subscriptionType, currency, total, discount?, tax?, paidAt?, canceledAt?, lines[] }` | `lines[]` = `{ description, type, qty?, amount, currency }`. |
+| `POST /billings` | `{ userId, networkId?, subscriptionId, code, status?, subscriptionType, currency, total, discount?, tax?, paidAt?, canceledAt?, lines[] }` | `lines[]` = `{ description, type, qty?, amount, currency }`. |
 | `GET /billings?page=&limit=` | — | list paginated. |
 | `GET /billings?search=&sortBy=&sortOrder=` | — | search OR like `code,currency`; <2 char diabaikan. |
-| `PATCH /billings/:id` | field opsional | `lines` = **replace seluruh baris**. Field opsional (`organizationId`, `discount`, `tax`, `paidAt`, `canceledAt`) dikirim `null` eksplisit saat kosong → backend **clear/disconnect**; `undefined` (di-omit) = biarkan. |
+| `PATCH /billings/:id` | field opsional | `lines` = **replace seluruh baris**. Field opsional (`networkId`, `discount`, `tax`, `paidAt`, `canceledAt`) dikirim `null` eksplisit saat kosong → backend **clear/disconnect**; `undefined` (di-omit) = biarkan. |
 | `DELETE /billings/:id` | — | hapus. |
 
-BillingEntity: `{ id, userId, user, organizationId|null, organization|null, subscriptionId, subscription, code, status, subscriptionType, currency, total, discount|null, tax|null, paidAt|null, canceledAt|null, lines[], createdAt, updatedAt }`; `lines` item `{ id, description, type:'ITEM'|'DISCOUNT'|'TAX', qty, amount, currency }`.
+BillingEntity: `{ id, userId, user, networkId|null, network|null, subscriptionId, subscription, code, status, subscriptionType, currency, total, discount|null, tax|null, paidAt|null, canceledAt|null, lines[], createdAt, updatedAt }`; `lines` item `{ id, description, type:'ITEM'|'DISCOUNT'|'TAX', qty, amount, currency }`.
 
 ### Searchable / Sortable
 
@@ -56,9 +56,9 @@ BillingEntity: `{ id, userId, user, organizationId|null, organization|null, subs
 
 ## 5. Form & Tanggal
 
-- Field: `code*`, `user` (Select), `organization` (Select opsional, sentinel `none` → `organizationId: null`), `subscription*` (Select), `status` (Select), `subscriptionType` (Select), `currency*`, `total*`, `discount`, `tax`, `paidAt`, `canceledAt`, `lines` (field array RHF: description, type Select, qty, amount, currency; tombol tambah/hapus baris).
+- Field: `code*`, `user` (Select), `network` (Select opsional, sentinel `none` → `networkId: null`), `subscription*` (Select), `status` (Select), `subscriptionType` (Select), `currency*`, `total*`, `discount`, `tax`, `paidAt`, `canceledAt`, `lines` (field array RHF: description, type Select, qty, amount, currency; tombol tambah/hapus baris).
 - Angka (`total`, `discount`, `tax`, `qty`, `amount`) disimpan sebagai string di form lalu dikonversi (`Number`) saat submit. `discount`/`tax` kosong → `null` (clear); `qty` kosong → di-omit (bukan `NaN`).
-- Field opsional kosong dikirim `null` eksplisit: `organizationId`, `discount`, `tax`, `paidAt`, `canceledAt`. Select user/organization/subscription di-disable + placeholder "—" bila sesi tak punya permission baca terkait.
+- Field opsional kosong dikirim `null` eksplisit: `networkId`, `discount`, `tax`, `paidAt`, `canceledAt`. Select user/network/subscription di-disable + placeholder "—" bila sesi tak punya permission baca terkait.
 - `paidAt`/`canceledAt` memakai `components/shared/date-time-picker.tsx`; dikirim ISO UTC (`value` sudah ISO dari picker). Dilarang `<input type="date">`.
 - 422 → `mapApiFieldErrors` → `form.setError` (mendukung path bersarang `lines.N.field`), tanpa toast, dialog tetap terbuka.
 - Toast call-site: `billing:toast.created/updated/deleted` + `*Failed`.
@@ -79,6 +79,6 @@ BillingEntity: `{ id, userId, user, organizationId|null, organization|null, subs
 - **Kontrak terkonfirmasi/terimplementasi (BE)**:
   - Endpoint `/subscriptions` & `/billings` tersedia.
   - Enum `status`/`subscriptionType`/`type` line; `total` number; `qty` optional; 422 error per-field (termasuk path bersarang `lines.N.field`).
-  - Semantik `null`: BE map `null` → clear (`discount`/`tax`/`paidAt`/`canceledAt`) & disconnect (`organizationId`); `undefined` → biarkan.
+  - Semantik `null`: BE map `null` → clear (`discount`/`tax`/`paidAt`/`canceledAt`) & disconnect (`networkId`); `undefined` → biarkan.
   - Sort relasi `user.fullName`/`subscription.name` didukung via `BILLING_SORT_MAP`.
 - Format tampilan `total` memakai `Number.toLocaleString` + kode `currency` (tanpa helper shared — belum ada).

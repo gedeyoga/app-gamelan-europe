@@ -12,6 +12,8 @@ export interface User {
   status: UserStatus
   roleId: string | null
   role: UserRole | null
+  countryId?: string | null
+  stateId?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -21,6 +23,8 @@ export interface CreateUserInput {
   fullName: string
   password: string
   status?: UserStatus
+  countryId?: string | null
+  stateId?: number | null
 }
 
 export interface UpdateUserInput {
@@ -28,6 +32,8 @@ export interface UpdateUserInput {
   fullName?: string
   status?: UserStatus
   password?: string
+  countryId?: string | null
+  stateId?: number | null
 }
 
 export interface RoleOption {

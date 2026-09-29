@@ -35,6 +35,7 @@ export function StorySubmissionDetailPage() {
       content: submission.content,
       thumbnail: submission.thumbnail,
       categories: submission.categories.map((category) => ({ ...category, type: 'STORY' })),
+      authors: [],
       creator: null,
       gallery: submission.gallery,
       flyer: submission.flyer,

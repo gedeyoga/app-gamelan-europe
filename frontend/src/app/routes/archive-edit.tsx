@@ -13,6 +13,7 @@ import {
 } from '@/lib/toast'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
+import { useUsers } from '@/features/user/hooks/use-users'
 import { ArchiveForm } from '@/features/archive/components/archive-form'
 import type { ArchiveFormValues } from '@/features/archive/lib/schema'
 import { useApproveArchive } from '@/features/archive/hooks/use-approve-archive'
@@ -40,6 +41,7 @@ function toFormValues(archive: Archive): ArchiveFormValues {
     status: archive.status,
     publishedAt: archive.publishedAt ?? '',
     categoryIds: archive.categories.map((category) => category.id),
+    authorIds: archive.authors.map((author) => author.id),
     externalLinks: archive.externalLinks,
   }
 }
@@ -53,6 +55,8 @@ export function ArchiveEditPage() {
   const canUpdate = can('archive:update')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canManageAuthors = can('user:create') && can('user:read')
+  const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishArchive = can('archive:publish')
   const canSubmitArchive = can('archive:submit')
   const canApproveArchive = can('archive:approve')
@@ -60,6 +64,7 @@ export function ArchiveEditPage() {
 
   const archiveQuery = useArchive(id)
   const categoriesQuery = useCategories(canReadCategories)
+  const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const updateArchive = useUpdateArchive()
   const submitArchive = useSubmitArchive()
   const approveArchive = useApproveArchive()
@@ -132,6 +137,12 @@ export function ArchiveEditPage() {
     navigate('/archives')
   }
 
+  const authorsOptions = (usersQuery.data?.items ?? []).map((user) => ({
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+  }))
+
   if (!canUpdate) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
@@ -197,6 +208,10 @@ export function ArchiveEditPage() {
           canApproveArchive={canApproveArchive}
           canRejectArchive={canRejectArchive}
           onCreateCategory={handleCreateCategory}
+          authors={authorsOptions}
+          isLoadingUsers={usersQuery.isPending}
+          canManageAuthors={canManageAuthors}
+          canDeleteAuthors={canDeleteAuthors}
           onUploadImage={uploadImage.mutateAsync}
           onUploadDocument={uploadDocument.mutateAsync}
           onUploadError={handleUploadError}

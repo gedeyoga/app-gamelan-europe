@@ -40,7 +40,7 @@ import {
   BILLING_STATUSES,
   BILLING_SUBSCRIPTION_TYPES,
   type Billing,
-  type BillingOrganization,
+  type BillingNetwork,
   type BillingSubscription,
   type BillingUser,
   type CreateBillingInput,
@@ -53,11 +53,11 @@ export interface BillingFormDialogProps {
   mode: BillingFormMode
   billing: Billing | null
   users: BillingUser[]
-  organizations: BillingOrganization[]
+  networks: BillingNetwork[]
   subscriptions: BillingSubscription[]
   /** `false` = sesi tanpa permission baca terkait → select di-disable + placeholder "—". */
   canSelectUser?: boolean
-  canSelectOrganization?: boolean
+  canSelectNetwork?: boolean
   canSelectSubscription?: boolean
   isSubmitting: boolean
   submissionError: Error | null
@@ -75,10 +75,10 @@ export function BillingFormDialog({
   mode,
   billing,
   users,
-  organizations,
+  networks,
   subscriptions,
   canSelectUser = true,
-  canSelectOrganization = true,
+  canSelectNetwork = true,
   canSelectSubscription = true,
   isSubmitting,
   submissionError,
@@ -101,7 +101,7 @@ export function BillingFormDialog({
           .trim()
           .min(1, t('validation:userInvalid'))
           .uuid(t('validation:userInvalid')),
-        organizationId: z.string(),
+        networkId: z.string(),
         subscriptionId: z
           .string()
           .trim()
@@ -185,7 +185,7 @@ export function BillingFormDialog({
       ? {
           code: billing.code,
           userId: billing.userId,
-          organizationId: billing.organizationId ?? '',
+          networkId: billing.networkId ?? '',
           subscriptionId: billing.subscriptionId,
           status: billing.status,
           subscriptionType: billing.subscriptionType,
@@ -206,7 +206,7 @@ export function BillingFormDialog({
       : {
           code: '',
           userId: '',
-          organizationId: '',
+          networkId: '',
           subscriptionId: '',
           status: 'PENDING',
           subscriptionType: 'MONTHLY',
@@ -244,8 +244,8 @@ export function BillingFormDialog({
   function buildPayload(values: BillingFormValues): CreateBillingInput {
     return {
       userId: values.userId,
-      // null = disconnect organization (backend map null → disconnect).
-      organizationId: values.organizationId || null,
+      // null = disconnect network (backend map null → disconnect).
+      networkId: values.networkId || null,
       subscriptionId: values.subscriptionId,
       code: values.code,
       status: values.status,
@@ -343,27 +343,27 @@ export function BillingFormDialog({
 
             <FormField
               control={form.control}
-              name="organizationId"
+              name="networkId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('billing:form.organization')}</FormLabel>
+                  <FormLabel>{t('billing:form.network')}</FormLabel>
                   <Select
                     value={field.value || 'none'}
                     onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
-                    disabled={!canSelectOrganization}
+                    disabled={!canSelectNetwork}
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue
-                          placeholder={canSelectOrganization ? t('billing:form.selectOrganization') : '—'}
+                          placeholder={canSelectNetwork ? t('billing:form.selectNetwork') : '—'}
                         />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="none">{t('billing:form.noOrganization')}</SelectItem>
-                      {organizations.map((organization) => (
-                        <SelectItem key={organization.id} value={organization.id}>
-                          {organization.name}
+                      <SelectItem value="none">{t('billing:form.noNetwork')}</SelectItem>
+                      {networks.map((network) => (
+                        <SelectItem key={network.id} value={network.id}>
+                          {network.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

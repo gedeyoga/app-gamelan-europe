@@ -34,7 +34,7 @@ export const BILLING_FILTER_FIELDS = [
   'subscriptionType',
   'currency',
   'userId',
-  'organizationId',
+  'networkId',
   'subscriptionId',
   'paidAt',
   'canceledAt',
@@ -106,8 +106,8 @@ export class BillingService {
       total: dto.total,
       lines: { create: dto.lines.map((line) => this.toLineData(line)) },
     };
-    if (dto.organizationId !== undefined && dto.organizationId !== null) {
-      data.organization = { connect: { id: dto.organizationId } };
+    if (dto.networkId !== undefined && dto.networkId !== null) {
+      data.network = { connect: { id: dto.networkId } };
     }
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.discount !== undefined) data.discount = dto.discount;
@@ -120,9 +120,9 @@ export class BillingService {
   update(id: string, dto: UpdateBillingDto): Promise<BillingEntity> {
     const data: Prisma.BillingUpdateInput = {};
     if (dto.userId !== undefined) data.user = { connect: { id: dto.userId } };
-    if (dto.organizationId !== undefined) {
-      data.organization =
-        dto.organizationId === null ? { disconnect: true } : { connect: { id: dto.organizationId } };
+    if (dto.networkId !== undefined) {
+      data.network =
+        dto.networkId === null ? { disconnect: true } : { connect: { id: dto.networkId } };
     }
     if (dto.subscriptionId !== undefined) data.subscription = { connect: { id: dto.subscriptionId } };
     if (dto.code !== undefined) data.code = dto.code;

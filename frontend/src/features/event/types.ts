@@ -26,7 +26,7 @@ export interface EventDate {
 export interface EventCreator {
   id: string
   fullName: string
-  organization: { id: string; name: string } | null
+  network: { id: string; name: string } | null
 }
 
 export interface Event {
@@ -40,6 +40,7 @@ export interface Event {
   content?: string
   thumbnail: string | null
   eventTypes: EventType[]
+  authors: { id: string; fullName: string }[]
   /** Tanggal event, berurut. */
   dates: EventDate[]
   location: EventLocation | null
@@ -72,6 +73,7 @@ export interface CreateEventInput {
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
   eventTypeIds?: string[]
+  authorIds?: string[]
   /** Tanggal event; bila diisi minimal 1. */
   dates?: EventDateInput[]
   /** Wajib — satu event = satu lokasi. */

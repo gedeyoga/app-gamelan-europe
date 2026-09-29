@@ -6,6 +6,7 @@ import { CacheService, REDIS_CLIENT } from './core/redis/cache.service';
 import { AccessScopeService } from './core/auth/access-scope.service';
 import { InternalAuthGuard } from './common/guards/internal-auth.guard';
 import { UserModule } from './modules/user/user.module';
+import { UserContentPurgeModule } from './modules/user/user-content-purge.module';
 import { RoleModule } from './modules/role/role.module';
 import { PermissionModule } from './modules/permission/permission.module';
 import { RolePermissionModule } from './modules/role-permissions/role-permission.module';
@@ -21,12 +22,13 @@ import { ImageModule } from './modules/image/image.module';
 import { PostModule } from './modules/post/post.module';
 import { DocumentModule } from './modules/document/document.module';
 import { ArchiveModule } from './modules/archive/archive.module';
-import { OrganizationModule } from './modules/organization/organization.module';
+import { NetworkModule } from './modules/network/network.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { EventSubmissionModule } from './modules/event-submission/event-submission.module';
 import { ArchiveSubmissionModule } from './modules/archive-submission/archive-submission.module';
 import { StorySubmissionModule } from './modules/story-submission/story-submission.module';
+import { StatsModule } from './modules/stats/stats.module';
 
 const redisProvider = {
   provide: REDIS_CLIENT,
@@ -41,6 +43,7 @@ const redisProvider = {
 @Module({
   imports: [
     UserModule,
+    UserContentPurgeModule,
     RoleModule,
     PermissionModule,
     RolePermissionModule,
@@ -56,12 +59,13 @@ const redisProvider = {
     PostModule,
     DocumentModule,
     ArchiveModule,
-    OrganizationModule,
+    NetworkModule,
     SubscriptionModule,
     BillingModule,
     EventSubmissionModule,
     ArchiveSubmissionModule,
     StorySubmissionModule,
+    StatsModule,
   ],
   providers: [redisProvider, PrismaService, CacheService, InternalAuthGuard, AccessScopeService],
   exports: [
@@ -70,6 +74,7 @@ const redisProvider = {
     InternalAuthGuard,
     AccessScopeService,
     UserModule,
+    UserContentPurgeModule,
     RoleModule,
     PermissionModule,
     RolePermissionModule,
@@ -85,12 +90,13 @@ const redisProvider = {
     PostModule,
     DocumentModule,
     ArchiveModule,
-    OrganizationModule,
+    NetworkModule,
     SubscriptionModule,
     BillingModule,
     EventSubmissionModule,
     ArchiveSubmissionModule,
     StorySubmissionModule,
+    StatsModule,
   ],
 })
 export class LibsModule {}

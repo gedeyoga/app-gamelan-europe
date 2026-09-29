@@ -1,0 +1,74 @@
+{
+  "title": "Network",
+  "subtitle": "Kelola network, lokasinya, dan sosial media",
+  "add": "Tambah Network",
+  "search": {
+    "placeholder": "Cari nama, negara bagian, negara, atau alamat...",
+    "ariaLabel": "Cari network"
+  },
+  "errors": {
+    "loadData": "Gagal memuat data network. Silakan coba lagi.",
+    "loadDetail": "Gagal memuat detail network.",
+    "forbidden": "Tidak punya akses untuk melihat data network.",
+    "uploadFailed": "Gagal mengunggah gambar. Silakan coba lagi.",
+    "noCreatePermission": "Tidak punya izin untuk membuat network.",
+    "noUpdatePermission": "Tidak punya izin untuk mengubah network."
+  },
+  "table": {
+    "name": "Nama",
+    "state": "Negara Bagian",
+    "country": "Negara",
+    "created": "Dibuat",
+    "empty": "Belum ada network",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian",
+    "edit": "Edit",
+    "delete": "Hapus"
+  },
+  "form": {
+    "createTitle": "Tambah Network",
+    "editTitle": "Edit Network",
+    "name": "Nama",
+    "state": "Negara Bagian",
+    "country": "Negara",
+    "address": "Alamat",
+    "website": "Website",
+    "websitePlaceholder": "https://contoh.com",
+    "contact": "Kontak",
+    "contactPlaceholder": "Email atau nomor telepon",
+    "socialMedia": {
+      "label": "Sosial media",
+      "add": "Tambah sosial media",
+      "remove": "Hapus sosial media",
+      "index": "Sosial media {{number}}",
+      "platform": "Platform",
+      "platformPlaceholder": "mis. Instagram",
+      "url": "URL",
+      "urlPlaceholder": "https://instagram.com/...",
+      "empty": "Belum ada sosial media"
+    },
+    "mapLabel": "Pilih lokasi di peta",
+    "settingsTitle": "Pengaturan",
+    "hideSettings": "Sembunyikan pengaturan",
+    "showSettings": "Tampilkan pengaturan",
+    "countryPlaceholder": "Pilih negara",
+    "countrySearch": "Cari negara...",
+    "countryEmpty": "Negara tidak ditemukan.",
+    "statePlaceholder": "Pilih negara bagian",
+    "stateSearch": "Cari negara bagian...",
+    "stateEmpty": "Negara bagian tidak ditemukan.",
+    "stateSelectCountry": "Pilih negara terlebih dahulu"
+  },
+  "delete": {
+    "title": "Hapus Network",
+    "description": "Yakin ingin menghapus network {{name}}? Tindakan ini tidak dapat dibatalkan."
+  },
+  "toast": {
+    "created": "Network berhasil dibuat",
+    "updated": "Network berhasil diperbarui",
+    "deleted": "Network berhasil dihapus",
+    "createFailed": "Gagal membuat network",
+    "updateFailed": "Gagal memperbarui network",
+    "deleteFailed": "Gagal menghapus network"
+  }
+}

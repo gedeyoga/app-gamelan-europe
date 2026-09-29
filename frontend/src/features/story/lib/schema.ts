@@ -22,6 +22,7 @@ export function createStorySchema(t: TFunction) {
     status: z.enum(CONTENT_STATUSES),
     visibility: z.enum(VISIBILITIES),
     categoryIds: z.array(z.string()),
+    authorIds: z.array(z.string().uuid()),
     imageIds: z.array(z.string()),
   })
 }

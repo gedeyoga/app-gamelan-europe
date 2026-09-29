@@ -21,6 +21,8 @@ export interface ThumbnailUploadProps {
   onRemove: () => void
   /** Namespace i18n; default `story` (dipakai archive lewat `archive`). */
   i18nPrefix?: string
+  /** Bentuk pratinjau; default `video` (konsumen lama tidak berubah). */
+  shape?: 'video' | 'circle'
   className?: string
 }
 
@@ -33,11 +35,15 @@ export function ThumbnailUpload({
   onUpload,
   onRemove,
   i18nPrefix = 'story',
+  shape = 'video',
   className,
 }: ThumbnailUploadProps) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null)
+  const isCircle = shape === 'circle'
+  const aspectClass = isCircle ? 'aspect-square' : 'aspect-video'
+  const radiusClass = isCircle ? 'rounded-full' : 'rounded-lg'
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -77,14 +83,15 @@ export function ThumbnailUpload({
       {value ? (
         <div
           className={cn(
-            'relative overflow-hidden rounded-lg border',
+            'relative overflow-hidden border',
+            radiusClass,
             isDragging && 'ring-2 ring-primary',
           )}
         >
           <img
             src={previewUrl ?? value}
             alt={t(`${i18nPrefix}:form.thumbnail`)}
-            className="aspect-video w-full object-cover"
+            className={cn('w-full object-cover', aspectClass)}
           />
         </div>
       ) : (
@@ -94,7 +101,9 @@ export function ThumbnailUpload({
           onClick={() => inputRef.current?.click()}
           disabled={disabled || isUploading}
           className={cn(
-            'flex aspect-video w-full items-center justify-center rounded-lg border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-50',
+            'flex w-full items-center justify-center border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-50',
+            aspectClass,
+            radiusClass,
             isDragging && 'border-primary bg-muted/50',
           )}
         >

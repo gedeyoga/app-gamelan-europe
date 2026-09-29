@@ -14,10 +14,24 @@ export const archiveSelect = {
   approvedAt: true,
   externalLinks: true,
   documentIds: true,
-  creator: { select: { id: true, fullName: true, organizationId: true } },
+  creator: { select: { id: true, fullName: true, networkId: true } },
   categories: {
     select: {
       category: { select: { id: true, name: true, type: true } },
+    },
+  },
+  authors: {
+    select: {
+      author: {
+        select: {
+          id: true,
+          fullName: true,
+          countryId: true,
+          country: { select: { id: true, iso2: true, name: true } },
+          stateId: true,
+          state: { select: { id: true, name: true } },
+        },
+      },
     },
   },
   createdAt: true,
@@ -28,17 +42,20 @@ export type ArchiveRow = Prisma.ArchiveGetPayload<{ select: typeof archiveSelect
 
 export type ArchiveCategoryEntity = { id: string; name: string; type: CategoryType };
 
+export type ArchiveAuthorEntity = ArchiveRow['authors'][number]['author'];
+
 // Kontrak response API: `categories` flat (bukan `[{ category }]`).
 // `documentIds` mentah tetap ada di entity internal (dipakai hydrate).
-// `creator.organizationId` hanya dipakai internal (row-level scoping) — TIDAK keluar ke FE.
-export type ArchiveEntity = Omit<ArchiveRow, 'categories'> & {
+// `creator.networkId` hanya dipakai internal (row-level scoping) — TIDAK keluar ke FE.
+export type ArchiveEntity = Omit<ArchiveRow, 'categories' | 'authors'> & {
   categories: ArchiveCategoryEntity[];
+  authors: ArchiveAuthorEntity[];
 };
 
-// `creator.organizationId` dibuang di response; FE hanya menerima `{ id, fullName }`.
+// `creator.networkId` dibuang di response; FE hanya menerima `{ id, fullName }`.
 export type ArchiveCreatorRef = { id: string; fullName: string };
 
-// Item LIST = `ArchiveEntity` TANPA `documentIds` dan tanpa `creator.organizationId`.
+// Item LIST = `ArchiveEntity` TANPA `documentIds` dan tanpa `creator.networkId`.
 // `externalLinks` nullable: di-null-kan untuk member-only tanpa akses (lihat `redactMemberOnly`).
 export type ArchiveListItem = Omit<ArchiveEntity, 'documentIds' | 'creator' | 'externalLinks'> & {
   creator: ArchiveCreatorRef | null;
@@ -52,7 +69,7 @@ export type ArchiveResponse = ArchiveListItem & {
 };
 
 export function mapArchive(row: ArchiveRow): ArchiveEntity {
-  return { ...row, categories: row.categories.map((link) => link.category) };
+  return { ...row, categories: row.categories.map((link) => link.category), authors: row.authors.map((link) => link.author) };
 }
 
 // Redaksi member-only (pure, diekspor agar mudah di-unit-test).

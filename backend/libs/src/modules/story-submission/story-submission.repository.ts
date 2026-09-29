@@ -14,6 +14,11 @@ export interface CreateStorySubmissionData {
   galleryImageIds: string[];
   flyerImageIds: string[];
   thumbnail?: string | null;
+  // Section `submitter` (data pengirim) — audit-only, tidak disalin ke Post saat approve.
+  submitterFullName: string;
+  submitterEmail: string;
+  submitterCountryId: number;
+  submitterStateId: number | null;
 }
 
 const SUBMISSION_ENTITY_TYPE = 'story-submission';
@@ -71,6 +76,10 @@ export class StorySubmissionRepository {
               galleryImageIds: data.galleryImageIds,
               flyerImageIds: data.flyerImageIds,
               thumbnail: data.thumbnail ?? null,
+              submitterFullName: data.submitterFullName,
+              submitterEmail: data.submitterEmail,
+              submitterCountryId: data.submitterCountryId,
+              submitterStateId: data.submitterStateId ?? null,
               status: StorySubmissionStatus.REQUEST,
             },
             select: storySubmissionSelect,

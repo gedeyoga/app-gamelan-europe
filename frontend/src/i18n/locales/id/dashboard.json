@@ -4,8 +4,7 @@
   "welcome": "Selamat datang, {{name}}",
   "subtitle": "Pantau event dan cerita terbaru dari komunitas gamelan.",
   "role": {
-    "member": "Member",
-    "organization": "Organisasi"
+    "member": "Member"
   },
   "stats": {
     "upcomingEvents": "Event Akan Datang",
@@ -38,7 +37,7 @@
     },
     "pendingArchives": {
       "title": "Arsip Menunggu Persetujuan",
-      "subtitle": "Arsip yang diajukan member dan organisasi.",
+      "subtitle": "Arsip yang diajukan member dan network.",
       "viewAll": "Lihat semua",
       "empty": "Tidak ada arsip yang menunggu persetujuan.",
       "error": "Gagal memuat data.",
@@ -46,12 +45,6 @@
     },
     "pendingSubmissions": {
       "empty": "Tidak ada usulan event yang menunggu review.",
-      "error": "Gagal memuat data."
-    },
-    "pendingArchiveSubmissions": {
-      "title": "Usulan Arsip Publik",
-      "subtitle": "Usulan arsip dari publik yang menunggu review.",
-      "empty": "Tidak ada usulan arsip publik yang menunggu review.",
       "error": "Gagal memuat data."
     },
     "pendingStorySubmissions": {
@@ -100,23 +93,6 @@
     "confirmCancel": "Batal",
     "confirmSubmit": "Konfirmasi"
   },
-  "pendingArchiveSubmission": {
-    "approve": "Setujui",
-    "reject": "Tolak",
-    "unknown": "Tidak diketahui",
-    "statusRequest": "Diajukan",
-    "attachments": "{{count}} lampiran",
-    "approved": "Usulan arsip disetujui.",
-    "rejected": "Usulan arsip ditolak.",
-    "approveFailed": "Gagal menyetujui usulan arsip.",
-    "rejectFailed": "Gagal menolak usulan arsip.",
-    "confirmApproveTitle": "Setujui usulan arsip ini?",
-    "confirmApproveDescription": "Draft arsip akan dibuat. Anda akan diarahkan ke editornya.",
-    "confirmRejectTitle": "Tolak usulan arsip ini?",
-    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada arsip yang dibuat.",
-    "confirmCancel": "Batal",
-    "confirmSubmit": "Konfirmasi"
-  },
   "pendingStorySubmission": {
     "approve": "Setujui",
     "reject": "Tolak",
@@ -148,7 +124,7 @@
     "archives": "Archives",
     "event": "Event",
     "myBilling": "Billing Saya",
-    "organizations": "Organizations",
+    "networks": "Network",
     "apiKey": "API Keys",
     "subscription": "Subscription",
     "billing": "Billing Management"

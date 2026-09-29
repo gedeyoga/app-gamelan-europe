@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 
@@ -15,6 +16,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
 import { CategoryCombobox } from '@/components/shared/category-combobox'
+import { UserCombobox, type UserOption } from '@/components/shared/user-combobox'
+import { useAuth } from '@/features/auth/auth-provider'
+import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
+import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
 import { GalleryUpload } from './gallery-upload'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import type { StoryFormValues } from '../lib/schema'
@@ -48,6 +53,11 @@ export interface StoryMetaPanelProps {
   canReadCategories: boolean
   canCreateCategory: boolean
   onCreateCategory: (name: string) => Promise<StoryCategory | undefined>
+  authors: UserOption[]
+  isLoadingUsers: boolean
+  canManageAuthors: boolean
+  /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
+  canDeleteAuthors: boolean
   disabled?: boolean
   className?: string
 }
@@ -79,10 +89,39 @@ export function StoryMetaPanel({
   canReadCategories,
   canCreateCategory,
   onCreateCategory,
+  authors,
+  isLoadingUsers,
+  canManageAuthors,
+  canDeleteAuthors,
   disabled = false,
   className,
 }: StoryMetaPanelProps) {
   const { t } = useTranslation()
+  const { user: sessionUser } = useAuth()
+  const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
+  const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
+  const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
+
+  // Gabung author baru (belum tentu muncul di `authors`) + dedupe terhadap prop.
+  const authorOptions = useMemo(() => {
+    const seen = new Set(authors.map((author) => author.id))
+    return [...authors, ...createdAuthors.filter((author) => !seen.has(author.id))]
+  }, [authors, createdAuthors])
+
+  function handleAuthorCreated(author: UserOption) {
+    setCreatedAuthors((prev) =>
+      prev.some((item) => item.id === author.id) ? prev : [...prev, author],
+    )
+  }
+
+  function handleAuthorDeleted(authorId: string) {
+    setCreatedAuthors((prev) => prev.filter((author) => author.id !== authorId))
+    form.setValue(
+      'authorIds',
+      (form.getValues('authorIds') ?? []).filter((id) => id !== authorId),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
 
   return (
     <div className={cn('flex flex-col gap-4', className)}>
@@ -194,6 +233,34 @@ export function StoryMetaPanel({
         )}
       />
 
+      {canManageAuthors && (
+        <FormField
+          control={form.control}
+          name="authorIds"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('story:form.authors')}</FormLabel>
+              <UserCombobox
+                options={authorOptions}
+                value={field.value}
+                onChange={field.onChange}
+                isLoading={isLoadingUsers}
+                disabled={disabled}
+                canCreate={canManageAuthors}
+                onCreateClick={() => setAuthorDialogOpen(true)}
+                canDeleteOption={(option) =>
+                  canDeleteAuthors &&
+                  option.id !== sessionUser?.id &&
+                  !field.value.includes(option.id)
+                }
+                onDeleteOption={setDeletingAuthor}
+              />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
       <FormField
         control={form.control}
         name="thumbnail"
@@ -238,6 +305,26 @@ export function StoryMetaPanel({
           disabled={disabled}
         />
       </div>
+
+      {canManageAuthors && (
+        <>
+          <AuthorCreateDialog
+            open={authorDialogOpen}
+            onOpenChange={setAuthorDialogOpen}
+            onCreated={handleAuthorCreated}
+          />
+          {canDeleteAuthors && (
+            <AuthorDeleteDialog
+              open={Boolean(deletingAuthor)}
+              onOpenChange={(open) => {
+                if (!open) setDeletingAuthor(null)
+              }}
+              author={deletingAuthor}
+              onDeleted={handleAuthorDeleted}
+            />
+          )}
+        </>
+      )}
     </div>
   )
 }

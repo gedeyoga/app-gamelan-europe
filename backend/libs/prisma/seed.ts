@@ -19,12 +19,14 @@ function toCode(name: string): string {
 
 // ---------------------------------------------------------------------------
 // Sumber deklaratif permission dipindah ke seed-data.ts (RULES Bab 22).
-// Role -> permission ADDITIVE kecuali ORGANIZATION_REMOVED_PERMISSION_CODES.
+// Role -> permission ADDITIVE (seeder tidak pernah mencabut relasi role lain).
 // ---------------------------------------------------------------------------
 
+// Permission set bersama `member` & `author` (keduanya identik).
+const MEMBER_PERMISSION_CODES = ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
+
 // Role default (idempoten, additive). `admin` = semua permission;
-// `organization` = pengelola event milik anggota organisasinya (transisi maksimal sampai REQUEST);
-// `member` = mengelola event sendiri sampai REQUEST (bukan read-only).
+// `member` & `author` = mengelola event sendiri sampai REQUEST (bukan read-only), permission set sama.
 const DEFAULT_ROLES: DefaultRole[] = [
   {
     name: 'admin',
@@ -32,37 +34,21 @@ const DEFAULT_ROLES: DefaultRole[] = [
     permissions: DEFAULT_PERMISSIONS.map((p) => p.code),
   },
   {
-    name: 'organization',
-    description: 'Pengelola event milik anggota organisasinya (tanpa story write)',
-    permissions: [
-      'story:read',
-      'event:create',
-      'event:read',
-      'event:update',
-      'event:delete',
-      'event:submit',
-      'event-type:read',
-      'category:read',
-      'archive:create',
-      'archive:read',
-      'archive:update',
-      'archive:delete',
-      'archive:submit',
-      'user:create',
-      'user:read',
-    ],
+    name: 'member',
+    description: 'Anggota jaringan — mengelola event (sampai REQUEST), tanpa story write',
+    permissions: MEMBER_PERMISSION_CODES,
   },
   {
-    name: 'member',
-    description: 'Anggota organisasi — mengelola event (sampai REQUEST), tanpa story write',
-    permissions: ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'],
+    name: 'author',
+    description: 'Author — mengelola event (sampai REQUEST), tanpa story write',
+    permissions: MEMBER_PERMISSION_CODES,
   },
 ];
 
-// Relasi role-permission yang SENGAJA dihapus dari role `organization` (seeder otherwise
-// additive). Targeted: hanya role `organization`, tidak menyentuh custom role / relasi lain.
-// `story:read` TIDAK dihapus (lihat DEFAULT_ROLES).
-const ORGANIZATION_REMOVED_PERMISSION_CODES = ['story:create', 'story:update', 'story:delete', 'story:submit'];
+// Role legacy yang sudah dihapus dari DEFAULT_ROLES (rename RBAC v2). Baris DB-nya
+// dibersihkan targeted saat seeding; user yang masih memakainya → `roleId` NULL
+// (relasi `User.role` `onDelete: SetNull`).
+const LEGACY_ROLE_NAMES = ['organization'];
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim();
 const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME?.trim();
@@ -140,20 +126,14 @@ async function main(): Promise<void> {
   });
   console.log(`role-permission: ${createdRolePermissions.count} relation(s) created (additive)`);
 
-  // Targeted delete: copot story-write dari role `organization` (bukan deleteMany global —
-  // custom role & relasi role lain tidak tersentuh). Perubahan permission yang di-*tambah*
-  // tetap additive lewat createMany di atas.
-  const organizationRoleId = roleIdByName.get('organization');
-  if (organizationRoleId) {
-    const removed = await prisma.rolePermission.deleteMany({
-      where: {
-        roleId: organizationRoleId,
-        permission: { code: { in: ORGANIZATION_REMOVED_PERMISSION_CODES } },
-      },
-    });
-    console.log(
-      `role-permission organization -> removed ${removed.count} story-write relation(s): targeted`,
-    );
+  // Hapus role legacy (mis. `organization` sebelum rename RBAC v2). Targeted by name —
+  // bukan deleteMany global. Relasi `role_permissions` ikut terhapus (FK `onDelete: Cascade`);
+  // user yang masih memakai role ini → `roleId` NULL (FK `onDelete: SetNull`).
+  const removedLegacyRoles = await prisma.role.deleteMany({
+    where: { name: { in: LEGACY_ROLE_NAMES } },
+  });
+  if (removedLegacyRoles.count > 0) {
+    console.log(`role legacy: ${removedLegacyRoles.count} role(s) removed (${LEGACY_ROLE_NAMES.join(', ')})`);
   }
 
   const adminRoleId = roleIdByName.get('admin');

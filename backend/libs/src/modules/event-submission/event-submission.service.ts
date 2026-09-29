@@ -43,6 +43,25 @@ export class EventSubmissionService {
     });
   }
 
+  // Relasi geo dipakai dua jalur (event sendiri & section `author`) → satu helper, tanpa duplikasi.
+  private async requireCountry(countryId: number, field: string): Promise<void> {
+    const country = await this.countryRepository.findByIdOrNull(countryId);
+    if (!country) throw this.validationError(field, `${field} does not exist`);
+  }
+
+  private async requireStateInCountry(
+    stateId: number | undefined,
+    countryId: number,
+    stateField: string,
+    countryField: string,
+  ): Promise<void> {
+    if (stateId === undefined) return;
+    const state = await this.stateRepository.findByIdOrNull(stateId);
+    if (!state || state.countryId !== countryId) {
+      throw this.validationError(stateField, `${stateField} must belong to ${countryField}`);
+    }
+  }
+
   async list(query: ListEventSubmissionsQueryDto): Promise<{ items: EventSubmissionEntity[]; total: number }> {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
@@ -77,15 +96,11 @@ export class EventSubmissionService {
   }
 
   async create(dto: CreateEventSubmissionDto): Promise<{ id: string; status: EventSubmissionStatus }> {
-    const country = await this.countryRepository.findByIdOrNull(dto.countryId);
-    if (!country) throw this.validationError('countryId', 'countryId does not exist');
+    await this.requireCountry(dto.countryId, 'countryId');
+    await this.requireStateInCountry(dto.stateId, dto.countryId, 'stateId', 'countryId');
 
-    if (dto.stateId !== undefined) {
-      const state = await this.stateRepository.findByIdOrNull(dto.stateId);
-      if (!state || state.countryId !== dto.countryId) {
-        throw this.validationError('stateId', 'stateId must belong to countryId');
-      }
-    }
+    await this.requireCountry(dto.author.countryId, 'author.countryId');
+    await this.requireStateInCountry(dto.author.stateId, dto.author.countryId, 'author.stateId', 'author.countryId');
 
     const eventType = await this.eventTypeRepository.findByIdOrNull(dto.eventTypeId);
     if (!eventType) throw this.validationError('eventTypeId', 'eventTypeId does not exist');
@@ -104,6 +119,10 @@ export class EventSubmissionService {
       countryId: dto.countryId,
       stateId: dto.stateId ?? null,
       organiser: dto.organiser,
+      authorFullName: dto.author.fullName,
+      authorEmail: dto.author.email,
+      authorCountryId: dto.author.countryId,
+      authorStateId: dto.author.stateId ?? null,
       eventTypeId: dto.eventTypeId,
       shortDescription: dto.shortDescription,
       thumbnail: dto.thumbnail ?? null,

@@ -16,6 +16,7 @@ export interface CreateArchiveData {
   documentIds: string[];
   createdBy?: string;
   categoryIds?: string[];
+  authorIds?: string[];
 }
 
 export interface UpdateArchiveData {
@@ -29,6 +30,7 @@ export interface UpdateArchiveData {
   externalLinks?: string[];
   documentIds?: string[];
   categoryIds?: string[];
+  authorIds?: string[];
 }
 
 @Injectable()
@@ -52,10 +54,33 @@ export class ArchiveRepository {
     }
   }
 
+  private async setAuthors(
+    tx: Prisma.TransactionClient,
+    archiveId: string,
+    authorIds: string[],
+  ): Promise<void> {
+    await tx.archiveAuthor.deleteMany({ where: { archiveId } });
+    if (authorIds.length > 0) {
+      await tx.archiveAuthor.createMany({
+        data: authorIds.map((authorId) => ({ archiveId, authorId })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   async findById(id: string): Promise<ArchiveEntity> {
     const archive = await this.prisma.archive.findUnique({ where: { id }, select: archiveSelect });
     if (!archive) throw new NotFoundException('Archive not found');
     return mapArchive(archive);
+  }
+
+  // Id-only (tanpa hydrate) untuk purge cascade hapus user; cleanup dokumen/S3 diurus `ArchiveService.remove` per id.
+  async findIdsByAuthorId(authorId: string): Promise<string[]> {
+    const rows = await this.prisma.archive.findMany({
+      where: { authors: { some: { authorId } } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
   }
 
   async findMany(params: {
@@ -91,6 +116,7 @@ export class ArchiveRepository {
         select: { id: true },
       });
       if (data.categoryIds !== undefined) await this.setCategories(client, archive.id, data.categoryIds);
+      if (data.authorIds !== undefined) await this.setAuthors(client, archive.id, data.authorIds);
       await this.documentRepository.bind(data.documentIds, 'archive', archive.id, client);
       return mapArchive(
         await client.archive.findUniqueOrThrow({ where: { id: archive.id }, select: archiveSelect }),
@@ -136,6 +162,7 @@ export class ArchiveRepository {
         await tx.archive.update({ where: { id }, data: update });
       }
       if (data.categoryIds !== undefined) await this.setCategories(tx, id, data.categoryIds);
+      if (data.authorIds !== undefined) await this.setAuthors(tx, id, data.authorIds);
       if (data.documentIds !== undefined) {
         await this.documentRepository.bind(data.documentIds, 'archive', id, tx);
         // Lepas binding dokumen yang dikeluarkan dari daftar (replace seluruh array).

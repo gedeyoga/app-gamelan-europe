@@ -34,8 +34,14 @@ export function updateUser(id: string, payload: UpdateUserInput): Promise<User> 
   })
 }
 
-export function deleteUser(id: string): Promise<User> {
-  return request<User>(`/users/${id}`, { method: 'DELETE' })
+export interface DeleteUserOptions {
+  /** Hapus juga semua story/event/archive di mana user ini terdaftar sebagai author (admin only). */
+  cascadeContent?: boolean
+}
+
+export function deleteUser(id: string, options?: DeleteUserOptions): Promise<User> {
+  const query = options?.cascadeContent ? '?cascadeContent=true' : ''
+  return request<User>(`/users/${id}${query}`, { method: 'DELETE' })
 }
 
 export function assignRole(userId: string, roleId: string): Promise<User> {

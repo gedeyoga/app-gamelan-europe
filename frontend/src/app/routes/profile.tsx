@@ -13,6 +13,7 @@ import {
 } from '@/features/profile/components/profile-card'
 import { useChangePassword } from '@/features/profile/hooks/use-change-password'
 import { useUpdateProfile } from '@/features/profile/hooks/use-update-profile'
+import { useUploadImage } from '@/features/profile/hooks/use-upload-image'
 import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from '@/lib/toast'
 
 export function ProfilePage() {
@@ -22,9 +23,11 @@ export function ProfilePage() {
   const session = useSession(auth.user ?? undefined)
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
+  const uploadImage = useUploadImage()
 
   // Counter increment → trigger ProfileCard reset form.
   const [resetSignal, setResetSignal] = useState(0)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   const isPending = updateProfile.isPending || changePassword.isPending
   const submissionError = updateProfile.error ?? changePassword.error
@@ -72,6 +75,39 @@ export function ProfilePage() {
     )
   }
 
+  function saveAvatar(avatar: string | null) {
+    updateProfile.mutate(
+      { avatar },
+      {
+        onSuccess: () => toastSuccess(t('toast.avatarUpdated')),
+        onError: (err: unknown) => {
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('toast.avatarUpdateFailed')))
+        },
+      },
+    )
+  }
+
+  async function handleAvatarUpload(file: File) {
+    setAvatarError(null)
+    try {
+      // BE membalas profil lengkap + `avatar` — cache & AuthProvider di-update di hook.
+      await uploadImage.mutateAsync(file)
+      toastSuccess(t('toast.avatarUpdated'))
+    } catch (err) {
+      if (isValidationError(err)) {
+        setAvatarError(t('thumbnail.uploadInvalid'))
+        return
+      }
+      toastError(getApiErrorMessage(err, t('toast.avatarUpdateFailed')))
+    }
+  }
+
+  function handleAvatarRemove() {
+    setAvatarError(null)
+    saveAvatar(null)
+  }
+
   const user = session.data ?? auth.user
 
   return (
@@ -112,6 +148,11 @@ export function ProfilePage() {
           submissionError={submissionError}
           onSubmit={handleSubmit}
           resetSignal={resetSignal}
+          avatar={user.avatar ?? null}
+          isUploadingAvatar={uploadImage.isPending}
+          avatarError={avatarError}
+          onAvatarUpload={(file) => void handleAvatarUpload(file)}
+          onAvatarRemove={handleAvatarRemove}
         />
       ) : null}
     </div>

@@ -498,13 +498,13 @@ Contoh 409:
 
 Seed di `libs/prisma/seed-data.ts` (`DEFAULT_PERMISSIONS`, dikonsumsi `libs/prisma/seed.ts`; rujuk [rbac.md §7](./rbac.md#7-seed-default)). Konvensi `resource:action` lowercase (rbac.md §4).
 
-| Code | Deskripsi | admin | organization | member |
-| --- | --- | :---: | :---: | :---: |
-| `archive-submission:read` | Lihat daftar/detail usulan archive | ✅ | — | — |
-| `archive-submission:approve` | Setujui + recreate konten ke tabel `archives` sebagai `DRAFT` (bukan publish) | ✅ | — | — |
-| `archive-submission:reject` | Tolak usulan | ✅ | — | — |
+| Code | Deskripsi | admin | member |
+| --- | --- | :---: | :---: |
+| `archive-submission:read` | Lihat daftar/detail usulan archive | ✅ | — |
+| `archive-submission:approve` | Setujui + recreate konten ke tabel `archives` sebagai `DRAFT` (bukan publish) | ✅ | — |
+| `archive-submission:reject` | Tolak usulan | ✅ | — |
 
-- Seed **3** code `archive-submission:*`, semuanya **admin-only** (tidak diberikan ke `organization`/`member`).
+- Seed **3** code `archive-submission:*`, semuanya **admin-only** (tidak diberikan ke `member`/`author`).
 - `admin` otomatis mendapat semua code (`DEFAULT_PERMISSIONS.map`).
 - Endpoint publik (`POST /archive-submissions`, `POST /archive-submissions/thumbnail`) tetap `@Public()` → **bypass deny-by-default**, jadi **tidak butuh** permission apa pun (§5.1). Submit publik murni anonim — tidak ada permission `create`.
 - Update hitungan `DEFAULT_PERMISSIONS` di `rbac.md` §7 (**65 → 68**, +3). `pnpm prisma:seed` idempoten.
@@ -565,7 +565,7 @@ Perintah: `pnpm prisma migrate dev --name add_archive_submissions` → `pnpm pri
 Modul `archive` **sudah** punya workflow internal terautentikasi penuh:
 
 - `archive:submit` (`DRAFT → REQUEST`), `archive:approve` (`REQUEST → PUBLISHED`), `archive:reject` (`REQUEST → DRAFT`), `archive:publish` (`APPROVED → PUBLISHED`), `archive:unpublish` (`PUBLISHED → DRAFT`) — [archive.md §5](./archive.md#5-aturan-status).
-- Dipakai oleh role `organization`/`member` yang terautentikasi mengusulkan archive dari dalam EGS.
+- Dipakai oleh `member`/`author` yang terautentikasi mengusulkan archive dari dalam EGS.
 
 `archive-submission` publik ini adalah **jalur kedua yang terpisah**:
 
@@ -581,7 +581,7 @@ Modul `archive` **sudah** punya workflow internal terautentikasi penuh:
 - Tabel terpisah (`archive_submissions`) — submission bukan `Archive` sampai **disetujui**; saat approve dibuat `Archive` `DRAFT` dan ditautkan `archiveId` (§5.2). Submission tetap tersimpan sebagai audit.
 - **Tanpa `categoryIds` di submit publik** — input anonim tak termoderasi tidak boleh menentukan kategori; admin menetapkan pada `Archive` `DRAFT` setelah approve lewat `PATCH /archives/:id`.
 - **PDF publik DIDUKUNG** lewat `POST /archive-submissions/attachments` + field `attachments` — id baris `Document` (`entityType='archive-submission'`, `entityId=null`) berurut; saat approve disalin ke `Archive.documentIds` dan di-bind (§5.2.1). Bukan lagi ditunda. Mitigasi abuse ada di §8 poin 3b (PDF-only + magic-byte, max 10 MB, cap 20, throttle 10/menit, key UUID, orphan cleanup TODO). **Upgrade path (belum ada):** varian/thumbnail PDF, scan malware (AV), atau kuota per-IP/hari bila volume naik. `documentIds` (nama field archive) tetap tidak diterima dari body publik.
-- **Tanpa identitas/contact submitter** (ditunda) — `Archive` tidak punya padanan organiser/organization, dan submission publik tak menyediakan fallback kontak. Audit tetap via `reviewedBy`/`reviewedAt`. **Upgrade path:** tambah kolom `submitterName`/`submitterEmail` opsional pada `archive_submissions` bila tim moderasi butuh menghubungi pengusul.
+- **Tanpa identitas/contact submitter** (ditunda) — `Archive` tidak punya padanan organiser/network, dan submission publik tak menyediakan fallback kontak. Audit tetap via `reviewedBy`/`reviewedAt`. **Upgrade path:** tambah kolom `submitterName`/`submitterEmail` opsional pada `archive_submissions` bila tim moderasi butuh menghubungi pengusul.
 - `archiveId @unique` + conditional update `status: REQUEST` → idempotensi approve (tidak ada `Archive` dobel). `onDelete: SetNull` → audit tetap walau `Archive` dihapus.
 - Status final tidak bisa diubah → 409 (bukan overwrite).
 - Endpoint publik tetap `@Public()` tanpa permission; 3 permission `archive-submission:*` tetap di-seed, **admin-only** (§7).

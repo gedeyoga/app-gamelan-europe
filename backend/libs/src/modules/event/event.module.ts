@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { OrganizationModule } from '@app/libs/modules/organization/organization.module';
+import { NetworkModule } from '@app/libs/modules/network/network.module';
+import { UserModule } from '@app/libs/modules/user/user.module';
 import { EventRepository } from './event.repository';
 import { EventService } from './event.service';
 
 @Module({
-  imports: [OrganizationModule],
+  imports: [NetworkModule, UserModule],
   providers: [EventRepository, EventService],
   exports: [EventRepository, EventService],
 })

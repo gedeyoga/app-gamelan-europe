@@ -7,7 +7,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -16,11 +16,13 @@ import {
   AuthenticatedUser,
   CreateStorySubmissionDto,
   CurrentUser,
+  ImageResponse,
   ImageService,
   ListStorySubmissionsQueryDto,
-  MulterUploadInterceptor,
+  MulterUploadManyInterceptor,
   Permissions,
   Public,
+  requireUploadedFiles,
   ReviewStorySubmissionDto,
   StorySubmissionService,
 } from '@app/libs';
@@ -43,25 +45,26 @@ export class StorySubmissionsController {
   }
 
   // `entityType` di-hardcode server-side (tidak diterima dari body publik).
+  // Multi-file: field `files` (maks 10), respons array `ImageResponse[]`.
   @Post('thumbnail')
   @Public()
   @HttpCode(201)
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UseInterceptors(MulterUploadInterceptor)
-  thumbnail(@UploadedFile() file: Express.Multer.File) {
-    return this.imageService.upload(file, 'story-submission');
+  @UseInterceptors(MulterUploadManyInterceptor)
+  thumbnail(@UploadedFiles() files: Express.Multer.File[]): Promise<ImageResponse[]> {
+    return Promise.all(
+      requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'story-submission')),
+    );
   }
 
-  // Upload galeri/flyer form publik; `entityType` di-hardcode server-side.
+  // Upload galeri/flyer form publik; `entityType` di-hardcode server-side. Multi-file (`files`, maks 10).
   @Post('images')
   @Public()
   @HttpCode(201)
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UseInterceptors(MulterUploadInterceptor)
-  image(@UploadedFile() file: Express.Multer.File) {
-    return this.imageService.upload(file, 'story-submission');
+  @UseInterceptors(MulterUploadManyInterceptor)
+  image(@UploadedFiles() files: Express.Multer.File[]): Promise<ImageResponse[]> {
+    return Promise.all(
+      requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'story-submission')),
+    );
   }
 
   // Kategori STORY untuk form publik (tanpa auth). Harus di atas `:id`.

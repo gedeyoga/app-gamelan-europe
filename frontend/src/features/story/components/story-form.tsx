@@ -29,6 +29,7 @@ import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
 
 import { RichTextEditor } from '@/components/shared/rich-text-editor'
+import type { UserOption } from '@/components/shared/user-combobox'
 import { StoryMetaPanel } from './story-meta-panel'
 import { createStorySchema, type StoryFormValues } from '../lib/schema'
 import { slugify } from '../lib/slug'
@@ -64,6 +65,11 @@ export interface StoryFormProps {
   canApproveStory: boolean
   canRejectStory: boolean
   onCreateCategory: (name: string) => Promise<StoryCategory | undefined>
+  authors: UserOption[]
+  isLoadingUsers: boolean
+  canManageAuthors: boolean
+  /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
+  canDeleteAuthors: boolean
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
 }
@@ -86,6 +92,10 @@ export function StoryForm({
   canApproveStory,
   canRejectStory,
   onCreateCategory,
+  authors,
+  isLoadingUsers,
+  canManageAuthors,
+  canDeleteAuthors,
   onUploadImage,
   onUploadError,
 }: StoryFormProps) {
@@ -233,6 +243,7 @@ export function StoryForm({
       status: STATUS_BY_ACTION[action] ?? values.status,
       visibility: values.visibility,
       categoryIds: values.categoryIds,
+      authorIds: values.authorIds,
       ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
       ...(values.content ? { content: values.content } : {}),
@@ -452,6 +463,10 @@ export function StoryForm({
                     canReadCategories={canReadCategories}
                     canCreateCategory={canCreateCategory}
                     onCreateCategory={onCreateCategory}
+                    authors={authors}
+                    isLoadingUsers={isLoadingUsers}
+                    canManageAuthors={canManageAuthors}
+                    canDeleteAuthors={canDeleteAuthors}
                     disabled={isPending}
                   />
                 </div>

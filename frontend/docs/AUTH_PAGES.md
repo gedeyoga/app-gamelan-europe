@@ -66,8 +66,8 @@ Field form (react-hook-form + zod):
 | `confirmPassword` | Input password | wajib cocok dengan `password`. |
 | `phone` | Komposit dial + nasional | `{ dial, national }`; opsional (kosong = tidak dikirim). |
 | `countryId` | `Select` negara | opsional (sentinel `none` = tanpa negara), nilai `iso2`. |
-| `organization` | Checkbox | bila dicentang, `organizationName` wajib. |
-| `organizationName` | Input teks | trim, max 200; hanya dikirim bila `organization` true. |
+| `network` | Checkbox | bila dicentang, `networkName` wajib. |
+| `networkName` | Input teks | trim, max 200; hanya dikirim bila `network` true. |
 
 Tidak ada field alamat.
 

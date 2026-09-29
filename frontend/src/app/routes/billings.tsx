@@ -20,13 +20,13 @@ import { useDeleteBilling } from '@/features/billing/hooks/use-delete-billing'
 import { useUpdateBilling } from '@/features/billing/hooks/use-update-billing'
 import type {
   Billing,
-  BillingOrganization,
+  BillingNetwork,
   BillingSubscription,
   BillingUser,
   CreateBillingInput,
   UpdateBillingInput,
 } from '@/features/billing/types'
-import { useOrganizations } from '@/features/organization/hooks/use-organizations'
+import { useNetworks } from '@/features/network/hooks/use-networks'
 import { useSubscriptions } from '@/features/subscription/hooks/use-subscriptions'
 import { useUsers } from '@/features/user/hooks/use-users'
 
@@ -66,17 +66,17 @@ export function BillingsPage() {
   // Opsi form di-fetch lazy: hanya saat dialog terbuka + sesi punya permission baca terkait,
   // agar user tanpa permission tidak kena banner 403 permanen saat mount.
   const canReadUsers = can('user:read')
-  const canReadOrganizations = can('organization:read')
+  const canReadNetworks = can('network:read')
   const canReadSubscriptions = can('subscription:read')
   const usersQuery = useUsers({
     page: 1,
     limit: OPTION_LIMIT,
     enabled: formOpen && canReadUsers,
   })
-  const organizationsQuery = useOrganizations({
+  const networksQuery = useNetworks({
     page: 1,
     limit: OPTION_LIMIT,
-    enabled: formOpen && canReadOrganizations,
+    enabled: formOpen && canReadNetworks,
   })
   const subscriptionsQuery = useSubscriptions({
     page: 1,
@@ -93,9 +93,10 @@ export function BillingsPage() {
     fullName: user.fullName,
     email: user.email,
   }))
-  const organizationOptions: BillingOrganization[] = (
-    organizationsQuery.data?.items ?? []
-  ).map((organization) => ({ id: organization.id, name: organization.name }))
+  const networkOptions: BillingNetwork[] = (networksQuery.data?.items ?? []).map((network) => ({
+    id: network.id,
+    name: network.name,
+  }))
   const subscriptionOptions: BillingSubscription[] = (
     subscriptionsQuery.data?.items ?? []
   ).map((subscription) => ({
@@ -108,7 +109,7 @@ export function BillingsPage() {
   const billingsForbidden = isForbiddenError(billingsQuery.error)
   const optionsError =
     (canReadUsers && usersQuery.isError) ||
-    (canReadOrganizations && organizationsQuery.isError) ||
+    (canReadNetworks && networksQuery.isError) ||
     (canReadSubscriptions && subscriptionsQuery.isError)
   const canCreateBilling = can('billing:create')
 
@@ -271,10 +272,10 @@ export function BillingsPage() {
           mode={formMode}
           billing={editingBilling}
           users={userOptions}
-          organizations={organizationOptions}
+          networks={networkOptions}
           subscriptions={subscriptionOptions}
           canSelectUser={canReadUsers}
-          canSelectOrganization={canReadOrganizations}
+          canSelectNetwork={canReadNetworks}
           canSelectSubscription={canReadSubscriptions}
           isSubmitting={formMode === 'create' ? createBilling.isPending : updateBilling.isPending}
           submissionError={formMode === 'create' ? createBilling.error : updateBilling.error}

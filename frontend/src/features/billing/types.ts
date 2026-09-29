@@ -8,7 +8,7 @@ export interface BillingUser {
   email: string
 }
 
-export interface BillingOrganization {
+export interface BillingNetwork {
   id: string
   name: string
 }
@@ -32,8 +32,8 @@ export interface Billing {
   id: string
   userId: string
   user: BillingUser
-  organizationId: string | null
-  organization: BillingOrganization | null
+  networkId: string | null
+  network: BillingNetwork | null
   subscriptionId: string
   subscription: BillingSubscription
   code: string
@@ -60,8 +60,8 @@ export interface BillingLineInput {
 
 export interface CreateBillingInput {
   userId: string
-  /** `null` = disconnect organization; `undefined` = biarkan. */
-  organizationId?: string | null
+  /** `null` = disconnect network; `undefined` = biarkan. */
+  networkId?: string | null
   subscriptionId: string
   code: string
   status?: BillingStatus

@@ -30,8 +30,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { CategoryCombobox } from '@/components/shared/category-combobox'
+import { UserCombobox, type UserOption } from '@/components/shared/user-combobox'
 import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
+import { useAuth } from '@/features/auth/auth-provider'
+import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
+import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
 import { ApiError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 
@@ -89,6 +93,11 @@ export interface ArchiveFormProps {
   canApproveArchive: boolean
   canRejectArchive: boolean
   onCreateCategory: (name: string) => Promise<ArchiveCategory | undefined>
+  authors: UserOption[]
+  isLoadingUsers: boolean
+  canManageAuthors: boolean
+  /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
+  canDeleteAuthors: boolean
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadDocument: (file: File) => Promise<ArchiveDocument>
   onUploadError: (error: unknown) => void
@@ -112,11 +121,16 @@ export function ArchiveForm({
   canApproveArchive,
   canRejectArchive,
   onCreateCategory,
+  authors,
+  isLoadingUsers,
+  canManageAuthors,
+  canDeleteAuthors,
   onUploadImage,
   onUploadDocument,
   onUploadError,
 }: ArchiveFormProps) {
   const { t } = useTranslation()
+  const { user: sessionUser } = useAuth()
   const schema = useMemo(() => createArchiveSchema(t), [t])
   const form = useForm<ArchiveFormValues>({
     resolver: zodResolver(schema),
@@ -134,6 +148,9 @@ export function ArchiveForm({
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
   const [publishAction, setPublishAction] = useState<'publish' | 'approve'>('publish')
+  const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
+  const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
+  const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
     action: ArchiveFormAction
@@ -141,6 +158,27 @@ export function ArchiveForm({
   } | null>(null)
 
   const thumbnail = useWatch({ control: form.control, name: 'thumbnail' })
+
+  // Gabung author baru (belum tentu muncul di `authors`) + dedupe terhadap prop.
+  const authorOptions = useMemo(() => {
+    const seen = new Set(authors.map((author) => author.id))
+    return [...authors, ...createdAuthors.filter((author) => !seen.has(author.id))]
+  }, [authors, createdAuthors])
+
+  function handleAuthorCreated(author: UserOption) {
+    setCreatedAuthors((prev) =>
+      prev.some((item) => item.id === author.id) ? prev : [...prev, author],
+    )
+  }
+
+  function handleAuthorDeleted(authorId: string) {
+    setCreatedAuthors((prev) => prev.filter((author) => author.id !== authorId))
+    form.setValue(
+      'authorIds',
+      (form.getValues('authorIds') ?? []).filter((id) => id !== authorId),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
 
   // 422 → per-field; tetap di halaman (tanpa toast).
   useEffect(() => {
@@ -215,6 +253,7 @@ export function ArchiveForm({
       type: values.type,
       status: STATUS_BY_ACTION[action] ?? values.status,
       categoryIds: values.categoryIds,
+      authorIds: values.authorIds,
       ...(values.description.trim() ? { description: values.description.trim() } : {}),
     }
 
@@ -445,6 +484,34 @@ export function ArchiveForm({
                     </FormItem>
                   )}
                 />
+
+                {canManageAuthors && (
+                  <FormField
+                    control={form.control}
+                    name="authorIds"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('archive:form.authors')}</FormLabel>
+                        <UserCombobox
+                          options={authorOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          isLoading={isLoadingUsers}
+                          disabled={isPending}
+                          canCreate={canManageAuthors}
+                          onCreateClick={() => setAuthorDialogOpen(true)}
+                          canDeleteOption={(option) =>
+                            canDeleteAuthors &&
+                            option.id !== sessionUser?.id &&
+                            !field.value.includes(option.id)
+                          }
+                          onDeleteOption={setDeletingAuthor}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -562,6 +629,26 @@ export function ArchiveForm({
         }
         cancelLabel={t('archive:form.cancel')}
       />
+
+      {canManageAuthors && (
+        <>
+          <AuthorCreateDialog
+            open={authorDialogOpen}
+            onOpenChange={setAuthorDialogOpen}
+            onCreated={handleAuthorCreated}
+          />
+          {canDeleteAuthors && (
+            <AuthorDeleteDialog
+              open={Boolean(deletingAuthor)}
+              onOpenChange={(open) => {
+                if (!open) setDeletingAuthor(null)
+              }}
+              author={deletingAuthor}
+              onDeleted={handleAuthorDeleted}
+            />
+          )}
+        </>
+      )}
     </Form>
   )
 }

@@ -212,7 +212,7 @@ Dua lapis otorisasi berjalan terpisah:
 | **Row-level scope** | `AccessScopeService.resolve(ownerId, resource)` | Service konten — baris mana yang boleh dibaca/ditulis (`resource ∈ {'story','event'}`). |
 
 - Principal API key mengeset `id = creator.id` (owner). Karena itu `AccessScopeService.resolve(user.id, resource)` di service konten memakai **permission & organisasi owner**, bukan permission key. Scope dihitung **per-resource** (M2).
-- **Konsekuensi**: key milik `admin` → scope `all` (bisa lihat semua baris); key milik `organization`/`member` dengan tulis event → scope `organization`/`own` sesuai resource + `organizationId`; key tanpa tulis → `published`.
+- **Konsekuensi**: key milik `admin` → scope `all` (bisa lihat semua baris); key milik user dengan permission tulis event → scope `network`/`own` sesuai resource + `networkId`; key tanpa tulis → `published`.
 - Scope di-resolve **fresh dari DB** tiap request (single source of truth) — role owner berubah → scope key ikut berubah tanpa perlu buat ulang key.
 - `creator.status !== ACTIVE` (`INACTIVE`/`BLOCKED`) → key langsung invalid (**401**), meski hash cocok.
 

@@ -46,6 +46,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const { t } = useTranslation('dashboard')
   const { t: tStory } = useTranslation('story')
   const { t: tEvent } = useTranslation('event')
+  const { t: tNetwork } = useTranslation('network')
   const { theme, toggleTheme } = useTheme()
   const { pathname: rawPathname } = useLocation()
   // Normalisasi trailing slash (kecuali root `/`) agar `/stories/new/` tetap match.
@@ -55,6 +56,8 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     pathname === '/stories/new' || /^\/stories\/[^/]+\/edit$/.test(pathname)
   const isEventEditor =
     pathname === '/events/new' || /^\/events\/[^/]+\/edit$/.test(pathname)
+  const isNetworkEditor =
+    pathname === '/networks/new' || /^\/networks\/[^/]+\/edit$/.test(pathname)
   // `/stories/:id` (bukan `/new`, bukan `/edit`): halaman read-only dengan layout penuh tanpa sidebar/header.
   const isStoryDetail = /^\/stories\/(?!new$)[^/]+$/.test(pathname)
   // `/events/:id`: halaman detail read-only — pola sama, tanpa sidebar/header.
@@ -78,10 +81,10 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
       { title: t('nav.users'), url: '/users', icon: Users, permission: 'user:read' },
       { title: t('nav.roles'), url: '/roles', icon: Shield, permission: 'role:read' },
       {
-        title: t('nav.organizations'),
-        url: '/organizations',
+        title: t('nav.networks'),
+        url: '/networks',
         icon: Building2,
-        permission: 'organization:read',
+        permission: 'network:read',
       },
       { title: t('nav.apiKey'), url: '/api-keys', icon: KeyRound, permission: 'apikey:read' },
     ],
@@ -129,17 +132,29 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
     return <Outlet />
   }
 
-  // Route editor story/event: tanpa sidebar, header ringkas + breadcrumb Dashboard / section / judul.
-  if (isStoryEditor || isEventEditor) {
-    const editorTitle = isStoryEditor
-      ? pathname === '/stories/new'
-        ? tStory('form.createTitle')
-        : tStory('form.editTitle')
-      : pathname === '/events/new'
-        ? tEvent('form.createTitle')
-        : tEvent('form.editTitle')
-    const sectionLabel = isStoryEditor ? t('nav.story') : t('nav.event')
-    const sectionUrl = isStoryEditor ? '/stories' : '/events'
+  // Route editor story/event/network: tanpa sidebar, header ringkas + breadcrumb Dashboard / section / judul.
+  if (isStoryEditor || isEventEditor || isNetworkEditor) {
+    const editorTitle = isNetworkEditor
+      ? pathname === '/networks/new'
+        ? tNetwork('form.createTitle')
+        : tNetwork('form.editTitle')
+      : isStoryEditor
+        ? pathname === '/stories/new'
+          ? tStory('form.createTitle')
+          : tStory('form.editTitle')
+        : pathname === '/events/new'
+          ? tEvent('form.createTitle')
+          : tEvent('form.editTitle')
+    const sectionLabel = isNetworkEditor
+      ? t('nav.networks')
+      : isStoryEditor
+        ? t('nav.story')
+        : t('nav.event')
+    const sectionUrl = isNetworkEditor
+      ? '/networks'
+      : isStoryEditor
+        ? '/stories'
+        : '/events'
     return (
       <TooltipProvider delayDuration={0}>
         <div className="flex min-h-svh flex-col lg:h-svh lg:overflow-hidden">

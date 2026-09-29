@@ -40,6 +40,12 @@ interface AuthContextValue {
    * sebelum `navigate('/')` (backend `/auth/login` tidak mengembalikan permissions).
    */
   hydrateSession: () => Promise<SessionUser>
+  /**
+   * Timpa state + `localStorage['auth.user']` dengan payload sesi dari
+   * mutation (`PATCH /auth/me`, `POST /auth/me/avatar`) — jaga sidebar/UI
+   * tetap sinkron tanpa reload dan tanpa refetch.
+   */
+  setSession: (session: SessionUser) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -85,6 +91,7 @@ function readStoredUser(): SessionUser | null {
       status: parsed.status,
       role: parsed.role ?? null,
       permissions: parsed.permissions,
+      avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
     }
   } catch {
     localStorage.removeItem(USER_KEY)
@@ -297,8 +304,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       hydrateSession,
+      setSession,
     }),
-    [user, status, login, logout, hydrateSession],
+    [user, status, login, logout, hydrateSession, setSession],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

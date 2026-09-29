@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -158,20 +157,10 @@ export function RegisterForm() {
             national: z.string(),
           }),
           countryId: z.string().optional(),
-          organization: z.boolean(),
-          organizationName: z
-            .string()
-            .trim()
-            .max(200, t('validation:organizationNameMax', { count: 200 }))
-            .optional(),
         })
         .refine((data) => data.password === data.confirmPassword, {
           message: t('validation:passwordMismatch'),
           path: ['confirmPassword'],
-        })
-        .refine((data) => !data.organization || (data.organizationName ?? '').length > 0, {
-          message: t('validation:organizationNameRequired'),
-          path: ['organizationName'],
         })
         .superRefine((data, ctx) => {
           const national = toDigits(data.phone.national).replace(/^0+/, '')
@@ -208,8 +197,6 @@ export function RegisterForm() {
       confirmPassword: '',
       phone: { dial: '', national: '' },
       countryId: '',
-      organization: false,
-      organizationName: '',
     },
   })
 
@@ -256,8 +243,6 @@ export function RegisterForm() {
       password: values.password,
       phone,
       countryId: values.countryId || undefined,
-      organizationName:
-        values.organization && values.organizationName ? values.organizationName : undefined,
     })
   }
 
@@ -372,46 +357,6 @@ export function RegisterForm() {
             </FormItem>
           )}
         />
-
-        <FormField
-          control={form.control}
-          name="organization"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>{t('auth:register.organization')}</FormLabel>
-                <p className="text-xs text-muted-foreground">
-                  {t('auth:register.organizationHint')}
-                </p>
-              </div>
-            </FormItem>
-          )}
-        />
-
-        {form.watch('organization') && (
-          <FormField
-            control={form.control}
-            name="organizationName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('auth:register.organizationName')}</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="organization"
-                    maxLength={200}
-                    placeholder={t('auth:register.organizationNamePlaceholder')}
-                    {...field}
-                    value={field.value ?? ''}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
 
         <Button type="submit" className="w-full" disabled={register.isPending}>
           <UserPlus data-icon="inline-start" className="size-4" />

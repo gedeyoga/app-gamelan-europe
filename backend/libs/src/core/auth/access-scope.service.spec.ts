@@ -3,11 +3,11 @@ import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { hasAdminAccess, ADMIN_ACCESS_PERMISSION } from '@app/libs/modules/permission/permission.constants';
 import { AccessScopeService, ownReadWhere } from './access-scope.service';
 
-function make(user: { organizationId?: string | null; codes?: string[] }): AccessScopeService {
+function make(user: { networkId?: string | null; codes?: string[] }): AccessScopeService {
   const prisma = {
     user: {
       findUnique: jest.fn().mockResolvedValue({
-        organizationId: user.organizationId ?? null,
+        networkId: user.networkId ?? null,
         role: { permissions: (user.codes ?? []).map((code) => ({ permission: { code } })) },
       }),
     },
@@ -27,32 +27,32 @@ describe('AccessScopeService.resolve (permission-based, per-resource)', () => {
     });
   });
 
-  it('M2: story write does NOT grant organization scope on event', async () => {
-    const svc = make({ organizationId: 'org-1', codes: ['story:create'] });
+  it('M2: story write does NOT grant network scope on event', async () => {
+    const svc = make({ networkId: 'org-1', codes: ['story:create'] });
     await expect(svc.resolve('u1', 'event')).resolves.toEqual({
       kind: 'published',
       canViewPrivate: true,
     });
     await expect(svc.resolve('u1', 'story')).resolves.toEqual({
-      kind: 'organization',
-      organizationId: 'org-1',
+      kind: 'network',
+      networkId: 'org-1',
       userId: 'u1',
       canViewPrivate: true,
     });
   });
 
-  it('organizationId + content write (event) → organization for event', async () => {
+  it('networkId + content write (event) → network for event', async () => {
     await expect(
-      make({ organizationId: 'org-1', codes: ['event:create'] }).resolve('u1', 'event'),
+      make({ networkId: 'org-1', codes: ['event:create'] }).resolve('u1', 'event'),
     ).resolves.toEqual({
-      kind: 'organization',
-      organizationId: 'org-1',
+      kind: 'network',
+      networkId: 'org-1',
       userId: 'u1',
       canViewPrivate: true,
     });
   });
 
-  it('content write without organizationId → own', async () => {
+  it('content write without networkId → own', async () => {
     await expect(make({ codes: ['story:create'] }).resolve('u1', 'story')).resolves.toEqual({
       kind: 'own',
       userId: 'u1',
@@ -69,8 +69,8 @@ describe('AccessScopeService.resolve (permission-based, per-resource)', () => {
 
   it('member-like (event writer with org) → canViewPrivate true', async () => {
     await expect(
-      make({ organizationId: 'org-1', codes: ['story:read', 'event:read', 'event:create'] }).resolve('u1', 'event'),
-    ).resolves.toMatchObject({ kind: 'organization', canViewPrivate: true });
+      make({ networkId: 'org-1', codes: ['story:read', 'event:read', 'event:create'] }).resolve('u1', 'event'),
+    ).resolves.toMatchObject({ kind: 'network', canViewPrivate: true });
   });
 
   it('no permission → published + !canViewPrivate (least privilege)', async () => {

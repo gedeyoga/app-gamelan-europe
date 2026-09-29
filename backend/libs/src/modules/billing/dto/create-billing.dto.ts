@@ -24,7 +24,7 @@ export class CreateBillingDto {
   // `null` eksplisit = lepas relasi (update) / diabaikan (create). Selaras @IsOptional (skip null).
   @IsOptional()
   @IsUUID()
-  organizationId?: string | null;
+  networkId?: string | null;
 
   @IsUUID()
   subscriptionId: string;

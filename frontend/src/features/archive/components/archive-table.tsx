@@ -61,7 +61,7 @@ export function ArchiveTable({
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 7 : 6
+  const columnCount = showActions ? 8 : 7
 
   return (
     <div className="rounded-xl border">
@@ -80,6 +80,7 @@ export function ArchiveTable({
               />
             </TableHead>
             <TableHead>{t('archive:table.categories')}</TableHead>
+            <TableHead>{t('archive:table.author')}</TableHead>
             <TableHead>
               <SortableHeader
                 label={t('archive:table.type')}
@@ -180,6 +181,9 @@ export function ArchiveTable({
                       ))}
                     </div>
                   )}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {archive.authors.map((author) => author.fullName).join(', ') || '—'}
                 </TableCell>
                 <TableCell>
                   <Badge variant={TYPE_VARIANT[archive.type]}>

@@ -9,7 +9,7 @@
   "errors": {
     "loadData": "Failed to load billing data. Please try again.",
     "forbidden": "You don't have access to view billing data.",
-    "loadOptions": "Failed to load form options (user/organization/subscription)."
+    "loadOptions": "Failed to load form options (user/network/subscription)."
   },
   "table": {
     "code": "Code",
@@ -46,9 +46,9 @@
     "code": "Code",
     "user": "User",
     "selectUser": "Select user",
-    "organization": "Organization",
-    "selectOrganization": "Select organization",
-    "noOrganization": "No organization",
+    "network": "Network",
+    "selectNetwork": "Select network",
+    "noNetwork": "No network",
     "subscription": "Subscription",
     "selectSubscription": "Select subscription",
     "status": "Status",

@@ -185,7 +185,7 @@ export function StoryTable({
                   )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {story.creator?.fullName ?? '—'}
+                  {story.authors.map((author) => author.fullName).join(', ') || '—'}
                 </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[story.status]}>

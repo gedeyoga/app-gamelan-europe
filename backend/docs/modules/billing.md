@@ -11,7 +11,7 @@ Menu: [subscription.md](./subscription.md)
 Modul **`billing`** mengelola `Billing` (tagihan) beserta `BillingLine` (rincian baris). Relasi:
 
 - `Billing.userId → User.id` (wajib, `onDelete: Cascade`)
-- `Billing.organizationId → Organization.id` (opsional, `onDelete: SetNull`)
+- `Billing.networkId → Network.id` (opsional, `onDelete: SetNull`)
 - `Billing.subscriptionId → Subscription.id` (wajib, `onDelete: Restrict`)
 - `BillingLine.billingId → Billing.id` (wajib, `onDelete: Cascade`)
 
@@ -44,11 +44,11 @@ Jalankan `pnpm prisma:seed` untuk menambah 4 permission `billing:*`.
 ```typescript
 // libs/src/modules/billing/entities/billing.entity.ts
 export const billingSelect = {
-  id: true, userId: true, organizationId: true, subscriptionId: true,
+  id: true, userId: true, networkId: true, subscriptionId: true,
   code: true, status: true, subscriptionType: true, currency: true,
   total: true, discount: true, tax: true, paidAt: true, canceledAt: true,
   user: { select: { id: true, fullName: true, email: true } },
-  organization: { select: { id: true, name: true } },   // nullable
+  network: { select: { id: true, name: true } },   // nullable
   subscription: { select: { id: true, name: true, slug: true } },
   lines: { select: { id: true, description: true, type: true, qty: true, amount: true, currency: true } },
   createdAt: true, updatedAt: true,
@@ -56,7 +56,7 @@ export const billingSelect = {
 ```
 
 - `total` → `number`; `discount`/`tax` → `number | null`; `lines[].amount` → `number`.
-- `organization` nullable (bila `organizationId` null).
+- `network` nullable (bila `networkId` null).
 
 ---
 
@@ -67,7 +67,7 @@ export const billingSelect = {
 | Field | Aturan |
 | --- | --- |
 | `userId` | `@IsUUID()` wajib |
-| `organizationId` | opsional, `@IsUUID()` |
+| `networkId` | opsional, `@IsUUID()` |
 | `subscriptionId` | `@IsUUID()` wajib |
 | `code` | trim, `@IsNotEmpty()`, `@MaxLength(100)`; duplikat → **409** `ConflictException('Billing code already exists')` |
 | `status` | opsional, `@IsEnum(BillingStatus)` (`PENDING`/`PAID`/`CANCELED`) |
@@ -88,7 +88,7 @@ export const billingSelect = {
 
 | Field | `undefined` | `null` eksplisit |
 | --- | --- | --- |
-| `organizationId` | create: relasi tidak di-set · update: tidak disentuh | create: diabaikan (relasi tetap null) · update: **`{ disconnect: true }`** (lepas organisasi) |
+| `networkId` | create: relasi tidak di-set · update: tidak disentuh | create: diabaikan (relasi tetap null) · update: **`{ disconnect: true }`** (lepas organisasi) |
 | `discount`, `tax` | create: skip (default null) · update: tidak disentuh | **clear** → `null` |
 | `paidAt`, `canceledAt` | create: skip (default null) · update: tidak disentuh | **clear** → `null` (bukan `new Date(null)`) |
 
@@ -100,7 +100,7 @@ export const billingSelect = {
 | --- | --- |
 | `BILLING_SEARCHABLE_FIELDS` | `['code', 'currency']` |
 | `BILLING_SORT_FIELDS` | `['code', 'status', 'subscriptionType', 'currency', 'total', 'paidAt', 'canceledAt', 'createdAt', 'updatedAt', 'user.fullName', 'subscription.name']` |
-| `BILLING_FILTER_FIELDS` | `['code', 'status', 'subscriptionType', 'currency', 'userId', 'organizationId', 'subscriptionId', 'paidAt', 'canceledAt', 'createdAt', 'updatedAt']` |
+| `BILLING_FILTER_FIELDS` | `['code', 'status', 'subscriptionType', 'currency', 'userId', 'networkId', 'subscriptionId', 'paidAt', 'canceledAt', 'createdAt', 'updatedAt']` |
 | `BILLING_DATE_FIELDS` | `['paidAt', 'canceledAt', 'createdAt', 'updatedAt']` |
 
 Sort kolom relasi didukung via `BILLING_SORT_MAP` (dipakai `buildOrderBy`):

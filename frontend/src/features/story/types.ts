@@ -30,6 +30,7 @@ export interface Story {
   content?: string
   thumbnail: string | null
   categories: StoryCategory[]
+  authors: { id: string; fullName: string }[]
   creator: Creator | null
   /** Galeri gambar berurut (kontrak `GET /posts/:id`). */
   gallery: UploadedImage[]
@@ -47,6 +48,7 @@ export interface CreateStoryInput {
   status?: ContentStatus
   visibility?: Visibility
   categoryIds?: string[]
+  authorIds?: string[]
   imageIds?: string[]
   /** Galeri gambar berurut (id `Image`); bila dikirim = replace seluruh galeri. */
   galleryImageIds?: string[]

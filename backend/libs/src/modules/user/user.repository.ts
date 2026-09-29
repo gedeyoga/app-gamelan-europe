@@ -13,6 +13,11 @@ export class UserRepository {
     return user;
   }
 
+  async findByIds(ids: string[]): Promise<UserEntity[]> {
+    if (ids.length === 0) return [];
+    return this.prisma.user.findMany({ where: { id: { in: ids } }, select: userSelect });
+  }
+
   async findByEmailWithPassword(email: string): Promise<UserAuthEntity | null> {
     return this.prisma.user.findUnique({ where: { email }, select: userWithPasswordSelect });
   }
@@ -41,34 +46,6 @@ export class UserRepository {
   async create(data: Prisma.UserUncheckedCreateInput): Promise<UserEntity> {
     try {
       return await this.prisma.user.create({ data, select: userSelect });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw this.toUniqueConstraintError(e);
-      }
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-        throw this.toForeignKeyConstraintError(e);
-      }
-      throw e;
-    }
-  }
-
-  // Self-register + buat organization baru secara atomik: bila user gagal (mis. P2002 email),
-  // organization ikut rollback → tidak ada orphan. Error tetap dipetakan 422 per-field.
-  async createWithOrganization(
-    data: Prisma.UserUncheckedCreateInput,
-    organizationName: string,
-  ): Promise<UserEntity> {
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        const organization = await tx.organization.create({
-          data: { name: organizationName },
-          select: { id: true },
-        });
-        return tx.user.create({
-          data: { ...data, organizationId: organization.id },
-          select: userSelect,
-        });
-      });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw this.toUniqueConstraintError(e);
@@ -112,8 +89,9 @@ export class UserRepository {
     const meta = e.meta as { field_name?: string; constraint?: string } | undefined;
     const byColumn: Record<string, { field: string; message: string }> = {
       country_id: { field: 'countryId', message: 'Country not found' },
+      state_id: { field: 'stateId', message: 'State not found' },
       role_id: { field: 'roleId', message: 'Role not found' },
-      organization_id: { field: 'organizationId', message: 'Organization not found' },
+      network_id: { field: 'networkId', message: 'Network not found' },
     };
     const column =
       meta?.field_name && byColumn[meta.field_name]

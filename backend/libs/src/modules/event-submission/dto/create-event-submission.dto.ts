@@ -1,8 +1,10 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsEmail,
   IsInt,
   IsISO8601,
   IsNotEmpty,
+  IsNotEmptyObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -10,9 +12,12 @@ import {
   registerDecorator,
   ValidationArguments,
   ValidationOptions,
+  ValidateNested,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+const trimLower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 // Cap durasi inklusif (dipakai juga saat approve membangun EventDate) — mencegah DoS tanggal (§8.8).
 export const MAX_EVENT_SUBMISSION_RANGE_DAYS = 31;
@@ -51,6 +56,30 @@ function rangeError(obj: { startDate?: string; endDate?: string }): string | nul
   return null;
 }
 
+// Section `author` (data pengirim) — section tersendiri, terpisah dari geo/organiser event.
+// Cross-field `author.stateId` milik `author.countryId` dicek di service → 422 `author.stateId`.
+export class EventSubmissionAuthorDto {
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  fullName: string;
+
+  @Transform(trimLower)
+  @IsEmail()
+  @MaxLength(200)
+  email: string;
+
+  @Type(() => Number)
+  @IsInt()
+  countryId: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stateId?: number;
+}
+
 export class CreateEventSubmissionDto {
   @Transform(trim)
   @IsString()
@@ -79,6 +108,12 @@ export class CreateEventSubmissionDto {
   @IsNotEmpty()
   @MaxLength(200)
   organiser: string;
+
+  // Section terpisah "data pengirim" (wajib) — bukan bagian dari geo/organiser event.
+  @IsNotEmptyObject()
+  @ValidateNested()
+  @Type(() => EventSubmissionAuthorDto)
+  author: EventSubmissionAuthorDto;
 
   @IsUUID('4')
   eventTypeId: string;

@@ -61,7 +61,7 @@ export function EventTable({
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 9 : 8
+  const columnCount = showActions ? 10 : 9
 
   return (
     <div className="rounded-xl border">
@@ -82,6 +82,7 @@ export function EventTable({
             <TableHead>{t('event:table.eventTypes')}</TableHead>
             <TableHead>{t('event:table.dates')}</TableHead>
             <TableHead>{t('event:table.location')}</TableHead>
+            <TableHead>{t('event:table.author')}</TableHead>
             <TableHead>
               <SortableHeader
                 label={t('event:table.status')}
@@ -182,6 +183,9 @@ export function EventTable({
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {event.location?.name ?? '—'}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {event.authors.map((author) => author.fullName).join(', ') || '—'}
                 </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[event.status]}>

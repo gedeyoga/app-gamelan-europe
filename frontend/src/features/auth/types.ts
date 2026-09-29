@@ -16,7 +16,6 @@ export interface RegisterRequest {
   password: string
   phone?: string
   countryId?: string
-  organizationName?: string
 }
 
 export interface Country {
@@ -39,6 +38,7 @@ export interface SessionUser {
   status: string
   role: SessionRole | null
   permissions: string[]
+  avatar?: string | null
 }
 
 export interface RefreshResponse {

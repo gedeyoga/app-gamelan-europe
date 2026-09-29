@@ -2,7 +2,8 @@ import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityE
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
-import { OrganizationRepository } from '@app/libs/modules/organization/organization.repository';
+import { NetworkRepository } from '@app/libs/modules/network/network.repository';
+import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { EventRepository, CreateEventData, UpdateEventData } from './event.repository';
 import { EventEntity, EventResponse } from './entities/event.entity';
@@ -31,7 +32,8 @@ export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus[]; to:
 export class EventService {
   constructor(
     private readonly eventRepository: EventRepository,
-    private readonly organizationRepository: OrganizationRepository,
+    private readonly networkRepository: NetworkRepository,
+    private readonly userRepository: UserRepository,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -42,12 +44,24 @@ export class EventService {
     });
   }
 
-  // Cek existence Organization → 422 per-field (field body trust boundary).
-  private async assertOrganization(organizationId?: string | null): Promise<void> {
-    if (!organizationId) return;
-    const exists = await this.organizationRepository.existsById(organizationId);
+  // Cek existence Network → 422 per-field (field body trust boundary).
+  private async assertNetwork(networkId?: string | null): Promise<void> {
+    if (!networkId) return;
+    const exists = await this.networkRepository.existsById(networkId);
     if (!exists) {
-      throw this.validationError('organizationId', 'organizationId does not exist');
+      throw this.validationError('networkId', 'networkId does not exist');
+    }
+  }
+
+  // Cek existence setiap authorIds (user) → 422 per-field (cegah P2003 FK saat createMany).
+  private async assertAuthors(authorIds?: string[]): Promise<void> {
+    if (!authorIds || authorIds.length === 0) return;
+    const users = await this.userRepository.findByIds(authorIds);
+    const found = new Set(users.map((user) => user.id));
+    for (let i = 0; i < authorIds.length; i++) {
+      if (!found.has(authorIds[i])) {
+        throw this.validationError(`authorIds.${i}`, 'authorId must reference an existing user');
+      }
     }
   }
 
@@ -56,8 +70,8 @@ export class EventService {
     switch (scope.kind) {
       case 'all':
         return undefined;
-      case 'organization':
-        return { creator: { organizationId: scope.organizationId } };
+      case 'network':
+        return { creator: { networkId: scope.networkId } };
       case 'own':
         return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.EventWhereInput;
       case 'published': {
@@ -101,8 +115,8 @@ export class EventService {
   // "My Event": organisasi → event satu organisasi; selain itu → event buatan user sendiri.
   // Di-AND dengan scopeWhere (bukan mengganti) supaya scoping tetap aman.
   private mineWhere(scope: AccessScope, userId: string): Prisma.EventWhereInput {
-    if (scope.kind === 'organization') {
-      return { creator: { organizationId: scope.organizationId } };
+    if (scope.kind === 'network') {
+      return { creator: { networkId: scope.networkId } };
     }
     return { createdBy: userId };
   }
@@ -113,7 +127,7 @@ export class EventService {
     if (event.visibility === ContentVisibility.PRIVATE && !scope.canViewPrivate) {
       throw new ForbiddenException('Forbidden resource');
     }
-    if (scope.kind === 'organization' && event.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network' && event.creator?.networkId !== scope.networkId) {
       throw new ForbiddenException('Forbidden resource');
     }
     if (scope.kind === 'own') {
@@ -140,11 +154,11 @@ export class EventService {
     }
   }
 
-  // Tulis: admin bebas; organization hanya konten organisasinya; none/published tolak (defensif,
+  // Tulis: admin bebas; network hanya konten network-nya; none/published tolak (defensif,
   // guard permission biasanya sudah memblok lebih dulu).
   private assertWritable(event: EventEntity, scope: AccessScope): void {
-    if (scope.kind === 'organization') {
-      if (event.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network') {
+      if (event.creator?.networkId !== scope.networkId) {
         throw new ForbiddenException('Forbidden resource');
       }
       return;
@@ -158,7 +172,7 @@ export class EventService {
     if (scope.kind !== 'all') throw new ForbiddenException('Forbidden resource');
   }
 
-  // Buang `creator.organizationId` (tenancy internal) dari response; sertakan `organization` { id, name }.
+  // Buang `creator.networkId` (tenancy internal) dari response; sertakan `network` { id, name }.
   private toResponse(event: EventEntity): EventResponse {
     const { creator, ...rest } = event;
     return {
@@ -167,8 +181,8 @@ export class EventService {
         ? {
             id: creator.id,
             fullName: creator.fullName,
-            organization: creator.organization
-              ? { id: creator.organization.id, name: creator.organization.name }
+            network: creator.network
+              ? { id: creator.network.id, name: creator.network.name }
               : null,
           }
         : null,
@@ -221,7 +235,7 @@ export class EventService {
       this.eventRepository.findById(id),
       this.accessScope.resolve(userId, 'event'),
     ]);
-    this.assertReadable(event, scope); // cek scope pakai entity mentah (punya organizationId)
+    this.assertReadable(event, scope); // cek scope pakai entity mentah (punya networkId)
     return this.toResponse(event);
   }
 
@@ -237,7 +251,7 @@ export class EventService {
       status: autoPublish ? ContentStatus.PUBLISHED : status,
       visibility: dto.visibility ?? ContentVisibility.PUBLIC,
       createdBy,
-      organizationId: dto.organizationId ?? undefined,
+      networkId: dto.networkId ?? undefined,
       publishedAt: autoPublish
         ? new Date(dto.publishedAt!)
         : status === ContentStatus.PUBLISHED
@@ -248,19 +262,21 @@ export class EventService {
       eventTypeIds: dto.eventTypeIds,
       dates: dto.dates?.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime })),
       location: dto.location,
+      authorIds: dto.authorIds,
     };
   }
 
   async create(dto: CreateEventDto, userId: string): Promise<EventResponse> {
     const scope = await this.accessScope.resolve(userId, 'event');
-    if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
+    if (scope.kind !== 'all' && scope.kind !== 'network' && scope.kind !== 'own') {
       throw new ForbiddenException('Forbidden resource');
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
     const scoped = scope.kind === 'all' ? dto : { ...dto, status: ContentStatus.DRAFT, publishedAt: undefined };
     const status = scoped.status ?? ContentStatus.DRAFT;
 
-    await this.assertOrganization(scoped.organizationId);
+    await this.assertNetwork(scoped.networkId);
+    await this.assertAuthors(scoped.authorIds);
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (scoped.slug) {
@@ -292,14 +308,18 @@ export class EventService {
     if (dto.content !== undefined) data.content = dto.content;
     if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail;
     if (dto.eventTypeIds !== undefined) data.eventTypeIds = dto.eventTypeIds;
+    if (dto.authorIds !== undefined) {
+      await this.assertAuthors(dto.authorIds);
+      data.authorIds = dto.authorIds;
+    }
     if (dto.dates !== undefined)
       data.dates = dto.dates.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime }));
     if (dto.location !== undefined) data.location = dto.location;
-    if (dto.organizationId !== undefined) {
-      await this.assertOrganization(dto.organizationId);
-      data.organizationId = dto.organizationId;
+    if (dto.networkId !== undefined) {
+      await this.assertNetwork(dto.networkId);
+      data.networkId = dto.networkId;
     }
-    // Visibility boleh diubah scope `all` maupun `organization` (assertWritable sudah membatasi).
+    // Visibility boleh diubah scope `all` maupun `network` (assertWritable sudah membatasi).
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
@@ -357,10 +377,15 @@ export class EventService {
     return this.findOne(id, userId);
   }
 
-  async remove(id: string, userId: string): Promise<EventResponse> {
+  // `skipScopeCheck` hanya untuk purge cascade hapus user (pemanggil sudah otorisasi `admin:access`).
+  async remove(
+    id: string,
+    userId: string,
+    options?: { skipScopeCheck?: boolean },
+  ): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'event');
-    this.assertWritable(existing, scope);
+    if (!options?.skipScopeCheck) this.assertWritable(existing, scope);
     return this.toResponse(await this.eventRepository.delete(id));
   }
 }

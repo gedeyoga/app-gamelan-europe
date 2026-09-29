@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 export const billingSelect = {
   id: true,
   userId: true,
-  organizationId: true,
+  networkId: true,
   subscriptionId: true,
   code: true,
   status: true,
@@ -15,7 +15,7 @@ export const billingSelect = {
   paidAt: true,
   canceledAt: true,
   user: { select: { id: true, fullName: true, email: true } },
-  organization: { select: { id: true, name: true } },
+  network: { select: { id: true, name: true } },
   subscription: { select: { id: true, name: true, slug: true } },
   lines: { select: { id: true, description: true, type: true, qty: true, amount: true, currency: true } },
   createdAt: true,

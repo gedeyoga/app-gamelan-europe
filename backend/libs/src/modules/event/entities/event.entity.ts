@@ -13,13 +13,13 @@ export const eventSelect = {
   thumbnail: true,
   visibility: true,
   createdBy: true,
-  organizationId: true,
+  networkId: true,
   creator: {
     select: {
       id: true,
       fullName: true,
-      organizationId: true, // internal (row-level scoping); tidak keluar ke FE
-      organization: { select: { id: true, name: true } }, // name keluar ke FE
+      networkId: true, // internal (row-level scoping); tidak keluar ke FE
+      network: { select: { id: true, name: true } }, // name keluar ke FE
     },
   },
   dates: { select: { date: true, startTime: true, endTime: true }, orderBy: { date: 'asc' } },
@@ -28,8 +28,22 @@ export const eventSelect = {
       eventType: { select: { id: true, name: true } },
     },
   },
+  authors: {
+    select: {
+      author: {
+        select: {
+          id: true,
+          fullName: true,
+          countryId: true,
+          country: { select: { id: true, iso2: true, name: true } },
+          stateId: true,
+          state: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
   locations: { select: { name: true, address: true, lat: true, lng: true } },
-  organization: { select: { id: true, name: true } },
+  network: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.EventSelect;
@@ -37,6 +51,8 @@ export const eventSelect = {
 export type EventRow = Prisma.EventGetPayload<{ select: typeof eventSelect }>;
 
 export type EventTypeRef = { id: string; name: string };
+
+export type EventAuthorRef = EventRow['authors'][number]['author'];
 
 export type EventLocationEntity = {
   name: string;
@@ -52,18 +68,19 @@ export type EventDateEntity = {
 };
 
 // Kontrak response API: relasi flat (`eventTypes`, `dates` ISO UTC, `location`).
-export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations'> & {
+export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations' | 'authors'> & {
   dates: EventDateEntity[];
   eventTypes: EventTypeRef[];
+  authors: EventAuthorRef[];
   location: EventLocationEntity | null;
 };
 
-// `creator.organizationId` hanya dipakai internal (scope); tidak pernah keluar ke FE.
-// `creator.organization` ({ id, name } | null) keluar ke FE; null → FE fallback ke `fullName`.
+// `creator.networkId` hanya dipakai internal (scope); tidak pernah keluar ke FE.
+// `creator.network` ({ id, name } | null) keluar ke FE; null → FE fallback ke `fullName`.
 export type EventCreatorRef = {
   id: string;
   fullName: string;
-  organization: { id: string; name: string } | null;
+  network: { id: string; name: string } | null;
 };
 
 export type EventResponse = Omit<EventEntity, 'creator'> & {
@@ -71,7 +88,7 @@ export type EventResponse = Omit<EventEntity, 'creator'> & {
 };
 
 export function mapEvent(row: EventRow): EventEntity {
-  const { dates, eventTypes, locations, ...rest } = row;
+  const { dates, eventTypes, locations, authors, ...rest } = row;
   const [location] = locations;
   return {
     ...rest,
@@ -81,6 +98,7 @@ export function mapEvent(row: EventRow): EventEntity {
       endTime: d.endTime,
     })),
     eventTypes: eventTypes.map((link) => link.eventType),
+    authors: authors.map((link) => link.author),
     location: location
       ? {
           name: location.name,

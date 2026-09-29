@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 export interface DashboardHeroProps {
   fullName: string
-  /** Nama role sesi (mis. `member`/`organization`); kosong → badge disembunyikan. */
+  /** Nama role sesi (mis. `member`/`admin`); kosong → badge disembunyikan. */
   roleName: string
   className?: string
 }

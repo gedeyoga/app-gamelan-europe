@@ -130,7 +130,9 @@ export function StoryCard({
                 </div>
               )}
               <span className="truncate text-muted-foreground">
-                {story.creator?.fullName ?? '—'}
+                {story.authors.map((author) => author.fullName).join(', ') ||
+                  story.creator?.fullName ||
+                  '—'}
               </span>
               <span className="text-xs text-muted-foreground">
                 {formatDateTime(story.publishedAt)}

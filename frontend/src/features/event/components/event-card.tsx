@@ -7,6 +7,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -146,7 +147,15 @@ export function EventCard({
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {event.creator?.organization?.name ?? event.creator?.fullName ?? '—'}
+                  {event.creator?.network?.name ?? event.creator?.fullName ?? '—'}
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <User className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {event.authors.map((author) => author.fullName).join(', ') ||
+                    event.creator?.fullName ||
+                    '—'}
                 </span>
               </span>
               {showActions && (

@@ -14,6 +14,7 @@ import {
 
 import { RichTextEditor } from '@/components/shared/rich-text-editor'
 import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
+import type { UserOption } from '@/components/shared/user-combobox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,6 +67,11 @@ export interface EventFormProps {
   canApproveEvent: boolean
   canRejectEvent: boolean
   onCreateEventType: (name: string) => Promise<EventType | undefined>
+  authors: UserOption[]
+  isLoadingUsers: boolean
+  canManageAuthors: boolean
+  /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
+  canDeleteAuthors: boolean
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
 }
@@ -98,6 +104,10 @@ export function EventForm({
   canApproveEvent,
   canRejectEvent,
   onCreateEventType,
+  authors,
+  isLoadingUsers,
+  canManageAuthors,
+  canDeleteAuthors,
   onUploadImage,
   onUploadError,
 }: EventFormProps) {
@@ -204,6 +214,7 @@ export function EventForm({
       status: STATUS_BY_ACTION[action] ?? values.status,
       visibility: values.visibility,
       eventTypeIds: values.eventTypeIds,
+      authorIds: values.authorIds,
       location: buildLocation(values.location),
       ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
@@ -420,6 +431,10 @@ export function EventForm({
                     canReadEventTypes={canReadEventTypes}
                     canCreateEventType={canCreateEventType}
                     onCreateEventType={onCreateEventType}
+                    authors={authors}
+                    isLoadingUsers={isLoadingUsers}
+                    canManageAuthors={canManageAuthors}
+                    canDeleteAuthors={canDeleteAuthors}
                     disabled={isPending}
                   />
                 </div>

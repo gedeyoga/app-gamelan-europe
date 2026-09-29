@@ -120,6 +120,9 @@ export function ArchiveCard({
                   ))}
                 </div>
               )}
+              <span className="truncate text-muted-foreground">
+                {archive.authors.map((author) => author.fullName).join(', ') || '—'}
+              </span>
               <span className="text-xs text-muted-foreground">
                 {formatDateTime(archive.publishedAt)}
               </span>

@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { UserModule } from '@app/libs/modules/user/user.module';
 import { PermissionModule } from '@app/libs/modules/permission/permission.module';
 import { ApiKeyModule } from '@app/libs/modules/api-key/api-key.module';
+import { ImageModule } from '@app/libs/modules/image/image.module';
 import { AuthService } from './auth.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -23,6 +24,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
     UserModule,
     PermissionModule,
     ApiKeyModule,
+    ImageModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
   providers: [AuthService, RefreshTokenRepository, JwtStrategy, JwtAuthGuard, PermissionsGuard],

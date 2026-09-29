@@ -20,7 +20,7 @@ Karakteristik:
 - **Tanpa autentikasi** untuk endpoint publik (`POST /story-submissions`, `POST /story-submissions/thumbnail`, `POST /story-submissions/images`, `GET /story-submissions/categories`).
 - **Tabel terpisah** dari `posts` saat submit; approve membuat `Post` `DRAFT` dan menautkannya via `StorySubmission.postId` (§5.2.1). Submission **tidak dihapus** setelah approve — tetap tersimpan sebagai audit (`status=APPROVED`, `postId` terisi).
 - Status: `REQUEST` (default) → `APPROVED` / `REJECTED` (final). Hanya `APPROVED` yang membuat `Post` (`DRAFT`); `REJECTED` tidak.
-- **Field submission publik**: `name`, `content` (rich HTML, **disanitasi**), `categoryIds`, `galleryImageIds`, `flyerImageIds`, `thumbnail` (opsional). Tanpa identitas/contact submitter.
+- **Field submission publik**: `name`, `content` (rich HTML, **disanitasi**), `submitter` (**wajib**; `fullName`/`email`/`countryId`/`stateId?`, audit-only), `categoryIds`, `galleryImageIds`, `flyerImageIds`, `thumbnail` (opsional).
 
 ### Lokasi kode
 
@@ -28,7 +28,7 @@ Karakteristik:
 libs/src/modules/story-submission/
 ├── story-submission.repository.ts
 ├── story-submission.service.ts
-├── story-submission.module.ts      ← impor PostModule + ImageModule + CategoryModule
+├── story-submission.module.ts      ← impor PostModule + ImageModule + CategoryModule + CountryModule + StateModule
 ├── dto/
 │   ├── create-story-submission.dto.ts
 │   ├── review-story-submission.dto.ts
@@ -81,6 +81,14 @@ model StorySubmission {
   galleryImageIds String[]              @default([]) @map("gallery_image_ids")
   flyerImageIds   String[]              @default([]) @map("flyer_image_ids")
   thumbnail       String?
+  // Section `submitter` (data pengirim): audit-only, bukan bagian dari Post saat approve.
+  submitterFullName  String  @map("submitter_full_name")
+  submitterEmail     String  @map("submitter_email")
+  // Nullable HANYA untuk legacy rows (tanpa geo); API tetap mewajibkan submitter.countryId saat write.
+  submitterCountryId Int?    @map("submitter_country_id")
+  submitterCountry   Country @relation("StorySubmissionSubmitterCountry", fields: [submitterCountryId], references: [id], onDelete: Restrict)
+  submitterStateId   Int?    @map("submitter_state_id")
+  submitterState     State?  @relation("StorySubmissionSubmitterState", fields: [submitterStateId], references: [id], onDelete: SetNull)
   status          StorySubmissionStatus @default(REQUEST)
   adminNote       String?               @map("admin_note")
   reviewedBy      String?               @map("reviewed_by")
@@ -101,6 +109,14 @@ model StorySubmission {
 model Post {  // tambah baris
   submission StorySubmission?
 }
+
+model Country {  // tambah baris (back-relation `submitter`)
+  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterCountry")
+}
+
+model State {  // tambah baris (back-relation `submitter`)
+  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterState")
+}
 ```
 
 Catatan:
@@ -110,6 +126,7 @@ Catatan:
 - `categoryIds`/`galleryImageIds`/`flyerImageIds` = `String[]` scalar (bukan relasi Prisma) — urutan array = urutan tampil.
 - `reviewedBy` **scalar tanpa relasi** ke `User` (disengaja; kolom audit saja).
 - Migration `20260927100000_add_story_submission_content_fields`: drop `short_description`, add `content` (+ backfill dari `short_description` untuk row existing) + 3 kolom array.
+- Migration `20260930120000_add_story_submission_submitter`: tambah 4 kolom `submitter*` + 2 FK (`RESTRICT`/`SET NULL`). **BREAKING** (API publik): `submitter` **wajib** di `POST /story-submissions`. Legacy rows di-backfill `submitter_full_name`/`submitter_email = ''`; `submitter_country_id`/`submitter_state_id` tetap **NULL** (tabel tidak punya geo sendiri, dan `countries` di-seed setelah `migrate deploy`, jadi tidak ada nilai aman untuk di-backfill). `submitterCountryId` nullable HANYA untuk legacy rows; request tetap wajib.
 
 ---
 
@@ -122,13 +139,28 @@ Ikuti RULES bab 4 (satu `select` + `Prisma.GetPayload`). Relasi `post` hanya but
 export const storySubmissionSelect = {
   id: true, name: true, content: true,
   categoryIds: true, galleryImageIds: true, flyerImageIds: true,
-  thumbnail: true, status: true, adminNote: true, reviewedBy: true, reviewedAt: true,
+  thumbnail: true,
+  submitterFullName: true, submitterEmail: true, submitterCountryId: true, submitterStateId: true,
+  status: true, adminNote: true, reviewedBy: true, reviewedAt: true,
   postId: true, createdAt: true, updatedAt: true,
   post: { select: { id: true, slug: true, status: true } },
+  submitterCountry: { select: { id: true, iso2: true, name: true } },
+  submitterState: { select: { id: true, name: true } },
 } satisfies Prisma.StorySubmissionSelect;
 
-export type StorySubmissionEntity = Omit<StorySubmissionPayload, 'post'> & {
+export type StorySubmissionSubmitterRef = {
+  fullName: string; email: string; countryId: number; stateId: number | null;
+  country: { id: number; iso2: string; name: string } | null;
+  state: { id: number; name: string } | null;
+};
+
+export type StorySubmissionEntity = Omit<
+  StorySubmissionPayload,
+  'post' | 'submitterFullName' | 'submitterEmail' | 'submitterCountryId' | 'submitterStateId'
+  | 'submitterCountry' | 'submitterState'
+> & {
   post: { id: string; slug: string; status: string } | null;
+  submitter: StorySubmissionSubmitterRef;
 };
 
 // Item LIST: buang content/id mentah, ekspos nama kategori + jumlah gambar.
@@ -145,7 +177,7 @@ export type StorySubmissionDetail = StorySubmissionListItem & {
 };
 ```
 
-- `mapStorySubmission()` flatten join `post` → `{ id, slug, status }` (null bila belum ditautkan).
+- `mapStorySubmission()` flatten join `post` → `{ id, slug, status }` (null bila belum ditautkan) dan mengekspos section `submitter` bernested (`{ fullName, email, countryId, stateId, country, state }`); kolom flat `submitter*` **tidak pernah** bocor ke API.
 - List & detail memakai select yang sama. Id mentah (`categoryIds`/`galleryImageIds`/`flyerImageIds`) tidak bocor di item list; resolusi nama kategori dilakukan sekali secara batch (§5.3).
 - Detail memakai `ImageRepository.findByIds()` + `ImageService.toImageResponse()` untuk `gallery`/`flyer`.
 
@@ -162,9 +194,14 @@ File: `libs/src/modules/story-submission/dto/create-story-submission.dto.ts`.
 | `name` | `@Transform(trim)`, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(200)` |
 | `content` | `@IsString()`, `@IsNotEmpty()`, `@MaxLength(100000)` — rich HTML, disanitasi server-side |
 | `categoryIds` | opsional `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(20)` — tiap id wajib `Category` `type='STORY'` (422 `categoryIds.N`) |
-| `galleryImageIds` | opsional `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` — id dari `POST /story-submissions/images` |
+| `galleryImageIds` | opsional `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` — id dari `POST /story-submissions/images` (endpoint multi-file: field `files`, 1–10 per request → id dipakai untuk tiap item respons) |
 | `flyerImageIds` | opsional `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` |
 | `thumbnail` | opsional `@IsString()`, `@MaxLength(2048)` — URL storage EGS |
+| `submitter` | **wajib** `@IsNotEmptyObject()`, `@ValidateNested()`, `@Type(() => StorySubmissionSubmitterDto)` — nested `{ fullName, email, countryId, stateId? }`; geo dicek di service (422 `submitter.countryId`/`submitter.stateId`) |
+| `submitter.fullName` | `@Transform(trim)`, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(200)` |
+| `submitter.email` | `@Transform(trimLower)`, `@IsEmail()`, `@MaxLength(200)` |
+| `submitter.countryId` | `@Type(() => Number)`, `@IsInt()` — wajib ada |
+| `submitter.stateId` | opsional `@Type(() => Number)`, `@IsInt()` — harus milik `submitter.countryId` |
 
 `forbidNonWhitelisted` (§8 poin 2) **menolak** body yang menyertakan `status`/`reviewedBy`/`postId` dengan **422**; klien tidak dapat menyuntik field server-derived. `shortDescription` **dihapus** dari kontrak (tidak lagi diterima).
 
@@ -174,6 +211,7 @@ File: `libs/src/modules/story-submission/dto/create-story-submission.dto.ts`.
 {
   "name": "Sejarah Gamelan di Eropa",
   "content": "<p>Catatan perjalanan gamelan dari Yogyakarta ke Amsterdam.</p>",
+  "submitter": { "fullName": "Budi Santoso", "email": "budi@example.com", "countryId": 101, "stateId": 5 },
   "categoryIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
   "galleryImageIds": ["b7e2c1a0-1111-4222-8333-000000000001"],
   "flyerImageIds": ["b7e2c1a0-1111-4222-8333-000000000002"],
@@ -229,12 +267,12 @@ Semua path prefix **`/api/v1`** (RULES bab 1). Sukses `{ data, message }`; list 
 | Method | Path | Deskripsi | Request | Response |
 | --- | --- | --- | --- | --- |
 | POST | `/api/v1/story-submissions` | Buat usulan story, `status=REQUEST` | `CreateStorySubmissionDto` (JSON) | 201 `{ data: { id, status }, message }` |
-| POST | `/api/v1/story-submissions/thumbnail` | Upload thumbnail usulan | multipart `file` | 201 `{ data: ImageResponse, message }` |
-| POST | `/api/v1/story-submissions/images` | Upload galeri/flyer usulan | multipart `file` | 201 `{ data: ImageResponse, message }` |
+| POST | `/api/v1/story-submissions/thumbnail` | Upload thumbnail usulan (multi-file, `files`) | multipart `files` (1–10) | 201 `{ data: ImageResponse[], message }` |
+| POST | `/api/v1/story-submissions/images` | Upload galeri/flyer usulan (multi-file, `files`) | multipart `files` (1–10) | 201 `{ data: ImageResponse[], message }` |
 | GET | `/api/v1/story-submissions/categories` | Kategori `STORY` untuk form publik | — | 200 `{ data: [{ id, name }], meta, message }` |
 
 - `POST /story-submissions` → service `create()` men-set `status=REQUEST`, lalu balikan **hanya** `{ id, status }` (bukan seluruh row/PII echo, §8 poin 11). Throttle **5/menit**. 422 validasi per-field.
-- `POST /story-submissions/thumbnail` & `POST /story-submissions/images` → panggil `ImageService.upload(file, 'story-submission')`; **hardcode** `entityType` di controller, **jangan** terima dari body publik. Throttle **10/menit** masing-masing. Balikan `ImageResponse`.
+- `POST /story-submissions/thumbnail` & `POST /story-submissions/images` → panggil `ImageService.upload(file, 'story-submission')` untuk **setiap** file; **hardcode** `entityType` di controller, **jangan** terima dari body publik. Field multipart `files` (**array**, 1–10; `MulterUploadManyInterceptor`), respons `ImageResponse[]`. **Kedua endpoint TIDAK di-throttle** (keputusan): batas abuse = maks 10 file/request. `files` kosong/hilang → **422** `{ field: 'files', message: 'files must not be empty' }`; >10 file → **422** `{ field: 'files', message: 'at most 10 files are allowed' }`; file > `UPLOAD_MAX_SIZE_MB` → **422** `{ field: 'files', message: 'files must each be at most <UPLOAD_MAX_SIZE_MB> MB' }`. **BREAKING** untuk konsumen eksternal: dulu field `file` (tunggal) + respons objek; kini `files` (array) + `data: ImageResponse[]`.
 - `GET /story-submissions/categories` → `CategoryRepository.findMany({ where: { type: 'STORY' }, take: 100, orderBy: { name: 'asc' } })`; service (`listCategories()`) memetakan ke `{ id, name }`. `meta = { page: 1, limit: 100, total }`. **Declare sebelum `@Get(':id')`**.
 
 Contoh respons 201 (**hanya** `{ id, status }`):
@@ -331,7 +369,7 @@ Konstanta di-export dari `story-submission.service.ts`:
 
 Item list **tidak** membocorkan `content`/id gambar/kategori mentah. Nama kategori di-resolve **satu kali secara batch** (`categoryRepository.findByIds` atas union `categoryIds` semua item) — hindari N+1.
 
-Bentuk item list: `{ id, name, thumbnail, categories: {id,name}[], galleryCount, flyerCount, status, adminNote, reviewedBy, reviewedAt, postId, post: {id,slug,status}|null, createdAt, updatedAt }`.
+Bentuk item list: `{ id, name, thumbnail, submitter: { fullName, email, countryId, stateId, country: {id,iso2,name}|null, state: {id,name}|null }, categories: {id,name}[], galleryCount, flyerCount, status, adminNote, reviewedBy, reviewedAt, postId, post: {id,slug,status}|null, createdAt, updatedAt }`. `submitter` adalah PII admin-only (endpoint butuh `story-submission:read`), konsisten dengan `author` pada event submission.
 
 Bentuk detail (`GET /:id`) = item list + `content`, `categoryIds`, `gallery: ImageResponse[]` (berurut), `flyer: ImageResponse[]` (berurut).
 
@@ -376,7 +414,7 @@ Format standar: `{ statusCode, message, errors }` (RULES bab 5).
 | --- | --- | --- | --- |
 | `POST /story-submissions` | `UnprocessableEntityException` | 422 | validasi DTO per-field; `categoryIds.N` bukan kategori STORY; `galleryImageIds.N`/`flyerImageIds.N` bukan image submission tak terikat; `thumbnail` bukan milik storage EGS |
 | `POST /story-submissions` | `ConflictException` | 409 | duplikat identik (`name`) dalam window singkat |
-| `POST /story-submissions/thumbnail`, `/images` | `UnprocessableEntityException` | 422 | file hilang / MIME tak didukung / terlalu besar (dari `ImageService`) |
+| `POST /story-submissions/thumbnail`, `/images` | `UnprocessableEntityException` | 422 | `files` kosong/hilang / >10 file / MIME tak didukung / terlalu besar (dari `MulterUploadManyInterceptor` + `ImageService`) |
 | `GET /story-submissions` | `UnprocessableEntityException` | 422 | `sortBy`/`filter` tak dikenal, enum/tanggal invalid |
 | `GET /story-submissions/:id` | `BadRequestException` | 400 | `:id` bukan UUID (`ParseUUIDPipe`) |
 | `GET /story-submissions/:id` | `NotFoundException` | 404 | submission tidak ada |
@@ -384,7 +422,7 @@ Format standar: `{ statusCode, message, errors }` (RULES bab 5).
 | `POST /:id/approve`, `/:id/reject` | `NotFoundException` | 404 | submission tidak ada |
 | `POST /:id/approve` | `InternalServerErrorException` | 500 | gagal saat transaksi insert `Post` `DRAFT` → rollback, submission tetap `REQUEST` |
 | admin endpoints | `UnauthorizedException` / `ForbiddenException` | 401 / 403 | JWT invalid / permission kurang |
-| `POST /story-submissions*` | `HttpException` (429) | 429 | rate limit terlampaui |
+| `POST /story-submissions` (create saja) | `HttpException` (429) | 429 | rate limit 5/menit terlampaui; `/thumbnail` & `/images` **tidak** di-throttle |
 
 ---
 
@@ -392,14 +430,14 @@ Format standar: `{ statusCode, message, errors }` (RULES bab 5).
 
 Seed di `libs/prisma/seed-data.ts` (`DEFAULT_PERMISSIONS`). Konvensi `resource:action` lowercase (rbac.md §4).
 
-| Code | Deskripsi | admin | organization | member |
-| --- | --- | :---: | :---: | :---: |
-| `story-submission:read` | Lihat daftar/detail usulan story | ✅ | — | — |
-| `story-submission:approve` | Setujui + recreate konten ke tabel `posts` sebagai `DRAFT` (bukan publish) | ✅ | — | — |
-| `story-submission:reject` | Tolak usulan | ✅ | — | — |
+| Code | Deskripsi | admin | member |
+| --- | --- | :---: | :---: |
+| `story-submission:read` | Lihat daftar/detail usulan story | ✅ | — |
+| `story-submission:approve` | Setujui + recreate konten ke tabel `posts` sebagai `DRAFT` (bukan publish) | ✅ | — |
+| `story-submission:reject` | Tolak usulan | ✅ | — |
 
 - Semua **admin-only**; `libs/prisma/seed.ts` **tidak diubah**.
-- Endpoint publik (`POST /story-submissions`, `/thumbnail`, `/images`, `GET /categories`) tetap `@Public()` → **tidak butuh** permission apa pun. Submit publik murni anonim.
+- Endpoint publik (`POST /story-submissions`, `/thumbnail`, `/images`, `GET /categories`) tetap `@Public()` → **tidak butuh** permission apa pun. Pemanggil tidak punya akun, tetapi submission kini membawa PII submitter (`submitter.fullName`/`email`/`countryId`/`stateId?`) untuk verifikasi & komunikasi editorial.
 
 ---
 
@@ -407,7 +445,9 @@ Seed di `libs/prisma/seed-data.ts` (`DEFAULT_PERMISSIONS`). Konvensi `resource:a
 
 Endpoint tulis publik tanpa auth = permukaan serangan terbuka. Pertahanan terpasang:
 
-1. **Rate limit** — `POST /story-submissions` **5/menit**; `POST /story-submissions/thumbnail` & `/images` **10/menit**, per-IP, `@UseGuards(ThrottlerGuard)` + `@Throttle`. `ThrottlerModule` global di `apps/app/src/app.module.ts`. **Catatan:** `app.set('trust proxy', 1)` (Express) diperlukan agar IP benar di belakang reverse proxy.
+1. **Rate limit** — `POST /story-submissions` **5/menit**, per-IP, `@UseGuards(ThrottlerGuard)` + `@Throttle`. `ThrottlerModule` global di `apps/app/src/app.module.ts`. **Catatan:** `app.set('trust proxy', 1)` (Express) diperlukan agar IP benar di belakang reverse proxy.
+   - **`POST /story-submissions/thumbnail` & `/images` TIDAK di-throttle — keputusan sadar.** Throttle upload dibatalkan; kompensasi = batas keras **10 file/request** (`MulterUploadManyInterceptor`, `MAX_UPLOAD_FILES`). **Risiko residual:** anonim bisa mengirim banyak request berisi 10 gambar (masing-masing ≤ `UPLOAD_MAX_SIZE_MB`) → biaya storage/CPU `sharp`. **Upgrade path:** pasang kembali `@Throttle({ default: { limit: 10, ttl: 60_000 } })` atau kuota per-IP/hari (proxy/WAF) tanpa mengubah kontrak request (tetap `files`, maks 10).
+   - **Upload multi-file TIDAK atomik.** Setiap file diunggah independen lewat `ImageService.upload`; bila file ke-N gagal (**422**/500), file 1..N-1 dalam request yang sama **sudah tersimpan** dan bisa menjadi **orphan** (`entityId=null`) bila id/URL-nya tak ikut dikirim di `POST /story-submissions`. **Upgrade path:** cleanup per-file saat gagal (hapus objek yang sudah terunggah), atau unggah sekuensial + rollback.
 2. **Validasi ketat** — global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`. DTO pakai `@MaxLength`/`@ArrayMaxSize`/`@IsUUID`. `forbidNonWhitelisted` menolak field asing → `status`/`reviewedBy`/`postId` **tidak bisa disuntik**.
    - **Limit body JSON dinaikkan ke `1mb`** — `app.useBodyParser('json', { limit: '1mb' })` di `apps/app/src/main.ts`. Parser ini didaftarkan sebelum parser JSON default Nest, sehingga `content` `@MaxLength(100000)` (bisa >200KB pada encoding multibyte) **tercapai validasi (422)**; tanpa ini Express default (~100kb) membalas **413** lebih dulu. Hanya JSON — multipart (`/thumbnail`, `/images`) & `urlencoded` tak terpengaruh; >1mb tetap **413**.
 3. **Upload hardening (thumbnail & galeri/flyer)** — MIME allowlist + size cap (`UPLOAD_MAX_SIZE_MB`) + sniff magic bytes + tolak SVG + re-encode/downscale via `ImageProcessor`, key acak UUID, `entityType` **di-hardcode server-side** (`'story-submission'`).
@@ -424,7 +464,7 @@ Endpoint tulis publik tanpa auth = permukaan serangan terbuka. Pertahanan terpas
    - Disanitasi **saat create DAN saat approve** (defense in depth; row tersimpan tidak pernah dipercaya).
 9. **Bot mitigation** — rekomendasi captcha (**Cloudflare Turnstile**) opsional; verifikasi di controller/service, jangan log token.
 10. **Anti-duplikat/abuse** — tolak duplikat identik (`name`) dalam window **10 menit** → **409** (`DUPLICATE_WINDOW_MS`, `$transaction` `Serializable` menutup race insert).
-11. **Privasi/GDPR** — data minimum (tanpa identitas submitter). Bila IP disimpan untuk anti-abuse, simpan **hash** dan sebut retensi.
+11. **Privasi/GDPR** — section `submitter` (**wajib**) mengoleksi `fullName` + `email` + `countryId`/`stateId` untuk keperluan verifikasi & komunikasi editorial oleh admin; data **audit-only** (tidak disalin ke `Post` saat approve) dan hanya terekspos di endpoint admin ber-permission `story-submission:read`. Respons `POST` publik tidak meng-echo PII. Bila IP disimpan untuk anti-abuse, simpan **hash** dan sebut retensi.
 12. **No info leak** — respons `POST` publik hanya `{ id, status }`; error generik tanpa stack trace.
 13. **Bypass workflow dicegah** — publik tidak punya jalur menulis ke `posts` atau mengubah status selain lewat approve admin. `categoryIds`/rich content/gambar hanya masuk via create publik (divalidasi + disanitasi) lalu approve.
 
@@ -445,12 +485,14 @@ Endpoint tulis publik tanpa auth = permukaan serangan terbuka. Pertahanan terpas
 | 7 | `libs/src/libs.module.ts` / `libs/src/index.ts` | daftar/export `StorySubmissionModule`. |
 | 8 | `apps/app/src/app.module.ts` | daftar `StorySubmissionModule` + `StorySubmissionsController`. |
 | 9 | `backend/package.json` | `sanitize-html` + `@types/sanitize-html`. |
+| 10 | `libs/prisma/schema.prisma` + migration `20260930120000_add_story_submission_submitter` | Tambah section `submitter` (4 kolom + 2 FK) pada `StorySubmission` + back-relation di `Country`/`State`; DTO/entity/repository/service diperluas. **BREAKING** API publik: `submitter` wajib. |
+| 11 | `libs/src/common/interceptors/multer-upload.interceptor.ts` | Tambah `MulterUploadManyInterceptor` (+ `MAX_UPLOAD_FILES = 10`, opsi multer & MIME filter bersama, `requireUploadedFiles`). `MulterUploadInterceptor` (single `file`) tidak berubah. **BREAKING** API publik: `/thumbnail` & `/images` kini field `files` (maks 10) → respons `ImageResponse[]`, dan **tidak lagi di-throttle**. |
 
-Perintah: `pnpm prisma migrate dev --name add_story_submission_content_fields` (DB up) → `pnpm prisma:generate` → `pnpm tsc --noEmit` (AGENTS.md Verifikasi).
+Perintah: `pnpm prisma migrate dev --name add_story_submission_submitter` (DB up) → `pnpm prisma:generate` → `pnpm tsc --noEmit` (AGENTS.md Verifikasi).
 
 ### 9.2 Hubungan dengan workflow story internal (WAJIB dibaca)
 
-Modul `story`/`post` **sudah** punya workflow internal terautentikasi penuh, dipakai role `organization`/`member`. `story-submission` publik ini adalah **jalur kedua yang terpisah**:
+Modul `story`/`post` **sudah** punya workflow internal terautentikasi penuh, dipakai role `member`/`author`. `story-submission` publik ini adalah **jalur kedua yang terpisah**:
 
 - **Tabel berbeda** (`story_submissions` vs `posts`).
 - **Pelaku berbeda** (anonim tanpa akun vs user terautentikasi).
@@ -462,9 +504,10 @@ Modul `story`/`post` **sudah** punya workflow internal terautentikasi penuh, dip
 ### 9.3 Keputusan desain & simplifikasi sadar
 
 - Tabel terpisah (`story_submissions`) — submission bukan `Post` sampai **disetujui**; saat approve dibuat `Post` `DRAFT` + `postId`. Submission tetap sebagai audit.
-- **Field publik**: `name`, `content`, `categoryIds`, `galleryImageIds`, `flyerImageIds`, `thumbnail`. `content` wajib disanitasi; kategori divalidasi STORY; gambar divalidasi ownership.
+- **Field publik**: `name`, `content`, `submitter` (wajib; `fullName`/`email`/`countryId`/`stateId?`), `categoryIds`, `galleryImageIds`, `flyerImageIds`, `thumbnail`. `content` wajib disanitasi; kategori divalidasi STORY; gambar divalidasi ownership; `submitter` audit-only.
 - **Galeri/flyer = images only** (bukan attachment/Document). `entityType` di-hardcode `'story-submission'`.
-- **Tanpa identitas/contact submitter** — audit via `reviewedBy`/`reviewedAt`. Upgrade path: kolom `submitterName`/`submitterEmail` opsional.
+- **Upload multi-file (thumbnail & galeri/flyer)** — field multipart `files` (array, 1–10; `MAX_UPLOAD_FILES`), satu respons `ImageResponse` per file. Upload **tidak** di-throttle; batas abuse = 10 file/request (lihat §8 poin 1).
+- **Identitas/contact submitter: DIIMPLEMENTASIKAN** — section `submitter` (`fullName`/`email`/`countryId`/`stateId?`) **wajib** di `POST /story-submissions` (mirror `author` pada event submission), audit-only via kolom `submitter*` + `reviewedBy`/`reviewedAt`. Tidak disalin ke `Post` saat approve.
 - `postId @unique` + conditional update `status: REQUEST` → idempotensi approve. `onDelete: SetNull` → audit tetap.
 - **Dashboard admin = konsumen list admin, tanpa endpoint baru** (`meta.total`).
 - **Thumbnail tidak di-bind ke `Post`.** URL disalin ke `Post.thumbnail` saat approve; baris `Image` thumbnail tetap orphan. Upgrade path: bind/unbind + orphan cleanup worker.

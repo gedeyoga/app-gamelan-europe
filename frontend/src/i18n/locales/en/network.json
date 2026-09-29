@@ -1,0 +1,74 @@
+{
+  "title": "Networks",
+  "subtitle": "Manage networks, their locations, and social media",
+  "add": "Add Network",
+  "search": {
+    "placeholder": "Search name, state, country, or address...",
+    "ariaLabel": "Search networks"
+  },
+  "errors": {
+    "loadData": "Failed to load network data. Please try again.",
+    "loadDetail": "Failed to load network detail.",
+    "forbidden": "You don't have access to view network data.",
+    "uploadFailed": "Failed to upload image. Please try again.",
+    "noCreatePermission": "You don't have permission to create a network.",
+    "noUpdatePermission": "You don't have permission to edit a network."
+  },
+  "table": {
+    "name": "Name",
+    "state": "State",
+    "country": "Country",
+    "created": "Created",
+    "empty": "No networks yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "form": {
+    "createTitle": "Add Network",
+    "editTitle": "Edit Network",
+    "name": "Name",
+    "state": "State",
+    "country": "Country",
+    "address": "Address",
+    "website": "Website",
+    "websitePlaceholder": "https://example.com",
+    "contact": "Contact",
+    "contactPlaceholder": "Email or phone number",
+    "socialMedia": {
+      "label": "Social media",
+      "add": "Add social media",
+      "remove": "Remove social media",
+      "index": "Social media {{number}}",
+      "platform": "Platform",
+      "platformPlaceholder": "e.g. Instagram",
+      "url": "URL",
+      "urlPlaceholder": "https://instagram.com/...",
+      "empty": "No social media added yet"
+    },
+    "mapLabel": "Pick location on map",
+    "settingsTitle": "Settings",
+    "hideSettings": "Hide settings",
+    "showSettings": "Show settings",
+    "countryPlaceholder": "Select country",
+    "countrySearch": "Search country...",
+    "countryEmpty": "No country found.",
+    "statePlaceholder": "Select state",
+    "stateSearch": "Search state...",
+    "stateEmpty": "No state found.",
+    "stateSelectCountry": "Select a country first"
+  },
+  "delete": {
+    "title": "Delete Network",
+    "description": "Are you sure you want to delete network {{name}}? This action cannot be undone."
+  },
+  "toast": {
+    "created": "Network created successfully",
+    "updated": "Network updated successfully",
+    "deleted": "Network deleted successfully",
+    "createFailed": "Failed to create network",
+    "updateFailed": "Failed to update network",
+    "deleteFailed": "Failed to delete network"
+  }
+}

@@ -22,6 +22,7 @@ export function createEventSchema(t: TFunction) {
     status: z.enum(CONTENT_STATUSES),
     visibility: z.enum(VISIBILITIES),
     eventTypeIds: z.array(z.string()),
+    authorIds: z.array(z.string().uuid()),
     // Baris tanggal: `date` "YYYY-MM-DD", jam "HH:mm" ('' bila kosong).
     dates: z.array(
       z.object({
@@ -58,6 +59,7 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   status: 'DRAFT',
   visibility: 'PUBLIC',
   eventTypeIds: [],
+  authorIds: [],
   dates: [],
   location: { name: '', address: '', lat: '', lng: '' },
 }

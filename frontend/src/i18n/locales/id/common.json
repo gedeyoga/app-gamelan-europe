@@ -56,6 +56,11 @@
     "dismiss": "Tutup",
     "errorDefault": "Terjadi kesalahan"
   },
+  "combobox": {
+    "userPlaceholder": "Pilih pengguna",
+    "userSearch": "Cari pengguna...",
+    "userEmpty": "Pengguna tidak ditemukan"
+  },
   "eventCard": {
     "noThumbnail": "Tanpa thumbnail",
     "noLocation": "Lokasi belum tersedia",

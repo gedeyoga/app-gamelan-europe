@@ -79,31 +79,38 @@ enum StorySubmissionStatus {
 }
 
 model User {
-  id             String         @id @default(uuid())
-  email          String         @unique
-  fullName       String         @map("full_name")
+  id             String          @id @default(uuid())
+  email          String          @unique
+  fullName       String          @map("full_name")
   phone          String?
   address        String?
-  countryId      String?        @map("country_id")
-  country        Country?       @relation(fields: [countryId], references: [iso2], onDelete: SetNull)
-  passwordHash   String         @map("password_hash")
-  status         UserStatus     @default(ACTIVE)
-  roleId         String?        @map("role_id")
-  role           Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  organizationId String?        @map("organization_id")
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  avatar         String?
+  countryId      String?         @map("country_id")
+  country        Country?        @relation(fields: [countryId], references: [iso2], onDelete: SetNull)
+  stateId        Int?            @map("state_id")
+  state          State?          @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  passwordHash   String          @map("password_hash")
+  status         UserStatus      @default(ACTIVE)
+  roleId         String?         @map("role_id")
+  role           Role?           @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  networkId      String?         @map("network_id")
+  network        Network?        @relation(fields: [networkId], references: [id], onDelete: SetNull)
   refreshTokens  RefreshToken[]
   billings       Billing[]
-  events         Event[]        @relation("EventCreator")
-  posts          Post[]         @relation("PostCreator")
-  archives       Archive[]      @relation("ArchiveCreator")
-  apiKeys        ApiKey[]       @relation("ApiKeyCreator")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  events         Event[]         @relation("EventCreator")
+  posts          Post[]          @relation("PostCreator")
+  archives       Archive[]       @relation("ArchiveCreator")
+  apiKeys        ApiKey[]        @relation("ApiKeyCreator")
+  eventAuthors   EventAuthor[]   @relation("EventAuthor")
+  postAuthors    PostAuthor[]    @relation("PostAuthor")
+  archiveAuthors ArchiveAuthor[] @relation("ArchiveAuthor")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([roleId])
-  @@index([organizationId])
+  @@index([networkId])
   @@index([countryId])
+  @@index([stateId])
   @@map("users")
 }
 
@@ -121,13 +128,13 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(uuid())
-  code        String           @unique
+  id          String             @id @default(uuid())
+  code        String             @unique
   description String?
   roles       RolePermission[]
   apiKeys     ApiKeyPermission[]
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
 
   @@map("permissions")
 }
@@ -158,21 +165,25 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-model Organization {
-  id        String    @id @default(uuid())
-  name      String
-  state     String?
-  country   String?
-  address   String?
-  lat       Decimal?  @db.Decimal(10, 7)
-  lng       Decimal?  @db.Decimal(10, 7)
-  users     User[]
-  billings  Billing[]
-  events    Event[]
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+model Network {
+  id          String    @id @default(uuid())
+  name        String
+  state       String?
+  country     String?
+  address     String?
+  content     String?   @db.Text
+  website     String?
+  contact     String?
+  socialMedia Json?     @map("social_media")
+  lat         Decimal?  @db.Decimal(10, 7)
+  lng         Decimal?  @db.Decimal(10, 7)
+  users       User[]
+  billings    Billing[]
+  events      Event[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  @@map("organizations")
+  @@map("networks")
 }
 
 model Subscription {
@@ -193,8 +204,8 @@ model Billing {
   id               String           @id @default(uuid())
   userId           String           @map("user_id")
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId   String?          @map("organization_id")
-  organization     Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  networkId        String?          @map("network_id")
+  network          Network?         @relation(fields: [networkId], references: [id], onDelete: SetNull)
   subscriptionId   String           @map("subscription_id")
   subscription     Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
   code             String           @unique
@@ -211,7 +222,7 @@ model Billing {
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   @@index([userId])
-  @@index([organizationId])
+  @@index([networkId])
   @@index([subscriptionId])
   @@map("billings")
 }
@@ -244,17 +255,18 @@ model Event {
   visibility  ContentVisibility @default(PUBLIC)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  organizationId String?        @map("organization_id")
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  networkId   String?           @map("network_id")
+  network     Network?          @relation(fields: [networkId], references: [id], onDelete: SetNull)
   dates       EventDate[]
   eventTypes  AssignEventType[]
   locations   EventLocation[]
+  authors     EventAuthor[]
   submission  EventSubmission?
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
   @@index([createdBy])
-  @@index([organizationId])
+  @@index([networkId])
   @@map("events")
 }
 
@@ -273,12 +285,12 @@ model EventDate {
 }
 
 model EventType {
-  id          String            @id @default(uuid())
-  name        String
-  assignments AssignEventType[]
+  id               String            @id @default(uuid())
+  name             String
+  assignments      AssignEventType[]
   eventSubmissions EventSubmission[]
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   @@map("event_types")
 }
@@ -319,10 +331,17 @@ model EventSubmission {
   startDate        DateTime              @map("start_date") @db.Date
   endDate          DateTime              @map("end_date") @db.Date
   countryId        Int                   @map("country_id")
-  country          Country               @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  country          Country               @relation("EventSubmissionCountry", fields: [countryId], references: [id], onDelete: Restrict)
   stateId          Int?                  @map("state_id")
-  state            State?                @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  state            State?                @relation("EventSubmissionState", fields: [stateId], references: [id], onDelete: SetNull)
   organiser        String
+  // Section `author` (data pengirim): audit-only, bukan bagian dari Event saat approve.
+  authorFullName   String                @map("author_full_name")
+  authorEmail      String                @map("author_email")
+  authorCountryId  Int                   @map("author_country_id")
+  authorCountry    Country               @relation("EventSubmissionAuthorCountry", fields: [authorCountryId], references: [id], onDelete: Restrict)
+  authorStateId    Int?                  @map("author_state_id")
+  authorState      State?                @relation("EventSubmissionAuthorState", fields: [authorStateId], references: [id], onDelete: SetNull)
   eventTypeId      String?               @map("event_type_id")
   eventType        EventType?            @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
   shortDescription String                @map("short_description")
@@ -345,6 +364,7 @@ model Image {
   id         String   @id @default(uuid())
   entityType String   @map("entity_type")
   entityId   String?  @map("entity_id")
+  createdBy  String?  @map("created_by")
   key        String   @unique
   filename   String
   mimeType   String?  @map("mime_type")
@@ -357,27 +377,29 @@ model Image {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([entityType, entityId])
+  @@index([entityType, entityId, createdBy])
   @@map("images")
 }
 
 model Post {
-  id              String         @id @default(uuid())
+  id              String            @id @default(uuid())
   name            String
-  slug            String         @unique
-  status          ContentStatus  @default(DRAFT)
-  publishedAt     DateTime?      @map("published_at")
-  approvedAt      DateTime?      @map("approved_at")
+  slug            String            @unique
+  status          ContentStatus     @default(DRAFT)
+  publishedAt     DateTime?         @map("published_at")
+  approvedAt      DateTime?         @map("approved_at")
   content         String
   thumbnail       String?
-  galleryImageIds String[]       @default([]) @map("gallery_image_ids")
-  flyerImageIds   String[]       @default([]) @map("flyer_image_ids")
+  galleryImageIds String[]          @default([]) @map("gallery_image_ids")
+  flyerImageIds   String[]          @default([]) @map("flyer_image_ids")
   visibility      ContentVisibility @default(PUBLIC)
-  createdBy       String?        @map("created_by")
-  creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  createdBy       String?           @map("created_by")
+  creator         User?             @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories      PostCategory[]
+  authors         PostAuthor[]
   submission      StorySubmission?
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
 
   @@index([createdBy])
   @@map("posts")
@@ -393,6 +415,21 @@ model Category {
   updatedAt DateTime          @updatedAt @map("updated_at")
 
   @@map("categories")
+}
+
+model EventAuthor {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation("EventAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([eventId, authorId])
+  @@index([eventId])
+  @@index([authorId])
+  @@map("event_authors")
 }
 
 model PostCategory {
@@ -411,22 +448,23 @@ model PostCategory {
 }
 
 model Archive {
-  id            String            @id @default(uuid())
+  id            String             @id @default(uuid())
   name          String
   description   String?
   thumbnail     String?
-  type          ArchiveType       @default(PUBLIC)
-  status        ArchiveStatus     @default(DRAFT)
-  publishedAt   DateTime?         @map("published_at")
-  approvedAt    DateTime?         @map("approved_at")
-  externalLinks String[]          @default([]) @map("external_links")
-  documentIds   String[]          @default([]) @map("document_ids")
-  createdBy     String?           @map("created_by")
-  creator       User?             @relation("ArchiveCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  type          ArchiveType        @default(PUBLIC)
+  status        ArchiveStatus      @default(DRAFT)
+  publishedAt   DateTime?          @map("published_at")
+  approvedAt    DateTime?          @map("approved_at")
+  externalLinks String[]           @default([]) @map("external_links")
+  documentIds   String[]           @default([]) @map("document_ids")
+  createdBy     String?            @map("created_by")
+  creator       User?              @relation("ArchiveCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories    ArchiveCategory[]
+  authors       ArchiveAuthor[]
   submission    ArchiveSubmission?
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
   @@index([createdBy])
   @@map("archives")
@@ -445,6 +483,36 @@ model ArchiveCategory {
   @@index([archiveId])
   @@index([categoryId])
   @@map("archive_categories")
+}
+
+model PostAuthor {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([postId, authorId])
+  @@index([postId])
+  @@index([authorId])
+  @@map("post_authors")
+}
+
+model ArchiveAuthor {
+  id        String   @id @default(uuid())
+  archiveId String   @map("archive_id")
+  archive   Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation("ArchiveAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([archiveId, authorId])
+  @@index([archiveId])
+  @@index([authorId])
+  @@map("archive_authors")
 }
 
 model ArchiveSubmission {
@@ -470,21 +538,30 @@ model ArchiveSubmission {
 }
 
 model StorySubmission {
-  id              String                @id @default(uuid())
-  name            String
-  content         String                @db.Text
-  categoryIds     String[]              @default([]) @map("category_ids")
-  galleryImageIds String[]              @default([]) @map("gallery_image_ids")
-  flyerImageIds   String[]              @default([]) @map("flyer_image_ids")
-  thumbnail       String?
-  status          StorySubmissionStatus @default(REQUEST)
-  adminNote       String?               @map("admin_note")
-  reviewedBy      String?               @map("reviewed_by")
-  reviewedAt      DateTime?             @map("reviewed_at")
-  postId          String?               @unique @map("post_id")
-  post            Post?                 @relation(fields: [postId], references: [id], onDelete: SetNull)
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  id                 String                @id @default(uuid())
+  name               String
+  content            String                @db.Text
+  categoryIds        String[]              @default([]) @map("category_ids")
+  galleryImageIds    String[]              @default([]) @map("gallery_image_ids")
+  flyerImageIds      String[]              @default([]) @map("flyer_image_ids")
+  thumbnail          String?
+  // Section `submitter` (data pengirim): audit-only, bukan bagian dari Post saat approve.
+  submitterFullName  String                @map("submitter_full_name")
+  submitterEmail     String                @map("submitter_email")
+  // `submitterCountryId` nullable HANYA untuk legacy rows (backfill); API tetap mewajibkan
+  // `submitter.countryId` saat write (DTO required, non-null).
+  submitterCountryId Int?                  @map("submitter_country_id")
+  submitterCountry   Country?              @relation("StorySubmissionSubmitterCountry", fields: [submitterCountryId], references: [id], onDelete: Restrict)
+  submitterStateId   Int?                  @map("submitter_state_id")
+  submitterState     State?                @relation("StorySubmissionSubmitterState", fields: [submitterStateId], references: [id], onDelete: SetNull)
+  status             StorySubmissionStatus @default(REQUEST)
+  adminNote          String?               @map("admin_note")
+  reviewedBy         String?               @map("reviewed_by")
+  reviewedAt         DateTime?             @map("reviewed_at")
+  postId             String?               @unique @map("post_id")
+  post               Post?                 @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("story_submissions")
@@ -519,53 +596,55 @@ model Region {
 }
 
 model Country {
-  id             Int       @id @default(autoincrement())
-  name           String
-  iso2           String    @unique @db.Char(2)
-  iso3           String?   @db.Char(3)
-  numericCode    String?   @map("numeric_code")
-  phoneCode      String?   @map("phone_code")
-  capital        String?
-  currency       String?
-  currencyName   String?   @map("currency_name")
-  currencySymbol String?   @map("currency_symbol")
-  tld            String?
-  native         String?
-  population     BigInt?
-  gdp            BigInt?
-  regionName     String?   @map("region_name")
-  subregion      String?
-  nationality    String?
-  timezones      Json?
-  translations   Json?
-  latitude       Decimal?  @db.Decimal(10, 8)
-  longitude      Decimal?  @db.Decimal(11, 8)
-  emoji          String?
-  emojiU         String?   @map("emoji_u")
-  wikiDataId     String?   @map("wiki_data_id")
-  regionId       Int?      @map("region_id")
-  region         Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
-  users          User[]
-  states         State[]
-  eventSubmissions EventSubmission[]
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                        Int               @id @default(autoincrement())
+  name                      String
+  iso2                      String            @unique @db.Char(2)
+  iso3                      String?           @db.Char(3)
+  numericCode               String?           @map("numeric_code")
+  phoneCode                 String?           @map("phone_code")
+  capital                   String?
+  currency                  String?
+  currencyName              String?           @map("currency_name")
+  currencySymbol            String?           @map("currency_symbol")
+  tld                       String?
+  native                    String?
+  population                BigInt?
+  gdp                       BigInt?
+  regionName                String?           @map("region_name")
+  subregion                 String?
+  nationality               String?
+  timezones                 Json?
+  translations              Json?
+  latitude                  Decimal?          @db.Decimal(10, 8)
+  longitude                 Decimal?          @db.Decimal(11, 8)
+  emoji                     String?
+  emojiU                    String?           @map("emoji_u")
+  wikiDataId                String?           @map("wiki_data_id")
+  regionId                  Int?              @map("region_id")
+  region                    Region?           @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  users                     User[]
+  states                    State[]
+  eventSubmissions          EventSubmission[] @relation("EventSubmissionCountry")
+  authorEventSubmissions    EventSubmission[] @relation("EventSubmissionAuthorCountry")
+  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterCountry")
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
 
   @@index([regionId])
   @@map("countries")
 }
 
 model ApiKey {
-  id          String            @id @default(uuid())
+  id          String             @id @default(uuid())
   name        String
-  keyHash     String            @unique @map("key_hash")
-  prefix      String            @map("prefix")
-  lastUsedAt  DateTime?         @map("last_used_at")
-  createdBy   String            @map("created_by")
-  creator     User              @relation("ApiKeyCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  keyHash     String             @unique @map("key_hash")
+  prefix      String             @map("prefix")
+  lastUsedAt  DateTime?          @map("last_used_at")
+  createdBy   String             @map("created_by")
+  creator     User               @relation("ApiKeyCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   permissions ApiKeyPermission[]
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
 
   @@index([createdBy])
   @@map("api_keys")
@@ -584,26 +663,29 @@ model ApiKeyPermission {
 }
 
 model State {
-  id           Int      @id
-  name         String
-  countryCode  String   @map("country_code") @db.Char(2)
-  fipsCode     String?  @map("fips_code")
-  iso2         String?
-  iso3166_2    String?
-  type         String?
-  level        Int?
-  parentId     Int?     @map("parent_id")
-  native       String?
-  latitude     Decimal? @db.Decimal(10, 8)
-  longitude    Decimal? @db.Decimal(11, 8)
-  timezone     String?
-  translations Json?
-  wikiDataId   String?  @map("wiki_data_id")
-  countryId    Int      @map("country_id")
-  country      Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  eventSubmissions EventSubmission[]
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                        Int               @id
+  name                      String
+  countryCode               String            @map("country_code") @db.Char(2)
+  fipsCode                  String?           @map("fips_code")
+  iso2                      String?
+  iso3166_2                 String?
+  type                      String?
+  level                     Int?
+  parentId                  Int?              @map("parent_id")
+  native                    String?
+  latitude                  Decimal?          @db.Decimal(10, 8)
+  longitude                 Decimal?          @db.Decimal(11, 8)
+  timezone                  String?
+  translations              Json?
+  wikiDataId                String?           @map("wiki_data_id")
+  countryId                 Int               @map("country_id")
+  country                   Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  eventSubmissions          EventSubmission[] @relation("EventSubmissionState")
+  authorEventSubmissions    EventSubmission[] @relation("EventSubmissionAuthorState")
+  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterState")
+  users                     User[]
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
 
   @@index([countryId])
   @@index([countryCode])

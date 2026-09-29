@@ -212,7 +212,7 @@ export const archiveSelect = {
   approvedAt: true,
   externalLinks: true,
   documentIds: true,
-  creator: { select: { id: true, fullName: true, organizationId: true } },
+  creator: { select: { id: true, fullName: true, networkId: true } },
   categories: {
     select: {
       category: { select: { id: true, name: true, type: true } },
@@ -228,12 +228,12 @@ export type ArchiveCategoryEntity = { id: string; name: string; type: CategoryTy
 
 // Kontrak response API: `categories` flat (bukan `[{ category }]`).
 // Mirror `PostEntity`: `documentIds` mentah tetap ada di entity internal (dipakai hydrate).
-// `creator.organizationId` HANYA internal (row-level scoping); dibuang di response.
+// `creator.networkId` HANYA internal (row-level scoping); dibuang di response.
 export type ArchiveEntity = Omit<ArchiveRow, 'categories'> & { categories: ArchiveCategoryEntity[] };
 
 export type ArchiveCreatorRef = { id: string; fullName: string };
 
-// Item LIST = `ArchiveEntity` TANPA `documentIds` dan tanpa `creator.organizationId`.
+// Item LIST = `ArchiveEntity` TANPA `documentIds` dan tanpa `creator.networkId`.
 export type ArchiveListItem = Omit<ArchiveEntity, 'documentIds' | 'creator'> & {
   creator: ArchiveCreatorRef | null;
 };
@@ -254,7 +254,7 @@ export function mapArchive(row: ArchiveRow): ArchiveEntity {
 
 > **`externalLinks` dikembalikan apa adanya** (`string[]`, urut) — tidak ada resolusi. Pengecualian: `type=MEMBER` + `canViewPrivate=false` → `externalLinks` (list & detail) dan `documents` (detail) di-null-kan; `PUBLIC`/pemanggil berhak tidak berubah ([§1](#1-deskripsi--lokasi)).
 
-- `creator` sengaja minimal di response (`id`, `fullName`); `organizationId` dipilih untuk scoping lalu **dibuang** ([§3](#3-entity-payload-type)).
+- `creator` sengaja minimal di response (`id`, `fullName`); `networkId` dipilih untuk scoping lalu **dibuang** ([§3](#3-entity-payload-type)).
 - **`url` dokumen TIDAK disimpan di DB**; dihitung `DocumentService.toDocumentResponse` dari `key` + `S3_PUBLIC_BASE_URL`.
 - **Tidak ada** select yang menyertakan kolom sensitif.
 
@@ -450,8 +450,8 @@ Resource `archive` **sudah** ditambahkan ke `AccessScopeService` (`ContentResour
 | Kondisi permission | Scope `.kind` |
 | --- | --- |
 | punya salah satu `archive:approve`/`publish`/`reject`/`unpublish` | `all` |
-| punya salah satu `archive:create`/`update`/`submit` **dan** `organizationId` | `organization` |
-| punya salah satu `archive:create`/`update`/`submit` tanpa `organizationId` | `own` |
+| punya salah satu `archive:create`/`update`/`submit` **dan** `networkId` | `network` |
+| punya salah satu `archive:create`/`update`/`submit` tanpa `networkId` | `own` |
 | selain itu | `published` |
 | (list early-return bila tidak ada baris) | `none` |
 
@@ -464,7 +464,7 @@ Resource `archive` **sudah** ditambahkan ke `AccessScopeService` (`ContentResour
 `scopeWhere(scope)` di `ArchiveService`:
 
 - `all` → `undefined` (tanpa filter).
-- `organization` → `{ creator: { organizationId } }`.
+- `network` → `{ creator: { networkId } }`.
 - `own` → `{ OR: [{ createdBy: userId }, { status: PUBLISHED, publishedAt: { not: null, lte: now } }] }`.
 - `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`.
 - `none` → `{ id: { in: [] } }` (list early-return `{ items: [], total: 0 }`).
@@ -472,8 +472,8 @@ Resource `archive` **sudah** ditambahkan ke `AccessScopeService` (`ContentResour
 Otorisasi baris (mirror event, tanpa `visibility`):
 
 - **Baca** (`list`/`findOne`): scope diterapkan; `assertReadable` → `404` (not found) atau `403` bila di luar scope. Pemilik bebas; non-pemilik pada `own` hanya boleh membaca baris terbit (`isPublished`).
-- **Tulis** (`update`/`transition`/`remove`): `assertWritable` → `all` bebas; `organization` hanya baris `creator.organizationId`-nya; `own` hanya `creator.id === userId`; `published`/`none` → `403` (defensif; guard permission memblok lebih dulu).
-- `creator.organizationId` dipilih internal untuk scoping, lalu **dibuang** dari response ([§3](#3-entity-payload-type)).
+- **Tulis** (`update`/`transition`/`remove`): `assertWritable` → `all` bebas; `network` hanya baris `creator.networkId`-nya; `own` hanya `creator.id === userId`; `published`/`none` → `403` (defensif; guard permission memblok lebih dulu). **Pengecualian:** `ArchiveService.remove(id, userId, { skipScopeCheck: true })` — dipakai purge cascade hapus user (`DELETE /users/:id?cascadeContent=true`; sudah otorisasi `user:delete` + `admin:access`) — melewati `assertWritable` **hanya** agar purge tidak berhenti separuh jalan (hydrate/cleanup S3 tetap jalan). Tanpa opsi, perilaku `remove` identik seperti di atas.
+- `creator.networkId` dipilih internal untuk scoping, lalu **dibuang** dari response ([§3](#3-entity-payload-type)).
 
 ---
 
@@ -490,7 +490,7 @@ Otorisasi baris (mirror event, tanpa `visibility`):
 | `updateStatusIf(id, from, to, extra)` | Update status **atomik** (`updateMany` conditional `where { id, status: from }`, `extra: { publishedAt?, approvedAt? }`); return `ArchiveEntity` bila tepat 1 baris berubah, else `null` (guard anti-TOCTOU). |
 | `delete(id)` | Hapus; `archive_categories` cascade otomatis (FK `onDelete: Cascade`). Baris `Document` **tidak** cascade (FK polymorphic `entityId`, tanpa relasi) → dibersihkan service ([§9](#9-link-eksternal--dokumen-pdf-upload-s3)). |
 
-`ArchiveService` menambahkan `transition(id, action, userId, { publishedAt }?)` yang memvalidasi transisi via `ARCHIVE_TRANSITIONS` + memanggil `updateStatusIf` ([§5](#5-aturan-status)). Method `list(query, userId)`, `findOne(id, userId)`, `update(id, dto, userId)`, `remove(id, userId)` menerapkan scoping ([§6](#6-scoping-baca--tulis)).
+`ArchiveService` menambahkan `transition(id, action, userId, { publishedAt }?)` yang memvalidasi transisi via `ARCHIVE_TRANSITIONS` + memanggil `updateStatusIf` ([§5](#5-aturan-status)). Method `list(query, userId)`, `findOne(id, userId)`, `update(id, dto, userId)`, `remove(id, userId, { skipScopeCheck }?)` menerapkan scoping ([§6](#6-scoping-baca--tulis)). `skipScopeCheck` hanya untuk purge cascade hapus user (lihat §6).
 
 `categoryIds` saat update = **replace set** (bukan append): hapus semua `ArchiveCategory` milik archive lalu buat ulang dari daftar baru, di dalam `$transaction`.
 
@@ -558,7 +558,7 @@ Semua list paginated via `ListQueryDto` shared (`page, limit, sortBy, sortOrder,
 | `status` enum (filter) | `['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED']` ([§5](#5-aturan-status)) |
 | `type` enum (filter) | `['MEMBER', 'PUBLIC']` |
 | `ARCHIVE_DATE_FIELDS` | `['publishedAt', 'createdAt', 'updatedAt']` (ISO 8601; invalid → 422; `like` ditolak) |
-| `mine` param | `'true' \| 'false'` opsional; `'true'` → AND `{ createdBy: userId }` (organisasi: `{ creator: { organizationId } }`) **di-AND** dengan scope, bukan mengganti. Nilai lain → 422 |
+| `mine` param | `'true' \| 'false'` opsional; `'true'` → AND `{ createdBy: userId }` (organisasi: `{ creator: { networkId } }`) **di-AND** dengan scope, bukan mengganti. Nilai lain → 422 |
 | `sortOrder` default | `desc` (`sortBy` default `createdAt`) |
 | Item select | `archiveSelect` → termasuk `categories` + `creator`; item = `ArchiveListItem` (tanpa `documentIds`/`documents`; list tidak di-hydrate) |
 | `meta` | `{ page, limit, total }` |
@@ -707,8 +707,9 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 ### Seed
 
 - `admin` → **semua** `archive:*` (otomatis dari `DEFAULT_PERMISSIONS`).
-- Role `organization` → `archive:create`, `archive:read`, `archive:update`, `archive:delete`, `archive:submit` (dikelola sampai REQUEST; tidak bisa approve/reject/publish/unpublish).
+- Role bawaan `member`/`author` → `archive:create`, `archive:read`, `archive:update`, `archive:submit` (dikelola sampai REQUEST; tidak bisa delete/approve/reject/publish/unpublish).
 - Role `member` → `archive:create`, `archive:read`, `archive:update`, `archive:submit` (tanpa `archive:delete`).
+- Role `author` → **sama dengan `member`** (berbagi `MEMBER_PERMISSION_CODES`): `archive:create`, `archive:read`, `archive:update`, `archive:submit`.
 - Sidebar menu gate = `admin:access` (seperti Story); route gate = `archive:read`.
 - Gerbang FE: menu "Archives" tampil bila user punya `admin:access`; halaman/route dilindungi `archive:read`.
 
@@ -853,7 +854,7 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 5. **`DocumentUploadInterceptor`** (PDF-only + 10 MB, `LIMIT_FILE_SIZE` → 422). **`ImageProcessor`/`MulterUploadInterceptor`/`ImageService` TIDAK disentuh.**
 6. **`AccessScopeService`**: resource `archive` ditambahkan (`CONTENT_RESOURCES`), `resolve(userId, 'archive')` + scoping ([§6](#6-scoping-baca--tulis)).
 7. **`POST /documents`**: key `documents/<uuid>.pdf`, response `DocumentResponse`.
-8. **Seed**: 9 permission `archive:*`; `organization`/`member` mendapat create/update/submit (+delete utk organization); `admin` all. `pnpm prisma:seed`.
+8. **Seed**: 9 permission `archive:*`; `member`/`author` mendapat create/update/submit; `admin` all. `pnpm prisma:seed`.
 9. **Env**: `UPLOAD_DOCUMENT_MAX_SIZE_MB` (default **10**) + Joi.
 
 ### TODO lanjutan
@@ -865,7 +866,7 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 ### Catatan untuk FE
 
 - Sibling brief FE: **`frontend/docs/module/archive.md`** (belum ada).
-- Kontrak penting: `documentIds`/`externalLinks` = array penuh, update **replace** seluruh array. `documents` (= `DocumentResponse[]`) **hanya** di detail `GET /archives/:id`, berurut sesuai `documentIds`; item list **tanpa** `documents`. `documentIds` mentah tidak dikembalikan. `creator.organizationId` internal tidak dikembalikan (`creator = { id, fullName }`).
+- Kontrak penting: `documentIds`/`externalLinks` = array penuh, update **replace** seluruh array. `documents` (= `DocumentResponse[]`) **hanya** di detail `GET /archives/:id`, berurut sesuai `documentIds`; item list **tanpa** `documents`. `documentIds` mentah tidak dikembalikan. `creator.networkId` internal tidak dikembalikan (`creator = { id, fullName }`).
 - `PATCH /archives/:id` dengan `"thumbnail": null` menghapus thumbnail.
 - **Workflow:** tombol submit (pemilik → `REQUEST`), approve/reject (moderator), publish (`APPROVED → PUBLISHED`), unpublish (`PUBLISHED → DRAFT`). `approve`/`publish` body opsional `{ publishedAt?: ISO8601 }`. Transisi tidak valid → **409**.
 - `publishedAt` opsional (ISO 8601) → menimpa + paksa `PUBLISHED`; `null` mengosongkan tanggal (hanya scope `all`).

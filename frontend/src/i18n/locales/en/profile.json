@@ -6,6 +6,19 @@
     "fullName": "Full name",
     "email": "Email"
   },
+  "avatar": {
+    "label": "Profile photo"
+  },
+  "form": {
+    "thumbnail": "Profile photo"
+  },
+  "thumbnail": {
+    "upload": "Upload photo",
+    "uploading": "Uploading...",
+    "remove": "Remove",
+    "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
+    "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB."
+  },
   "editProfile": {
     "cancel": "Cancel",
     "save": "Save"
@@ -25,6 +38,8 @@
     "profileUpdated": "Profile updated successfully.",
     "updateProfileFailed": "Failed to update profile.",
     "passwordChanged": "Password changed. Please log in again.",
-    "changePasswordFailed": "Failed to change password."
+    "changePasswordFailed": "Failed to change password.",
+    "avatarUpdated": "Profile photo updated.",
+    "avatarUpdateFailed": "Failed to update profile photo."
   }
 }

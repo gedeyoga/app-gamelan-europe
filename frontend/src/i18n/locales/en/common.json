@@ -56,6 +56,11 @@
     "dismiss": "Dismiss",
     "errorDefault": "Something went wrong"
   },
+  "combobox": {
+    "userPlaceholder": "Select users",
+    "userSearch": "Search user...",
+    "userEmpty": "No user found"
+  },
   "eventCard": {
     "noThumbnail": "No thumbnail",
     "noLocation": "Location not available",

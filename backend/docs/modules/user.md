@@ -14,6 +14,8 @@ Lokasi kode:
 libs/src/modules/user/
 ├── user.repository.ts
 ├── user.service.ts
+├── user-content-purge.service.ts   ← orkestrasi delete user (+ cascade konten author)
+├── user-content-purge.module.ts
 ├── user.controller.ts   ← tidak di libs; pindah ke apps/*/src/controllers/ (RULES bab 3)
 ├── user.module.ts
 ├── dto/
@@ -21,7 +23,8 @@ libs/src/modules/user/
 │   ├── login.dto.ts
 │   ├── create-user.dto.ts
 │   ├── update-user.dto.ts
-│   └── update-user-role.dto.ts
+│   ├── update-user-role.dto.ts
+│   └── delete-user-query.dto.ts
 └── entities/
     └── user.entity.ts
 ```
@@ -55,8 +58,8 @@ model User {
   status         UserStatus     @default(ACTIVE)
   roleId         String?        @map("role_id")
   role           Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  organizationId String?        @map("organization_id")
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  networkId      String?
+  network        Network?       @relation(fields: [networkId], references: [id], onDelete: SetNull)
   refreshTokens  RefreshToken[]
   billings       Billing[]
   events         Event[]        @relation("EventCreator")
@@ -65,7 +68,7 @@ model User {
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
   @@index([roleId])
-  @@index([organizationId])
+  @@index([networkId])
   @@index([countryId])
   @@map("users")
 }
@@ -79,7 +82,7 @@ enum UserStatus {
 
 - `email` unik (constraint DB) → `P2002` dipetakan ke `UnprocessableEntityException` (422) via `toUniqueConstraintError`.
 - `roleId` nullable: user boleh belum punya role (didapat setelah di-assign).
-- `countryId` (ISO-2) nullable → FK ke `Country.iso2`, `onDelete: SetNull`, diindeks (`@@index([countryId])`). `roleId`/`organizationId` juga diindeks.
+- `countryId` (ISO-2) nullable → FK ke `Country.iso2`, `onDelete: SetNull`, diindeks (`@@index([countryId])`). `roleId`/`networkId` juga diindeks.
 - `countryId` tidak ada di tabel → `P2003` dipetakan ke `UnprocessableEntityException` (422) field `countryId` (`toForeignKeyConstraintError`).
 
 ---
@@ -103,8 +106,8 @@ export const userSelect = {
   role: { select: { id: true, name: true } },
   countryId: true,
   country: { select: { id: true, iso2: true, name: true } },
-  organizationId: true,
-  organization: { select: { id: true, name: true } },
+  networkId: true,
+  network: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;
@@ -223,7 +226,7 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsUUID()
-  organizationId?: string;
+  networkId?: string;
 }
 ```
 
@@ -250,6 +253,20 @@ export class UpdateUserRoleDto {
 }
 ```
 
+```typescript
+// libs/src/modules/user/dto/delete-user-query.dto.ts
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional } from 'class-validator';
+
+export class DeleteUserQueryDto {
+  // FE mengirim `?cascadeContent=true` (string). Absen → undefined (jalur delete default).
+  @Transform(({ value }) => (value === undefined ? undefined : value === true || value === 'true'))
+  @IsOptional()
+  @IsBoolean()
+  cascadeContent?: boolean;
+}
+```
+
 > `UpdateUserDto` memperluas `CreateUserDto` (PartialType) sehingga `email`/`fullName`/`status`/`countryId` tetap tervalidasi bila dikirim. `password` pada update tidak lewat `UpdateUserDto` — hash di service.
 
 ### Tabel validasi & contoh 422
@@ -262,9 +279,10 @@ export class UpdateUserRoleDto {
 | `status` | opsional, `@IsEnum(UserStatus)` | 422 `{ field: 'status', message }` |
 | `countryId` | trim opsional, `@Length(2, 2)` (ISO-2, relasi `Country.iso2`) | 422 `{ field: 'countryId', message }` |
 | `roleId` | opsional, `@IsUUID()` (create: assign role; `UpdateUserDto` mewarisinya tapi diabaikan service — pakai `PATCH /users/:id/role`) | 422 `{ field: 'roleId', message }` |
-| `organizationId` | opsional, `@IsUUID()` (create: pindah user ke organization; `UpdateUserDto` mewarisinya, service update belum menerapkannya) | 422 `{ field: 'organizationId', message }` |
+| `networkId` | opsional, `@IsUUID()` (create: pindah user ke network; `UpdateUserDto` mewarisinya, service update belum menerapkannya) | 422 `{ field: 'networkId', message }` |
 | `roleId` (assign) | trim, `@IsUUID()` | 422 `{ field: 'roleId', message }` |
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
+| `cascadeContent` (query) | opsional, `@IsBoolean()` (string `"true"` di-coerce ke `boolean`; absen = `undefined`) | 422 `{ field: 'cascadeContent', message }` |
 
 ```json
 // POST /users dengan email invalid
@@ -339,7 +357,7 @@ export class UserRepository {
   }
 
   async update(id: string, data: Prisma.UserUncheckedUpdateInput): Promise<UserEntity> {
-    // Pre-check pakai select minimal → tidak menyentuh kolom drift (phone/address/organization_id).
+    // Pre-check pakai select minimal → tidak menyentuh kolom drift (phone/address/network_id).
     const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('User not found');
     try {
@@ -371,7 +389,7 @@ export class UserRepository {
     const byColumn: Record<string, { field: string; message: string }> = {
       country_id: { field: 'countryId', message: 'Country not found' },
       role_id: { field: 'roleId', message: 'Role not found' },
-      organization_id: { field: 'organizationId', message: 'Organization not found' },
+      network_id: { field: 'networkId', message: 'Network not found' },
     };
     const column =
       meta?.field_name && byColumn[meta.field_name]
@@ -511,7 +529,7 @@ Auth (update profile — `PATCH /auth/me`):
 | GET | `/api/v1/users/:id` | Detail user | PERMISSION: `user:read` |
 | PATCH | `/api/v1/users/:id` | Update user (email/fullName/status/countryId) | PERMISSION: `user:update` |
 | PATCH | `/api/v1/users/:id/role` | Set role user | PERMISSION: `user:update` |
-| DELETE | `/api/v1/users/:id` | Hapus user | PERMISSION: `user:delete` |
+| DELETE | `/api/v1/users/:id` | Hapus user; `?cascadeContent=true` ikut menghapus konten yang user author | PERMISSION: `user:delete` |
 
 Kontrak list (RULES Bab 19/19a/19b):
 
@@ -531,7 +549,26 @@ User CRUD detail:
 | `GET /users/:id` | path `id` | 200 `{ data: <user>, message }` | 404 tidak ditemukan |
 | `PATCH /users/:id` | path `id`, body `UpdateUserDto` | 200 `{ data: <user>, message }` | 404, 422 duplikat email, 422 `countryId` tak ada, 422 validasi |
 | `PATCH /users/:id/role` | path `id`, body `{ roleId }` | 200 `{ data: <user>, message }` | 404 user/role, 422 |
-| `DELETE /users/:id` | path `id` | 200 `{ data: <user>, message }` | 404 |
+| `DELETE /users/:id` | path `id`, query `?cascadeContent=true\|false` | 200 `{ data: <user>, message }` | 404 tidak ditemukan, 403 self-delete |
+
+#### Delete user + cascade konten (opsional)
+
+`DELETE /api/v1/users/:id` default **tidak berubah**: hanya menghapus row user (FK `createdBy` di konten `onDelete: SetNull`, konten tetap ada).
+
+Query `?cascadeContent=true` menambahkan purge konten yang user-nya terdaftar sebagai **author** (join `post_authors` / `event_authors` / `archive_authors`).
+
+| Item | Nilai |
+| --- | --- |
+| Query | `cascadeContent` (opsional, boolean; string `"true"` diterima via `DeleteUserQueryDto`) |
+| Konten yang dihapus | Post, Event, Archive di mana user ada di author join |
+| Konten yang **tidak** dihapus | konten orang lain yang hanya `createdBy` user (FK `SetNull` dibiarkan); submission terkait tidak diutak-atik |
+| Urutan | (1) resolve user → 404 bila tak ada + gerbang `admin:access`; (2) purge konten (Post → Event → Archive, per id, reuse `*.service.remove` yang mengurus gambar/dokumen/S3); (3) hapus user |
+| Retryability | sequential + fail-fast: bila satu delete konten gagal, user **tidak** dihapus → request bisa diulang; bukan satu transaksi besar (storage eksternal best-effort) |
+| Guard | `@Permissions('user:delete')` + `assertAdmin` (`admin:access`), sama seperti default |
+| Self-delete | `DELETE /users/:id` dengan `id === userId` **ditolak 403** (`ForbiddenException: Cannot delete your own account`). Dicek SEBELUM purge konten (agar tidak ada partial purge) dan sebelum delete di `UserService.remove`. Cek existence/404 tetap lebih dulu. Hardening atas perilaku lama (sebelumnya self-delete diizinkan). |
+| Bypass scope konten | Purge memanggil `post/event/archiveService.remove(id, userId, { skipScopeCheck: true })` — `assertWritable` (scope tulis konten) dilewati **hanya** untuk jalur ini. Alasannya: operasi sudah diotorisasi `user:delete` + `admin:access`; scope konten yang lebih sempit (`own`/`network`/`published`) membuat purge deterministik 403 di tengah jalan → konten terhapus separuh tanpa rollback lintas service dan retry tidak pernah konvergen. Tanpa opsi, perilaku `remove` ketiga service identik seperti sebelumnya (scope check tetap jalan). |
+| Response | 200 `{ data: <user>, message }` (entitas user terhapus); 404 user tak ada; 403 self-delete; 422 `cascadeContent` bukan boolean |
+| Orkestrasi | `UserContentPurgeService.remove(id, userId, cascadeContent)` (modul terpisah, bukan `UserService` — hindari dependency cycle dengan modul konten) |
 
 Keputusan akses user (eksplisit):
 
@@ -547,21 +584,21 @@ Keputusan akses user (eksplisit):
 
 `UserService` **tidak** memakai `AccessScopeService` (scope konten) untuk hak user/role. Gerbang eksplisit: `hasAdminAccess(codes)` — user wajib punya permission **`admin:access`** (hanya role `admin` di seed). Ini mencegah eskalasi: role custom ber-permission konten (`event:publish`, dst.) **selalu 403** di endpoint user.
 
-| Endpoint | `admin:access` | Non-admin (termasuk `organization`/`member`/role custom konten) |
+| Endpoint | `admin:access` | Non-admin (termasuk `member`/`author`/role custom konten) |
 | --- | --- | --- |
-| `POST /users` | `roleId`/`organizationId` dari body diteruskan apa adanya | 403 |
+| `POST /users` | `roleId`/`networkId` dari body diteruskan apa adanya | 403 |
 | `GET /users` | semua user | 403 |
 | `GET /users/:id` | bebas | 403 |
 | `PATCH /users/:id` | ✅ | 403 |
 | `PATCH /users/:id/role` | ✅ | 403 |
 | `DELETE /users/:id` | ✅ | 403 |
 
-- **Dua lapis:** guard `@Permissions('user:*')` **dan** gerbang `admin:access` di service. `organization` masih punya `user:create`/`user:read` di seed tetapi tetap **403** di service (permission itu kini tidak efektif untuk endpoint user).
-- `UpdateUserDto` mewarisi `roleId`/`organizationId` dari `CreateUserDto`, tetapi `update()` **belum** menerapkannya (hanya `email`/`fullName`/`status`/`countryId`/`password`); pindah role lewat `PATCH /users/:id/role`.
+- **Dua lapis:** guard `@Permissions('user:*')` **dan** gerbang `admin:access` di service. Role bawaan non-admin (`member`/`author`) tidak punya `user:*` sama sekali, dan role custom mana pun tanpa `admin:access` tetap **403** di service.
+- `UpdateUserDto` mewarisi `roleId`/`networkId` dari `CreateUserDto`, tetapi `update()` **belum** menerapkannya (hanya `email`/`fullName`/`status`/`countryId`/`password`); pindah role lewat `PATCH /users/:id/role`.
 - Assign `roleId` (create/assignRole) hanya oleh pemegang `admin:access`.
 
 ```json
-// 403 — user organization mengakses anggota org lain
+// 403 — non-admin (tanpa `admin:access`) mengakses endpoint user
 { "statusCode": 403, "message": "Forbidden resource", "errors": [] }
 ```
 
@@ -577,10 +614,10 @@ Keputusan akses user (eksplisit):
 | login | `UnauthorizedException` | 401 | email tak ada / password salah |
 | login | `UnprocessableEntityException` | 422 | validasi DTO |
 | create/list/detail/update/remove/role | `NotFoundException` | 404 | resource tidak ada |
+| remove | `ForbiddenException` | 403 | self-delete (`id === userId`) — `Cannot delete your own account` |
 | create/update/profile | `UnprocessableEntityException` | 422 | `countryId` tidak ada (FK `P2003` → `{ field: 'countryId', message: 'Country not found' }`) |
 | profile (`PATCH /auth/me`) | `BadRequestException` | 400 | tidak ada field yang dikirim |
-| `POST /users` (role `organization`), `GET/PATCH/DELETE /users*` non-admin | `ForbiddenException` | 403 | scope baris (bukan anggota organisasinya) / endpoint admin-only |
-| `POST /users` (role `organization`) | `InternalServerErrorException` | 500 | role `member` belum di-seed (`Member role not configured`) |
+| `POST /users`, `GET/PATCH/DELETE /users*` tanpa `admin:access` | `ForbiddenException` | 403 | endpoint admin-only (`admin:access`) |
 | semua | `ForbiddenException` | 403 | JWT valid tapi permission kurang |
 | semua | `UnauthorizedException` | 401 | JWT invalid/expired |
 | semua | `UnprocessableEntityException` | 422 | validasi DTO |

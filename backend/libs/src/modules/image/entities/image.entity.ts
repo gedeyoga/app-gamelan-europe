@@ -4,6 +4,7 @@ export const imageSelect = {
   id: true,
   entityType: true,
   entityId: true,
+  createdBy: true,
   key: true,
   filename: true,
   mimeType: true,

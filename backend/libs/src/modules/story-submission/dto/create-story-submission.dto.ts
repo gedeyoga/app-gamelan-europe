@@ -1,15 +1,45 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEmail,
+  IsInt,
   IsNotEmpty,
+  IsNotEmptyObject,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+const trimLower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
+
+// Section `submitter` (data pengirim) — section tersendiri, audit-only.
+// Cross-field `submitter.stateId` milik `submitter.countryId` dicek di service → 422 `submitter.stateId`.
+export class StorySubmissionSubmitterDto {
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  fullName: string;
+
+  @Transform(trimLower)
+  @IsEmail()
+  @MaxLength(200)
+  email: string;
+
+  @Type(() => Number)
+  @IsInt()
+  countryId: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stateId?: number;
+}
 
 export class CreateStorySubmissionDto {
   @Transform(trim)
@@ -49,4 +79,10 @@ export class CreateStorySubmissionDto {
   @IsString()
   @MaxLength(2048)
   thumbnail?: string;
+
+  // Section terpisah "data pengirim" (wajib) — audit-only, tidak disalin ke Post saat approve.
+  @IsNotEmptyObject()
+  @ValidateNested()
+  @Type(() => StorySubmissionSubmitterDto)
+  submitter: StorySubmissionSubmitterDto;
 }

@@ -2,7 +2,7 @@ import { LogOut, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,7 @@ import {
 export interface SidebarUserInfo {
   fullName: string
   email: string
+  avatar?: string | null
 }
 
 interface SidebarUserProps {
@@ -39,6 +40,9 @@ export function SidebarUser({ user, onLogout }: SidebarUserProps) {
       <DropdownMenuTrigger asChild>
         <button className="flex w-full items-center gap-2 rounded-md p-2 text-start outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring">
           <Avatar className="size-8 rounded-lg">
+            {user.avatar && (
+              <AvatarImage src={user.avatar} alt={user.fullName} className="rounded-lg" />
+            )}
             <AvatarFallback className="rounded-lg">{getInitials(user.fullName)}</AvatarFallback>
           </Avatar>
           <div className="grid flex-1 text-start text-sm leading-tight">

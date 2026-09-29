@@ -13,6 +13,7 @@ import {
 } from '@/lib/toast'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
+import { useUsers } from '@/features/user/hooks/use-users'
 import { EventForm } from '@/features/event/components/event-form'
 import { toDateOnly } from '@/features/event/lib/format'
 import type { EventFormValues } from '@/features/event/lib/schema'
@@ -35,6 +36,7 @@ function toFormValues(event: Event): EventFormValues {
     status: event.status,
     visibility: event.visibility,
     eventTypeIds: event.eventTypes.map((eventType) => eventType.id),
+    authorIds: event.authors.map((author) => author.id),
     dates: event.dates.map((entry) => ({
       date: toDateOnly(entry.date),
       startTime: entry.startTime ?? '',
@@ -58,6 +60,8 @@ export function EventEditPage() {
   const canUpdate = can('event:update')
   const canReadEventTypes = can('event-type:read')
   const canCreateEventType = can('event-type:create')
+  const canManageAuthors = can('user:create') && can('user:read')
+  const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishEvent = can('event:publish')
   const canSubmitEvent = can('event:submit')
   const canApproveEvent = can('event:approve')
@@ -65,6 +69,7 @@ export function EventEditPage() {
 
   const eventQuery = useEvent(id)
   const eventTypesQuery = useEventTypes(canReadEventTypes)
+  const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const updateEvent = useUpdateEvent()
   const submitEvent = useSubmitEvent()
   const approveEvent = useApproveEvent()
@@ -136,6 +141,12 @@ export function EventEditPage() {
     navigate('/events')
   }
 
+  const authorsOptions = (usersQuery.data?.items ?? []).map((user) => ({
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+  }))
+
   if (!canUpdate) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
@@ -199,6 +210,10 @@ export function EventEditPage() {
           canApproveEvent={canApproveEvent}
           canRejectEvent={canRejectEvent}
           onCreateEventType={handleCreateEventType}
+          authors={authorsOptions}
+          isLoadingUsers={usersQuery.isPending}
+          canManageAuthors={canManageAuthors}
+          canDeleteAuthors={canDeleteAuthors}
           onUploadImage={uploadImage.mutateAsync}
           onUploadError={handleUploadError}
         />

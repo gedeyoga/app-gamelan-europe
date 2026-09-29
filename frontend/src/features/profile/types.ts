@@ -8,4 +8,5 @@ export interface ChangePasswordInput {
 export interface UpdateProfileInput {
   fullName?: string
   email?: string
+  avatar?: string | null
 }

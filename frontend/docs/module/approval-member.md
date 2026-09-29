@@ -213,7 +213,7 @@ Alasan bukan field `source`: tidak ada di response backend (event/archive tidak 
     - `statusVariant?: 'default' | 'secondary' | 'outline' | 'destructive'`
     - `kindBadge?: { label: string; variant: 'default' | 'secondary' | 'outline' }` — label jenis (`Member`, dll)
     - `kindIcon?: LucideIcon` — ikon leading judul/identitas
-    - `creator?: { name: string; organization?: string | null }` (event) atau `creatorName?: string` (arsip)
+    - `creator?: { name: string; network?: string | null }` (event) atau `creatorName?: string` (arsip)
     - `dateLabel?: string | null`
     - `locationName?: string | null`
     - `categories?: string[]`
@@ -241,7 +241,7 @@ export interface DashboardPendingEventItem {
   id: string
   name: string
   thumbnail: string | null
-  creatorName: string | null          // organisasi event ?? creator.organization ?? fullName
+  creatorName: string | null          // organisasi event ?? creator.network ?? fullName
   dateLabel: string | null
   locationName: string | null         // BARU — event.location?.name
   eventTypes: string[]                // BARU — eventTypes.map(t => t.name)
@@ -320,8 +320,8 @@ Update **en & id** bersamaan.
 | `name` | Judul kartu | ✅ |
 | `thumbnail` | Media 16:9 + fallback `ImageOff` | ✅ |
 | `creator.fullName` | Baris pengaju | ✅ |
-| `creator.organization.name` | Baris “organisasi penyelenggara” (fallback) — **satu-satunya yang di-declare di FE `Event` saat ini** | ✅ |
-| `organization.name` (top-level) | Baris organisasi utama (precedence event.md §3) | ⚠️ ada di response backend, **belum dideklarasikan di `features/event/types.ts` `Event`** — tambah field bila mau precedence penuh |
+| `creator.network.name` | Baris “organisasi penyelenggara” (fallback) — **satu-satunya yang di-declare di FE `Event` saat ini** | ✅ |
+| `network.name` (top-level) | Baris organisasi utama (precedence event.md §3) | ⚠️ ada di response backend, **belum dideklarasikan di `features/event/types.ts` `Event`** — tambah field bila mau precedence penuh |
 | `dates[]` (`date`/`startTime`/`endTime`) | `dateLabel` (`formatEventDate`) | ✅ |
 | `location.name` | Baris lokasi (`MapPin`) | ✅ |
 | `eventTypes[].name` | Chip tipe | ✅ |
@@ -329,7 +329,7 @@ Update **en & id** bersamaan.
 | `content` | — (tidak ditampilkan; bisa jadi deskripsi masa depan) | ⚠️ ada, tak dipakai |
 | “sumber = member” | Ikon/badge jenis event | ❌ **tidak ada field** |
 
-Precedence pengaju (event.md §3): `event.organization?.name ?? event.creator?.organization?.name ?? event.creator?.fullName ?? '—'`. Catatan: FE `Event` **belum** punya `organization` top-level (hanya `creator.organization`) — mapping existing di `dashboard-home.tsx` memakai `creator.organization?.name ?? creator.fullName`. Untuk precedence penuh, tambah `organization` ke `features/event/types.ts` (bukan tugas dokumen ini). Untuk membedakan baris “organisasi” vs “individu”, tampilkan ikon `Building2` bila organisasi ada, `User` bila hanya `fullName` — **inferensi**, bukan fakta.
+Precedence pengaju (event.md §3): `event.network?.name ?? event.creator?.network?.name ?? event.creator?.fullName ?? '—'`. Catatan: FE `Event` **belum** punya `network` top-level (hanya `creator.network`) — mapping existing di `dashboard-home.tsx` memakai `creator.network?.name ?? creator.fullName`. Untuk precedence penuh, tambah `network` ke `features/event/types.ts` (bukan tugas dokumen ini). Untuk membedakan baris “organisasi” vs “individu”, tampilkan ikon `Building2` bila organisasi ada, `User` bila hanya `fullName` — **inferensi**, bukan fakta.
 
 ### Archive (`GET /archives` → `ArchiveListItem` — archive.md §3/§12)
 
@@ -343,7 +343,7 @@ Precedence pengaju (event.md §3): `event.organization?.name ?? event.creator?.o
 | `creator.fullName` | Baris pengaju | ✅ |
 | `createdAt` / `updatedAt` | `dateLabel` (proxy “diajukan”) | ✅ |
 | `status` | Badge “Diajukan” | ✅ |
-| `creator.organization` | Baris organisasi pengaju | ❌ **di-strip dari response** (archive.md §3: `creator = { id, fullName }`) |
+| `creator.network` | Baris organisasi pengaju | ❌ **di-strip dari response** (archive.md §3: `creator = { id, fullName }`) |
 | `submittedAt` (tanggal pengajuan) | Tanggal pengajuan asli | ❌ **tidak ada** — pakai `updatedAt` |
 | `externalLinks` / `documents` | Ringkasan berkas | ❌ hanya di detail; `MEMBER` + tanpa akses → `null` |
 
@@ -367,9 +367,9 @@ Precedence pengaju (event.md §3): `event.organization?.name ?? event.creator?.o
    - (a) Kunci `type=MEMBER` (sesuai permintaan “khusus member”) — menerima bahwa arsip PUBLIK dari member tidak masuk antrean ini.
    - (b) Tampilkan semua `REQUEST` (tanpa filter type) tetapi beri badge `Member`/`Publik` per kartu — lebih aman tetapi tidak memisahkan antrean.
    - (c) Dua sub-section / filter toggle “Member-only” vs “Semua”. Perlu keputusan produk. Rekomendasi sementara: **(a) + catat backlog** bahwa “arsip member-authored” tidak dapat dibedakan tanpa field baru (`createdByRole`/`source`).
-2. **Event member tanpa organisasi.** Member sering tanpa `organizationId` → hanya `creator.fullName`. Kartu harus tampil baik tanpa baris organisasi. Jangan mengarang nama organisasi.
+2. **Event member tanpa organisasi.** Member sering tanpa `networkId` → hanya `creator.fullName`. Kartu harus tampil baik tanpa baris organisasi. Jangan mengarang nama organisasi.
 3. **Event internal vs member tak terbeda.** Admin juga punya `event:submit`; event internal ber-`REQUEST` bisa tercampur. Tidak ada field sumber → tidak bisa dipisah di FE. Judul section “Diajukan member dan organisasi” sebaiknya jangan diklaim terlalu kuat.
-4. **Archive tanpa `creator.organization`.** Konsisten dengan (2)); desain kartu tidak boleh bergantung padanya.
+4. **Archive tanpa `creator.network`.** Konsisten dengan (2)); desain kartu tidak boleh bergantung padanya.
 5. **Jumlah item besar.** Kartu lebih tinggi dari baris. `limit=5` + pagination menahan tinggi; jangan naikkan limit di grid. Pantau performa `img` banyak → tambah `loading="lazy"` (submissions sudah).
 6. **Gate terpisah.** `isArchiveModerator` (`archive:approve/reject`) independen `isAdmin` (`event:*`). Refactor tidak boleh mengikat render arsip ke `isAdmin`.
 7. **Refactor regresi.** Mengganti tiga komponen berisiko kehilangan `busyId`/`isRefreshing`/pagination. Migrasi bertahap + verifikasi lint/tsc setiap langkah.

@@ -46,19 +46,6 @@ export interface DashboardPendingArchiveItem {
   categories: string[]
 }
 
-export interface DashboardPendingArchiveSubmissionItem {
-  id: string
-  name: string
-  thumbnail: string | null
-  description: string | null
-  /** Tautan eksternal; entri pertama dipakai sebagai fallback bila `description` kosong. */
-  externalLinks: string[]
-  /** Jumlah lampiran PDF (server-derived); `0` → sembunyikan. */
-  attachmentCount: number
-  /** Label tanggal `createdAt` yang sudah diformat, null bila tidak ada. */
-  dateLabel: string | null
-}
-
 export interface DashboardPendingStoryItem {
   id: string
   name: string

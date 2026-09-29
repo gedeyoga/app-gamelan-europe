@@ -18,7 +18,9 @@ import { EventsPage } from './events'
 import { EventNewPage } from './event-new'
 import { LoginPage } from './login'
 import { MyBillingsPage } from './my-billings'
-import { OrganizationsPage } from './organizations'
+import { NetworkEditPage } from './network-edit'
+import { NetworkNewPage } from './network-new'
+import { NetworksPage } from './networks'
 import { ProfilePage } from './profile'
 import { RegisterPage } from './register'
 import { RolesPage } from './roles'
@@ -106,13 +108,15 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'organizations',
+        path: 'networks',
         element: (
-          <RequirePermission code="organization:read">
-            <OrganizationsPage />
+          <RequirePermission code="network:read">
+            <NetworksPage />
           </RequirePermission>
         ),
       },
+      { path: 'networks/new', element: <NetworkNewPage /> },
+      { path: 'networks/:id/edit', element: <NetworkEditPage /> },
       {
         path: 'subscriptions',
         element: (

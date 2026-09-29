@@ -1,4 +1,4 @@
-import { Injectable, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -30,6 +30,8 @@ export interface ImageResponse {
 
 @Injectable()
 export class ImageService {
+  private readonly logger = new Logger(ImageService.name);
+
   constructor(
     private readonly imageRepository: ImageRepository,
     private readonly imageProcessor: ImageProcessor,
@@ -82,7 +84,27 @@ export class ImageService {
     return image.key === key || variants.some((v) => v.key === key);
   }
 
-  async upload(file: Express.Multer.File | undefined, entityType = 'post'): Promise<ImageResponse> {
+  // Hapus row milik entity + objek S3 (best-effort, DB dulu). Dipakai avatar replace/clear.
+  async removeByEntity(entityType: string, entityId: string): Promise<void> {
+    const keys = await this.imageRepository.deleteByEntity(entityType, entityId);
+    try {
+      await this.storage.deleteObjects(keys);
+    } catch {
+      this.logger.warn(`S3 cleanup failed for ${entityType} ${entityId} (${keys.length} object(s)); continuing`);
+    }
+  }
+
+  // Bind baris upload (unbound) ke entity; ownership `createdBy` ditegakkan di repository.
+  async bindToOwner(id: string, entityType: string, entityId: string, createdBy: string): Promise<void> {
+    const count = await this.imageRepository.bindOwnedById(id, entityType, entityId, createdBy);
+    if (count !== 1) throw this.invalid('image could not be bound');
+  }
+
+  async upload(
+    file: Express.Multer.File | undefined,
+    entityType = 'post',
+    createdBy?: string,
+  ): Promise<ImageResponse> {
     if (!file) throw this.invalid('file is required');
     if (!ALLOWED_MIME.includes(file.mimetype)) throw this.invalid('unsupported mime type');
 
@@ -112,6 +134,7 @@ export class ImageService {
       id, // = uuid di key; jaga invariant id row == uuid URL (trust check PK lookup).
       entityType,
       entityId: null,
+      createdBy: createdBy ?? null,
       key: originalKey,
       filename: file.originalname,
       mimeType: file.mimetype,

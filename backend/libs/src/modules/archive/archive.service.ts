@@ -5,6 +5,7 @@ import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListArchivesQueryDto } from './dto/list-archives-query.dto';
 import { CategoryRepository } from '@app/libs/modules/category/category.repository';
+import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { DocumentRepository } from '@app/libs/modules/document/document.repository';
 import { DocumentService } from '@app/libs/modules/document/document.service';
 import { ArchiveRepository, CreateArchiveData, UpdateArchiveData } from './archive.repository';
@@ -35,6 +36,7 @@ export class ArchiveService {
   constructor(
     private readonly archiveRepository: ArchiveRepository,
     private readonly categoryRepository: CategoryRepository,
+    private readonly userRepository: UserRepository,
     private readonly documentRepository: DocumentRepository,
     private readonly documentService: DocumentService,
     private readonly storage: StorageService,
@@ -59,8 +61,8 @@ export class ArchiveService {
     switch (scope.kind) {
       case 'all':
         return undefined;
-      case 'organization':
-        return { creator: { organizationId: scope.organizationId } };
+      case 'network':
+        return { creator: { networkId: scope.networkId } };
       case 'own':
         return { OR: [{ createdBy: scope.userId }, published] };
       case 'published':
@@ -73,8 +75,8 @@ export class ArchiveService {
   // "My Archive": organisasi → arsip satu organisasi; selain itu → arsip buatan user sendiri.
   // Di-AND dengan scopeWhere (bukan mengganti) supaya scoping tetap aman.
   private mineWhere(scope: AccessScope, userId: string): Prisma.ArchiveWhereInput {
-    if (scope.kind === 'organization') {
-      return { creator: { organizationId: scope.organizationId } };
+    if (scope.kind === 'network') {
+      return { creator: { networkId: scope.networkId } };
     }
     return { createdBy: userId };
   }
@@ -82,7 +84,7 @@ export class ArchiveService {
   // Baca: org hanya konten organisasinya; published hanya status PUBLISHED; none tolak.
   private assertReadable(archive: ArchiveEntity, scope: AccessScope): void {
     if (scope.kind === 'none') throw new ForbiddenException('Forbidden resource');
-    if (scope.kind === 'organization' && archive.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network' && archive.creator?.networkId !== scope.networkId) {
       throw new ForbiddenException('Forbidden resource');
     }
     if (scope.kind === 'own') {
@@ -95,11 +97,11 @@ export class ArchiveService {
     }
   }
 
-  // Tulis: admin bebas; organization hanya konten organisasinya; none/published tolak (defensif,
+  // Tulis: admin bebas; network hanya konten network-nya; none/published tolak (defensif,
   // guard permission biasanya sudah memblok lebih dulu).
   private assertWritable(archive: ArchiveEntity, scope: AccessScope): void {
-    if (scope.kind === 'organization') {
-      if (archive.creator?.organizationId !== scope.organizationId) {
+    if (scope.kind === 'network') {
+      if (archive.creator?.networkId !== scope.networkId) {
         throw new ForbiddenException('Forbidden resource');
       }
       return;
@@ -113,7 +115,7 @@ export class ArchiveService {
     if (scope.kind !== 'all') throw new ForbiddenException('Forbidden resource');
   }
 
-  // Buang `creator.organizationId` (tenancy internal) dari response.
+  // Buang `creator.networkId` (tenancy internal) dari response.
   private stripCreator(creator: ArchiveEntity['creator']): ArchiveCreatorRef | null {
     return creator ? { id: creator.id, fullName: creator.fullName } : null;
   }
@@ -137,6 +139,18 @@ export class ArchiveService {
           `categoryIds.${i}`,
           'categoryId must reference a category of type ARCHIVE',
         );
+      }
+    }
+  }
+
+  // Wajib setiap `authorIds` ada (user) → 422 per-field (cegah P2003 FK saat createMany).
+  private async assertAuthors(authorIds?: string[]): Promise<void> {
+    if (!authorIds || authorIds.length === 0) return;
+    const users = await this.userRepository.findByIds(authorIds);
+    const found = new Set(users.map((user) => user.id));
+    for (let i = 0; i < authorIds.length; i++) {
+      if (!found.has(authorIds[i])) {
+        throw this.validationError(`authorIds.${i}`, 'authorId must reference an existing user');
       }
     }
   }
@@ -184,7 +198,7 @@ export class ArchiveService {
     });
   }
 
-  // Item list: buang `documentIds` mentah + `creator.organizationId` tanpa lookup dokumen (hindari N+1).
+  // Item list: buang `documentIds` mentah + `creator.networkId` tanpa lookup dokumen (hindari N+1).
   private toListItem(archive: ArchiveEntity, canViewPrivate: boolean): ArchiveListItem {
     const { documentIds: _documentIds, creator, ...item } = archive;
     return redactMemberOnly({ ...item, creator: this.stripCreator(creator) }, canViewPrivate);
@@ -223,17 +237,18 @@ export class ArchiveService {
       this.archiveRepository.findById(id),
       this.accessScope.resolve(userId, 'archive'),
     ]);
-    this.assertReadable(archive, scope); // cek scope pakai entity mentah (punya organizationId)
+    this.assertReadable(archive, scope); // cek scope pakai entity mentah (punya networkId)
     return (await this.hydrate([archive], scope.canViewPrivate))[0];
   }
 
   // `tx` opsional: diteruskan dari pemanggil yang sudah membuka transaksi (approve archive-submission).
   async create(dto: CreateArchiveDto, userId: string, tx?: Prisma.TransactionClient): Promise<ArchiveResponse> {
     await this.assertArchiveCategories(dto.categoryIds);
+    await this.assertAuthors(dto.authorIds);
     await this.assertDocuments(dto.documentIds, null, tx);
 
     const scope = await this.accessScope.resolve(userId, 'archive');
-    if (scope.kind !== 'all' && scope.kind !== 'organization' && scope.kind !== 'own') {
+    if (scope.kind !== 'all' && scope.kind !== 'network' && scope.kind !== 'own') {
       throw new ForbiddenException('Forbidden resource');
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
@@ -261,6 +276,7 @@ export class ArchiveService {
       documentIds: scoped.documentIds ?? [],
       createdBy: userId,
       categoryIds: scoped.categoryIds,
+      authorIds: scoped.authorIds,
     };
     const archive = await this.archiveRepository.create(data, tx);
     return (await this.hydrate([archive], scope?.canViewPrivate ?? false))[0];
@@ -271,6 +287,7 @@ export class ArchiveService {
     const scope = await this.accessScope.resolve(userId, 'archive');
     this.assertWritable(existing, scope);
     if (dto.categoryIds !== undefined) await this.assertArchiveCategories(dto.categoryIds);
+    if (dto.authorIds !== undefined) await this.assertAuthors(dto.authorIds);
     if (dto.documentIds !== undefined) await this.assertDocuments(dto.documentIds, id);
 
     const data: UpdateArchiveData = {};
@@ -279,6 +296,7 @@ export class ArchiveService {
     if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail;
     if (dto.type !== undefined) data.type = dto.type;
     if (dto.categoryIds !== undefined) data.categoryIds = dto.categoryIds;
+    if (dto.authorIds !== undefined) data.authorIds = dto.authorIds;
     if (dto.externalLinks !== undefined) data.externalLinks = dto.externalLinks;
     if (dto.documentIds !== undefined) data.documentIds = dto.documentIds;
 
@@ -344,10 +362,16 @@ export class ArchiveService {
   }
 
   // DB dulu (sumber kebenaran) dalam satu transaksi; objek S3 dihapus best-effort setelah commit.
-  async remove(id: string, userId: string): Promise<ArchiveResponse> {
+  // `skipScopeCheck` hanya untuk purge cascade hapus user (pemanggil sudah otorisasi `admin:access`);
+  // `scope` tetap di-resolve karena `hydrate` butuh `canViewPrivate`.
+  async remove(
+    id: string,
+    userId: string,
+    options?: { skipScopeCheck?: boolean },
+  ): Promise<ArchiveResponse> {
     const archive = await this.archiveRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'archive');
-    this.assertWritable(archive, scope);
+    if (!options?.skipScopeCheck) this.assertWritable(archive, scope);
     const response = (await this.hydrate([archive], scope.canViewPrivate))[0];
     const documents = await this.documentRepository.findByEntity('archive', id);
     const keys = documents.map((document) => document.key);

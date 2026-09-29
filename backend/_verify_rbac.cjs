@@ -21,7 +21,7 @@ const p = new PrismaClient();
   console.log('=== TOTAL ROLE_PERMISSION ROWS ===', assigned.length);
   console.log('=== ALL PERMISSION CODES (sorted) ===');
   console.log(JSON.stringify([...allCodes].sort(), null, 0));
-  for (const name of ['admin', 'organization', 'member']) {
+  for (const name of ['admin', 'member', 'author']) {
     console.log(`=== ROLE ${name} (${(byRole[name] || []).length}) ===`);
     console.log(JSON.stringify([...(byRole[name] || [])].sort(), null, 0));
   }

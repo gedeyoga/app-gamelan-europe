@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Patch,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import {
   AuthenticatedUser,
   AuthService,
@@ -6,6 +15,7 @@ import {
   CurrentUser,
   LoginDto,
   LogoutDto,
+  MulterUploadInterceptor,
   Public,
   RefreshTokenDto,
   RegisterUserDto,
@@ -51,6 +61,14 @@ export class AuthController {
   @Patch('me')
   updateProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
     return this.authService.updateProfile(user.id, dto);
+  }
+
+  // LOGIN-only: self-service avatar upload. Binds the image to the caller; response = me() profile.
+  @Post('me/avatar')
+  @HttpCode(200)
+  @UseInterceptors(MulterUploadInterceptor)
+  updateAvatar(@CurrentUser() user: AuthenticatedUser, @UploadedFile() file: Express.Multer.File) {
+    return this.authService.updateAvatar(user.id, file);
   }
 
   // LOGIN-only: self-service password change. Revokes all refresh tokens for the user.
