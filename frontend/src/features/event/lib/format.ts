@@ -1,6 +1,17 @@
 import { DATETIME_FALLBACK, formatDate } from '@/lib/datetime'
 
-import type { EventDate } from '../types'
+import type { Event, EventDate } from '../types'
+
+/** Kredit event: organizer (network) → authors → createdBy. `null` bila tak ada semuanya. */
+export function getEventCreditName(event: Event): string | null {
+  const candidates = [
+    event.network?.name,
+    event.authors.map((author) => author.fullName).join(', '),
+    event.creator?.fullName,
+  ]
+  // `trim` + `||` agar string kosong/whitespace dianggap absen.
+  return candidates.map((name) => name?.trim()).find(Boolean) || null
+}
 
 /**
  * Tanggal API (ISO datetime, tersimpan UTC midnight) → `"YYYY-MM-DD"`.

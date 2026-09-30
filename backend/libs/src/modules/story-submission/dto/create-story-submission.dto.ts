@@ -12,6 +12,8 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+// Reuse bentuk grup flyer modul post (satu definisi; jangan bercabang).
+import { FlyerItemDto } from '@app/libs/modules/post/dto/create-post.dto';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const trimLower = ({ value }: { value: unknown }) =>
@@ -68,6 +70,16 @@ export class CreateStorySubmissionDto {
   @ArrayMaxSize(50)
   galleryImageIds?: string[];
 
+  // Daftar grup flyer bertipe; urutan array = urutan grup. Duplikat tipe/id & ownership dicek di service → 422.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => FlyerItemDto)
+  flyerItems?: FlyerItemDto[];
+
+  // @deprecated Gunakan `flyerItems`. Dipertahankan agar form pengajuan lama tetap jalan:
+  // bila dikirim tanpa `flyerItems` → dipetakan ke satu grup `[{ type: 'flyer', imageIds }]`.
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })

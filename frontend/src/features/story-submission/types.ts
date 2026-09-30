@@ -1,3 +1,4 @@
+import type { FlyerGroup } from '@/features/story/types'
 import type { UploadedImage } from '@/types/image'
 
 export type StorySubmissionStatus = 'REQUEST' | 'APPROVED' | 'REJECTED'
@@ -40,7 +41,8 @@ export interface StorySubmissionDetail extends StorySubmission {
   content: string
   categoryIds: string[]
   gallery: UploadedImage[]
-  flyer: UploadedImage[]
+  /** Flyer bertipe berurut — sama seperti `Post.flyer` (`{ type, images }[]`). */
+  flyer: FlyerGroup[]
 }
 
 export interface ApproveStorySubmissionResult {

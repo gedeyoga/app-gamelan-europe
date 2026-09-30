@@ -8,7 +8,8 @@ import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { ImageService } from '@app/libs/modules/image/image.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { PostRepository, CreatePostData, UpdatePostData } from './post.repository';
-import { PostEntity, PostResponse } from './entities/post.entity';
+import { PostEntity, PostFlyerItem, PostResponse } from './entities/post.entity';
+import { assertUniqueFlyerItems } from '@app/libs/common/utils/flyer.util';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { slugify } from './utils/slug.util';
@@ -134,10 +135,16 @@ export class PostService {
     if (scope.kind !== 'all') throw new ForbiddenException('Forbidden resource');
   }
 
-  // Resolve `galleryImageIds`/`flyerImageIds` → `gallery`/`flyer: ImageResponse[]` berurut; id mentah tidak dibocorkan ke FE.
+  // Resolve `galleryImageIds`/`flyerItems` → `gallery`/`flyer` berurut; id mentah tidak dibocorkan ke FE.
+  // Satu lookup `findByIds` untuk gabungan galeri + semua flyer.
   private async hydrate(posts: PostEntity[]): Promise<PostResponse[]> {
     const ids = [
-      ...new Set(posts.flatMap((post) => [...post.galleryImageIds, ...post.flyerImageIds])),
+      ...new Set(
+        posts.flatMap((post) => [
+          ...post.galleryImageIds,
+          ...post.flyerItems.flatMap((item) => item.imageIds),
+        ]),
+      ),
     ];
     const images = await this.imageRepository.findByIds(ids);
     const byId = new Map(images.map((image) => [image.id, image]));
@@ -146,32 +153,42 @@ export class PostService {
         .map((id) => byId.get(id))
         .filter((image): image is NonNullable<typeof image> => Boolean(image))
         .map((image) => this.imageService.toImageResponse(image));
-    return posts.map(({ galleryImageIds, flyerImageIds, creator, ...post }) => ({
+    return posts.map(({ galleryImageIds, flyerItems, creator, ...post }) => ({
       ...post,
       // Buang `creator.networkId` (tenancy internal) dari response.
       creator: creator ? { id: creator.id, fullName: creator.fullName } : null,
       gallery: resolve(galleryImageIds),
-      flyer: resolve(flyerImageIds),
+      flyer: flyerItems.map((item) => ({ type: item.type, images: resolve(item.imageIds) })),
     }));
   }
 
   // Buang id gambar asing (entityType beda / milik entity lain) sebelum di-bind.
   private async sanitizeImageIds(
-    dto: { imageIds?: string[]; galleryImageIds?: string[]; flyerImageIds?: string[] },
+    dto: {
+      imageIds?: string[] | null;
+      galleryImageIds?: string[] | null;
+      flyerItems?: { type: string; imageIds: string[] }[] | null;
+    },
     entityId: string | null,
-  ): Promise<{ imageIds?: string[]; galleryImageIds?: string[]; flyerImageIds?: string[] }> {
-    const [imageIds, galleryImageIds, flyerImageIds] = await Promise.all([
-      dto.imageIds === undefined
+  ): Promise<{ imageIds?: string[]; galleryImageIds?: string[]; flyerItems?: PostFlyerItem[] }> {
+    const [imageIds, galleryImageIds, flyerItems] = await Promise.all([
+      // `null` (PartialType `@IsOptional`) = jangan sentuh, sama seperti `undefined`.
+      dto.imageIds == null
         ? undefined
         : this.imageRepository.filterBindableIds(dto.imageIds, 'post', entityId),
-      dto.galleryImageIds === undefined
+      dto.galleryImageIds == null
         ? undefined
         : this.imageRepository.filterBindableIds(dto.galleryImageIds, 'post', entityId),
-      dto.flyerImageIds === undefined
+      dto.flyerItems == null
         ? undefined
-        : this.imageRepository.filterBindableIds(dto.flyerImageIds, 'post', entityId),
+        : Promise.all(
+            dto.flyerItems.map(async (item) => ({
+              type: item.type,
+              imageIds: await this.imageRepository.filterBindableIds(item.imageIds, 'post', entityId),
+            })),
+          ),
     ]);
-    return { imageIds, galleryImageIds, flyerImageIds };
+    return { imageIds, galleryImageIds, flyerItems };
   }
 
   private async uniqueSlug(base: string): Promise<string> {
@@ -240,7 +257,7 @@ export class PostService {
       authorIds: dto.authorIds,
       imageIds: dto.imageIds,
       galleryImageIds: dto.galleryImageIds,
-      flyerImageIds: dto.flyerImageIds,
+      flyerItems: dto.flyerItems,
     };
   }
 
@@ -251,6 +268,7 @@ export class PostService {
     }
     // Non-admin tidak boleh memaksa status/publishedAt (tutup bypass workflow).
     const scoped = scope.kind === 'all' ? dto : { ...dto, status: ContentStatus.DRAFT, publishedAt: undefined };
+    assertUniqueFlyerItems(dto.flyerItems);
     // Buang id gambar asing (post belum ada → hanya gambar tak terikat / entityType `post`).
     const prepared = { ...scoped, ...(await this.sanitizeImageIds(scoped, null)) };
     await this.assertAuthors(prepared.authorIds);
@@ -293,21 +311,27 @@ export class PostService {
       data.authorIds = dto.authorIds;
     }
     // Sanitasi id gambar: buang milik entity lain (IDOR). entityId = post ini.
-    const { imageIds, galleryImageIds, flyerImageIds } = await this.sanitizeImageIds(dto, id);
+    assertUniqueFlyerItems(dto.flyerItems);
+    const { imageIds, galleryImageIds, flyerItems } = await this.sanitizeImageIds(dto, id);
     if (imageIds !== undefined) data.imageIds = imageIds;
+    // m2: union id yang masih direferensikan request ini (imageIds ∪ galeri ∪ flyer) jangan
+    // di-unbind, walau id keluar dari salah satu koleksi. Field yang tak dikirim → nilai lama.
+    const referenced = new Set<string>([
+      ...(imageIds ?? []),
+      ...(galleryImageIds ?? existing.galleryImageIds),
+      ...(flyerItems ?? existing.flyerItems).flatMap((item) => item.imageIds),
+    ]);
     if (galleryImageIds !== undefined) {
       data.galleryImageIds = galleryImageIds;
       // Lepas binding gambar yang dikeluarkan dari galeri (thumbnail/inline lama jangan disentuh).
-      data.removedGalleryImageIds = existing.galleryImageIds.filter(
-        (imageId) => !galleryImageIds.includes(imageId),
-      );
+      data.removedGalleryImageIds = existing.galleryImageIds.filter((imageId) => !referenced.has(imageId));
     }
-    if (flyerImageIds !== undefined) {
-      data.flyerImageIds = flyerImageIds;
+    if (flyerItems !== undefined) {
+      data.flyerItems = flyerItems;
       // Lepas binding gambar yang dikeluarkan dari flyer (thumbnail/inline lama jangan disentuh).
-      data.removedFlyerImageIds = existing.flyerImageIds.filter(
-        (imageId) => !flyerImageIds.includes(imageId),
-      );
+      data.removedFlyerImageIds = existing.flyerItems
+        .flatMap((item) => item.imageIds)
+        .filter((imageId) => !referenced.has(imageId));
     }
     // Visibility boleh diubah scope `all` maupun `network` (assertWritable sudah membatasi).
     if (dto.visibility !== undefined) data.visibility = dto.visibility;

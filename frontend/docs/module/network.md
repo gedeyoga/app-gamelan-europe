@@ -35,7 +35,8 @@ src/features/network/
 ├── api/
 │   └── networks.ts                       # listNetworks, getNetwork, create/update/delete
 ├── lib/
-│   └── schema.ts                         # createNetworkSchema + NetworkFormValues
+│   ├── schema.ts                         # createNetworkSchema + NetworkFormValues + EMPTY_NETWORK_VALUES
+│   └── payload.ts                        # buildNetworkPayload (dipakai form full-page & dialog create)
 ├── hooks/
 │   ├── use-networks.ts                   # query ['networks', {page,limit,search,sortBy,sortOrder}]
 │   ├── use-network.ts                    # query ['network', {id}] (detail edit, staleTime 30s)
@@ -46,6 +47,7 @@ src/features/network/
     ├── network-table.tsx                 # presentational + DropdownMenu Edit/Hapus
     ├── network-form.tsx                  # form editor full-page (RHF + zod, 2 kolom)
     ├── network-meta-panel.tsx            # panel kanan: name/country/state/address/website/contact/socialMedia/LocationMapPicker
+    ├── network-create-dialog.tsx         # Dialog create reusable (NetworkMetaPanel + buildNetworkPayload, mirip AuthorCreateDialog)
     └── delete-network-dialog.tsx         # AlertDialog konfirmasi hapus
 ```
 
@@ -72,7 +74,7 @@ Envelope: sukses `{ data, message }`; list `{ data, meta:{page,limit,total}, mes
 | `PATCH /networks/:id` | field opsional | body kosong = tanpa perubahan. |
 | `DELETE /networks/:id` | — | hapus; relasi user/billing `SetNull`. |
 
-`buildPayload` mengirim field opsional kosong sebagai **`null` eksplisit** (bukan di-omit): `state`/`country`/`address`/`website`/`contact`/`content` → `null` saat kosong, `lat`/`lng` → `null` bila string kosong (Number bila terisi). `socialMedia` → array entri terisi, atau `null` bila tak ada entri (baris platform/url kosong **di-strip sebelum submit**). Backend memetakan `null` → clear.
+`buildNetworkPayload` (`lib/payload.ts`; dipakai `network-form.tsx` **dan** `network-create-dialog.tsx`, satu implementasi) mengirim field opsional kosong sebagai **`null` eksplisit** (bukan di-omit): `state`/`country`/`address`/`website`/`contact`/`content` → `null` saat kosong, `lat`/`lng` → `null` bila string kosong (Number bila terisi). `socialMedia` → array entri terisi, atau `null` bila tak ada entri (baris platform/url kosong **di-strip sebelum submit**). Backend memetakan `null` → clear.
 
 NetworkEntity: `{ id, name, state|null, country|null, address|null, website|null, contact|null, socialMedia|null, content|null, lat|null, lng|null, createdAt, updatedAt }` (`content` = rich HTML; `state` menggantikan `city`; `socialMedia` = `{ platform, url }[] | null`).
 
@@ -102,6 +104,8 @@ Field form `country` & `state` menyimpan **nama** (value=label=name). `iso2` dit
 - **Field panel meta** (`network-meta-panel.tsx`, urutan): `name` (Input) → `country` + `state` (dua kolom, `SearchSelect`) → `address` (Input) → `website` (Input URL) → `contact` (Input) → daftar `socialMedia` (field array) → `LocationMapPicker` (shared) di bawah label `network:form.mapLabel`. `useCountries`/`useStates` di-query dari panel; `iso2` diturunkan dari nama `country` terpilih (`countries.find(c => c.name === country)?.iso2`). Ganti `country` → reset `state`. `lat`/`lng` **tidak ditampilkan sebagai input** — hanya diset dari peta (`form.setValue('lat'|'lng', …, { shouldDirty: true, shouldValidate: true })`) dan tetap tervalidasi zod + dikirim `buildPayload`. Field `address` independen penuh dari peta; map menyediakan search-by-address (Nominatim) + drag marker yang hanya mengisi lat/lng. Opsi yang belum ada di list query disisipkan dari nilai form agar select tidak kosong.
 - **Gambar di `content`**: editor memakai `useUploadImage` dari fitur **`story`** (`features/story/hooks/use-upload-image`, `POST /images`); network **tidak** menyimpan relasi `Image` — `onImageUploaded` sengaja no-op, URL gambar cukup tertanam di HTML `content`. Error upload non-422 → `toastError(network:errors.uploadFailed)`; 422 tidak di-toast.
 - 422 → `mapApiFieldErrors` → `form.setError` per-field (`<FormMessage />` kosong), tanpa toast, **tetap di halaman editor**. Banner hanya non-422.
+- **Dialog create reusable** (`network-create-dialog.tsx`, mirip `user/components/author-create-dialog.tsx`): props `{ open, onOpenChange, onCreated(network), title?, description? }`; dipakai field **Penyelenggara** event. Render `{open && <Dialog open onOpenChange>}` (mount kondisional → `useForm` re-init bersih tiap dibuka). Isi = `useForm<NetworkFormValues>` + `createNetworkSchema(t)` + `defaultValues: EMPTY_NETWORK_VALUES` + `<NetworkMetaPanel form disabled={createNetwork.isPending}>` (bukan `NetworkForm` full-page; tanpa `RichTextEditor` karena `content` opsional). `<form id="network-create-form">` wajib `event.stopPropagation()` sebelum `form.handleSubmit` (dialog diportal tapi event React tetap bubble ke `<form>` induk editor event); tombol submit di `DialogFooter` via atribut `form="network-create-form"`. `useCreateNetwork().onSuccess` → `onCreated` + `onOpenChange(false)` + `toastSuccess('network:toast.created')`; non-422 → `toastError(getApiErrorMessage(..., 'network:toast.createFailed'))`; 422 → `setError` per-field (dialog tetap terbuka); banner hanya non-422.
+- `EMPTY_NETWORK_VALUES` (`lib/schema.ts`) menggantikan literal `INITIAL_VALUES` di `app/routes/network-new.tsx` (dipakai juga `NetworkCreateDialog`).
 - Toast call-site: `network:toast.created/updated/deleted` + `*Failed`; `if (isValidationError(err)) return;`.
 - Komponen presentational; data via props; tanpa import lintas fitur — **pengecualian**: import `useUploadImage` dari `features/story` (upload gambar ke `content`) dan `useCountries`/`useStates` dari `features/geo` (data dependency form).
 
@@ -130,3 +134,4 @@ Tanpa izin create/update, editor menampilkan empty-state (`network:errors.noCrea
 - Field `website`, `contact`, `socialMedia` (dinamis, maks 10) ditambahkan pada form create/edit; `socialMedia` ditampilkan juga di detail (list link per platform).
 - **Rename modul organization → network**: folder `src/features/network/`, komponen/hook/route/i18n namespace `network`, label menu **Network**, dan permission `organization:*` → `network:*`. Role `organization` dihapus dari seeder backend.
 - **Iterasi editor full-page + `content`**: create/edit dipindah dari `network-form-dialog.tsx` (dihapus) ke halaman penuh `/networks/new` & `/networks/:id/edit` yang meniru editor Story — `NetworkForm` + `NetworkMetaPanel` + `lib/schema.ts` + `useNetwork`. Field `content` (rich HTML, di-sanitasi backend) ditambah; tabel list tetap 4 kolom + Aksi (`content` hanya di editor). `AppShell` menyembunyikan sidebar pada kedua route editor (breadcrumb Dashboard / Networks / judul).
+- **Ekstraksi payload + dialog create reusable**: `buildPayload` (inline di `network-form.tsx`) dipindah verbatim ke `lib/payload.ts:buildNetworkPayload` (dipakai form + dialog); `INITIAL_VALUES` di `network-new.tsx` dipindah ke `lib/schema.ts:EMPTY_NETWORK_VALUES`; komponen baru `components/network-create-dialog.tsx` (dialog create reusable untuk field **Penyelenggara** event).

@@ -391,7 +391,7 @@ model Post {
   content         String
   thumbnail       String?
   galleryImageIds String[]          @default([]) @map("gallery_image_ids")
-  flyerImageIds   String[]          @default([]) @map("flyer_image_ids")
+  flyerItems      Json              @default("[]") @map("flyer_items")
   visibility      ContentVisibility @default(PUBLIC)
   createdBy       String?           @map("created_by")
   creator         User?             @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
@@ -543,7 +543,7 @@ model StorySubmission {
   content            String                @db.Text
   categoryIds        String[]              @default([]) @map("category_ids")
   galleryImageIds    String[]              @default([]) @map("gallery_image_ids")
-  flyerImageIds      String[]              @default([]) @map("flyer_image_ids")
+  flyerItems         Json                  @default("[]") @map("flyer_items")
   thumbnail          String?
   // Section `submitter` (data pengirim): audit-only, bukan bagian dari Post saat approve.
   submitterFullName  String                @map("submitter_full_name")

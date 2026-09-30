@@ -1,8 +1,9 @@
-import { RefreshCw } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 
+import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import { UserCombobox, type UserOption } from '@/components/shared/user-combobox'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
 import { useAuth } from '@/features/auth/auth-provider'
+import { NetworkCreateDialog } from '@/features/network/components/network-create-dialog'
 import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
 import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
 import { EventDatesField } from './event-dates-field'
@@ -49,6 +51,11 @@ export interface EventMetaPanelProps {
   canManageAuthors: boolean
   /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
   canDeleteAuthors: boolean
+  /** Opsi penyelenggara (tabel network). */
+  networks: SearchSelectOption[]
+  isLoadingNetworks: boolean
+  canReadNetworks: boolean
+  canCreateNetwork: boolean
   disabled?: boolean
   className?: string
 }
@@ -74,6 +81,10 @@ export function EventMetaPanel({
   isLoadingUsers,
   canManageAuthors,
   canDeleteAuthors,
+  networks,
+  isLoadingNetworks,
+  canReadNetworks,
+  canCreateNetwork,
   disabled = false,
   className,
 }: EventMetaPanelProps) {
@@ -82,12 +93,25 @@ export function EventMetaPanel({
   const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
   const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
   const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
+  const [networkDialogOpen, setNetworkDialogOpen] = useState(false)
+  const [createdNetworks, setCreatedNetworks] = useState<{ id: string; name: string }[]>([])
 
   // Gabung author baru (belum tentu muncul di `authors`) + dedupe terhadap prop.
   const authorOptions = useMemo(() => {
     const seen = new Set(authors.map((author) => author.id))
     return [...authors, ...createdAuthors.filter((author) => !seen.has(author.id))]
   }, [authors, createdAuthors])
+
+  // Gabung network baru (belum tentu muncul di `networks`) + dedupe terhadap prop.
+  const networkOptions = useMemo<SearchSelectOption[]>(() => {
+    const seen = new Set(networks.map((network) => network.value))
+    return [
+      ...networks,
+      ...createdNetworks
+        .filter((network) => !seen.has(network.id))
+        .map((network) => ({ value: network.id, label: network.name })),
+    ]
+  }, [networks, createdNetworks])
 
   function handleAuthorCreated(author: UserOption) {
     setCreatedAuthors((prev) =>
@@ -262,6 +286,49 @@ export function EventMetaPanel({
         />
       )}
 
+      {canReadNetworks && (
+        <FormField
+          control={form.control}
+          name="networkId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('event:form.organizer')}</FormLabel>
+              <div className="flex w-full items-center gap-2">
+                <SearchSelect
+                  className="flex-1"
+                  options={[
+                    { value: '', label: t('event:form.organizerNone') },
+                    ...networkOptions,
+                  ]}
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder={t('event:form.organizerPlaceholder')}
+                  searchPlaceholder={t('event:form.organizerSearch')}
+                  emptyLabel={t('event:form.organizerEmpty')}
+                  isLoading={isLoadingNetworks}
+                  disabled={disabled}
+                />
+                {canCreateNetwork && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    disabled={disabled}
+                    onClick={() => setNetworkDialogOpen(true)}
+                    aria-label={t('event:form.organizerAdd')}
+                    title={t('event:form.organizerAdd')}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                )}
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
       <FormField
         control={form.control}
         name="dates"
@@ -297,6 +364,20 @@ export function EventMetaPanel({
             />
           )}
         </>
+      )}
+
+      {canCreateNetwork && (
+        <NetworkCreateDialog
+          open={networkDialogOpen}
+          onOpenChange={setNetworkDialogOpen}
+          title={t('event:form.organizerCreateTitle')}
+          description={t('event:form.organizerCreateDescription')}
+          onCreated={(network) =>
+            setCreatedNetworks((prev) =>
+              prev.some((item) => item.id === network.id) ? prev : [...prev, network],
+            )
+          }
+        />
       )}
     </div>
   )

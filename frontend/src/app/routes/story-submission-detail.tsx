@@ -38,6 +38,7 @@ export function StorySubmissionDetailPage() {
       authors: [],
       creator: null,
       gallery: submission.gallery,
+      // Kontrak submission kini sama dengan `Post` → teruskan apa adanya (grup bertipe).
       flyer: submission.flyer,
       createdAt: submission.createdAt,
       updatedAt: submission.updatedAt,

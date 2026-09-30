@@ -5,6 +5,7 @@ import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
 import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { PostRepository } from '@app/libs/modules/post/post.repository';
 import { slugify } from '@app/libs/modules/post/utils/slug.util';
+import { FlyerItem } from '@app/libs/common/utils/flyer.util';
 import { storySubmissionSelect, StorySubmissionEntity, mapStorySubmission } from './entities/story-submission.entity';
 
 export interface CreateStorySubmissionData {
@@ -12,7 +13,7 @@ export interface CreateStorySubmissionData {
   content: string;
   categoryIds: string[];
   galleryImageIds: string[];
-  flyerImageIds: string[];
+  flyerItems: FlyerItem[];
   thumbnail?: string | null;
   // Section `submitter` (data pengirim) — audit-only, tidak disalin ke Post saat approve.
   submitterFullName: string;
@@ -74,7 +75,7 @@ export class StorySubmissionRepository {
               content: data.content,
               categoryIds: data.categoryIds,
               galleryImageIds: data.galleryImageIds,
-              flyerImageIds: data.flyerImageIds,
+              flyerItems: data.flyerItems as Prisma.InputJsonValue,
               thumbnail: data.thumbnail ?? null,
               submitterFullName: data.submitterFullName,
               submitterEmail: data.submitterEmail,
@@ -126,7 +127,10 @@ export class StorySubmissionRepository {
             await tx.storySubmission.findUniqueOrThrow({ where: { id }, select: storySubmissionSelect }),
           );
 
-          const imageIds = [...submission.galleryImageIds, ...submission.flyerImageIds];
+          const imageIds = [
+            ...submission.galleryImageIds,
+            ...submission.flyerItems.flatMap((item) => item.imageIds),
+          ];
           // Gambar publik tersimpan `entityType='story-submission'`, `entityId=null`.
           // Pindah ke `entityType='post'` (entityId tetap null) agar `PostRepository.bindImages()`
           // mem-bind row ke post baru.
@@ -154,7 +158,8 @@ export class StorySubmissionRepository {
             createdBy: reviewerUserId,
             categoryIds: submission.categoryIds,
             galleryImageIds: submission.galleryImageIds,
-            flyerImageIds: submission.flyerImageIds,
+            // Teruskan grup bertipe apa adanya; bind memakai id flattened (lihat `createWith`).
+            flyerItems: submission.flyerItems,
           });
 
           await tx.storySubmission.update({ where: { id }, data: { postId: story.id } });

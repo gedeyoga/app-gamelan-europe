@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
-import { mapPost, postSelect, PostEntity } from './entities/post.entity';
+import { mapPost, postSelect, PostEntity, PostFlyerItem } from './entities/post.entity';
 
 export interface CreatePostData {
   name: string;
@@ -17,7 +17,7 @@ export interface CreatePostData {
   authorIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
-  flyerImageIds?: string[];
+  flyerItems?: PostFlyerItem[];
 }
 
 export interface UpdatePostData {
@@ -33,7 +33,7 @@ export interface UpdatePostData {
   authorIds?: string[];
   imageIds?: string[];
   galleryImageIds?: string[];
-  flyerImageIds?: string[];
+  flyerItems?: PostFlyerItem[];
   removedGalleryImageIds?: string[];
   removedFlyerImageIds?: string[];
 }
@@ -156,7 +156,7 @@ export class PostRepository {
         approvedAt: data.approvedAt,
         createdBy: data.createdBy,
         galleryImageIds: data.galleryImageIds,
-        flyerImageIds: data.flyerImageIds,
+        flyerItems: data.flyerItems as Prisma.InputJsonValue | undefined,
       },
       select: { id: true },
     });
@@ -165,12 +165,12 @@ export class PostRepository {
     if (
       data.imageIds !== undefined ||
       data.galleryImageIds !== undefined ||
-      data.flyerImageIds !== undefined
+      data.flyerItems !== undefined
     ) {
       await this.bindImages(tx, post.id, [
         ...(data.imageIds ?? []),
         ...(data.galleryImageIds ?? []),
-        ...(data.flyerImageIds ?? []),
+        ...(data.flyerItems?.flatMap((item) => item.imageIds) ?? []),
       ]);
     }
     return mapPost(await tx.post.findUniqueOrThrow({ where: { id: post.id }, select: postSelect }));
@@ -221,7 +221,7 @@ export class PostRepository {
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
         if (data.galleryImageIds !== undefined) update.galleryImageIds = data.galleryImageIds;
-        if (data.flyerImageIds !== undefined) update.flyerImageIds = data.flyerImageIds;
+        if (data.flyerItems !== undefined) update.flyerItems = data.flyerItems as Prisma.InputJsonValue;
         if (Object.keys(update).length > 0) {
           await tx.post.update({ where: { id }, data: update });
         }
@@ -230,12 +230,12 @@ export class PostRepository {
         if (
           data.imageIds !== undefined ||
           data.galleryImageIds !== undefined ||
-          data.flyerImageIds !== undefined
+          data.flyerItems !== undefined
         ) {
           await this.bindImages(tx, id, [
             ...(data.imageIds ?? []),
             ...(data.galleryImageIds ?? []),
-            ...(data.flyerImageIds ?? []),
+            ...(data.flyerItems?.flatMap((item) => item.imageIds) ?? []),
           ]);
         }
         if (data.removedGalleryImageIds !== undefined) {

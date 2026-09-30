@@ -23,6 +23,8 @@ export function createEventSchema(t: TFunction) {
     visibility: z.enum(VISIBILITIES),
     eventTypeIds: z.array(z.string()),
     authorIds: z.array(z.string().uuid()),
+    // '' = tanpa penyelenggara; nilai non-kosong selalu UUID dari API.
+    networkId: z.string(),
     // Baris tanggal: `date` "YYYY-MM-DD", jam "HH:mm" ('' bila kosong).
     dates: z.array(
       z.object({
@@ -60,6 +62,7 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   visibility: 'PUBLIC',
   eventTypeIds: [],
   authorIds: [],
+  networkId: '',
   dates: [],
   location: { name: '', address: '', lat: '', lng: '' },
 }

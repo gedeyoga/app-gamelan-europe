@@ -14,6 +14,7 @@ import {
 
 import { RichTextEditor } from '@/components/shared/rich-text-editor'
 import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
+import type { SearchSelectOption } from '@/components/shared/search-select'
 import type { UserOption } from '@/components/shared/user-combobox'
 import {
   AlertDialog,
@@ -72,6 +73,11 @@ export interface EventFormProps {
   canManageAuthors: boolean
   /** Gate `user:delete` && `admin:access` — aksi hapus author (cascade konten) di dropdown. */
   canDeleteAuthors: boolean
+  /** Opsi penyelenggara (tabel network). */
+  networks: SearchSelectOption[]
+  isLoadingNetworks: boolean
+  canReadNetworks: boolean
+  canCreateNetwork: boolean
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
 }
@@ -108,6 +114,10 @@ export function EventForm({
   isLoadingUsers,
   canManageAuthors,
   canDeleteAuthors,
+  networks,
+  isLoadingNetworks,
+  canReadNetworks,
+  canCreateNetwork,
   onUploadImage,
   onUploadError,
 }: EventFormProps) {
@@ -215,6 +225,8 @@ export function EventForm({
       visibility: values.visibility,
       eventTypeIds: values.eventTypeIds,
       authorIds: values.authorIds,
+      // Selalu dikirim: `null` = clear saat edit, diabaikan backend saat create.
+      networkId: values.networkId.trim() === '' ? null : values.networkId,
       location: buildLocation(values.location),
       ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
@@ -435,6 +447,10 @@ export function EventForm({
                     isLoadingUsers={isLoadingUsers}
                     canManageAuthors={canManageAuthors}
                     canDeleteAuthors={canDeleteAuthors}
+                    networks={networks}
+                    isLoadingNetworks={isLoadingNetworks}
+                    canReadNetworks={canReadNetworks}
+                    canCreateNetwork={canCreateNetwork}
                     disabled={isPending}
                   />
                 </div>

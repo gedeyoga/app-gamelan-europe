@@ -62,3 +62,16 @@ export function createNetworkSchema(t: TFunction) {
 }
 
 export type NetworkFormValues = z.infer<ReturnType<typeof createNetworkSchema>>
+
+export const EMPTY_NETWORK_VALUES: NetworkFormValues = {
+  name: '',
+  state: '',
+  country: '',
+  address: '',
+  website: '',
+  contact: '',
+  socialMedia: [],
+  lat: '',
+  lng: '',
+  content: '',
+}

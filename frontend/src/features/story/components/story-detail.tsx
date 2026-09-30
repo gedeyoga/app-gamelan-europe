@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 
 import { STATUS_VARIANT, VISIBILITY_VARIANT } from './status-variant'
 import { StoryGallery } from './story-gallery'
+import { labelForType } from '../lib/flyer-type'
 import type { Story } from '../types'
 
 export interface StoryDetailProps {
@@ -107,11 +108,17 @@ export function StoryDetail({ story, className }: StoryDetailProps) {
           </section>
         )}
 
-        {(story.flyer ?? []).length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold">{t('story:detail.flyer')}</h2>
-            <StoryGallery images={story.flyer ?? []} />
-          </section>
+        {(story.flyer ?? []).map(
+          (group, index) =>
+            group.images.length > 0 && (
+              <section
+                key={`${group.type}-${index}`}
+                className="flex flex-col gap-3"
+              >
+                <h2 className="text-lg font-semibold">{labelForType(group.type, t)}</h2>
+                <StoryGallery images={group.images} />
+              </section>
+            ),
         )}
       </div>
     </article>

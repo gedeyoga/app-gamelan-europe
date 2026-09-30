@@ -150,6 +150,21 @@
   },
   "flyer": {
     "title": "Flyer",
+    "typeLabel": "Flyer type",
+    "presets": {
+      "flyer": "Flyer",
+      "poster": "Poster",
+      "banner": "Banner",
+      "brosur": "Brochure"
+    },
+    "addType": "Add another type",
+    "customTypePlaceholder": "Type name (e.g. Banner)",
+    "duplicateType": "This type is already used.",
+    "removeType": "Remove type",
+    "removeTypeConfirmTitle": "Remove flyer type",
+    "removeTypeConfirmDescription": "Type \"{{type}}\" and its images will be removed. Continue?",
+    "removeTypeConfirmConfirm": "Remove",
+    "removeTypeConfirmCancel": "Cancel",
     "add": "Add flyers",
     "empty": "No flyers yet.",
     "formats": "Formats: PNG, JPG, or WebP. Max 5 MB.",
@@ -170,8 +185,7 @@
     "notFound": "Story not found.",
     "authorFallback": "Unknown author",
     "noContent": "This story has no content yet.",
-    "gallery": "Gallery",
-    "flyer": "Flyer"
+    "gallery": "Gallery"
   },
   "toast": {
     "created": "Story created successfully",

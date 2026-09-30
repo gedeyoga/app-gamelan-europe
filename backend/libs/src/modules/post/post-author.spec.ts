@@ -20,7 +20,7 @@ describe('PostRepository author replace', () => {
       content: '',
       thumbnail: null,
       galleryImageIds: [],
-      flyerImageIds: [],
+      flyerItems: [],
       visibility: 'PUBLIC',
       createdBy: 'u1',
       creator: null,
@@ -95,7 +95,7 @@ describe('PostService author validation', () => {
       publishedAt: null,
       approvedAt: null,
       galleryImageIds: [],
-      flyerImageIds: [],
+      flyerItems: [],
     };
     const service = makeService(findByIds, { findById: jest.fn().mockResolvedValue(existing) });
 

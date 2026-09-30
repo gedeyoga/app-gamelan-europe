@@ -1597,7 +1597,7 @@ paths:
 
         `entityType` is **hardcoded server-side** to `story-submission` and is
         never read from the request body. The returned `id` of each item is later
-        sent in `galleryImageIds` / `flyerImageIds` of `POST /story-submissions`.
+        sent in `galleryImageIds` / `flyerItems` (legacy: `flyerImageIds`) of `POST /story-submissions`.
       security: []
       requestBody:
         required: true
@@ -1654,7 +1654,8 @@ paths:
       summary: Get story submission by id (admin)
       description: |
         Permission `story-submission:read`. Detail includes `content`,
-        `categoryIds` and resolves `gallery` / `flyer` (`ImageResponse[]`) in
+        `categoryIds` and resolves `gallery` (`ImageResponse[]`) and `flyer`
+        (`{ type, images }[]` typed groups, same shape as `Post.flyer`) in
         stored order.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -3073,8 +3074,9 @@ components:
             $ref: '#/components/schemas/ImageResponse'
         flyer:
           type: array
+          description: Ordered typed flyer groups; each group resolves its own images.
           items:
-            $ref: '#/components/schemas/ImageResponse'
+            $ref: '#/components/schemas/PostFlyerGroup'
         createdAt:
           type: string
           format: date-time
@@ -3149,13 +3151,12 @@ components:
           items:
             type: string
             format: uuid
-        flyerImageIds:
+        flyerItems:
           type: array
-          maxItems: 100
-          description: Ordered flyer image ids; replaces the whole array on update.
+          maxItems: 20
+          description: Ordered typed flyer groups; replaces all groups on update.
           items:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/FlyerItemRequest'
     UpdatePostRequest:
       type: object
       additionalProperties: false
@@ -3204,12 +3205,39 @@ components:
           items:
             type: string
             format: uuid
-        flyerImageIds:
+        flyerItems:
           type: array
-          maxItems: 100
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/FlyerItemRequest'
+
+    FlyerItemRequest:
+      type: object
+      additionalProperties: false
+      required: [type, imageIds]
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Free-form flyer type (e.g. `Flyer`, `Poster`). Must be unique case-insensitively within `flyerItems` (else 422 `flyerItems.N.type`).
+        imageIds:
+          type: array
+          maxItems: 50
+          description: Ordered image ids for this group. Ids must be unique within and across groups (else 422 `flyerItems.N.imageIds.M`).
           items:
             type: string
             format: uuid
+    PostFlyerGroup:
+      type: object
+      required: [type, images]
+      properties:
+        type:
+          type: string
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageResponse'
 
     # ---------- categories ----------
     Category:
@@ -4393,9 +4421,9 @@ components:
                         $ref: '#/components/schemas/ImageResponse'
                     flyer:
                       type: array
-                      description: Resolved flyer images in stored order.
+                      description: Resolved flyer groups (`{ type, images }[]`) in stored order; each group resolves its own images.
                       items:
-                        $ref: '#/components/schemas/ImageResponse'
+                        $ref: '#/components/schemas/PostFlyerGroup'
     StorySubmissionListResponse:
       allOf:
         - $ref: '#/components/schemas/SuccessMessage'
@@ -4466,9 +4494,12 @@ components:
         - `submitter.countryId` must exist.
         - `submitter.stateId`, when sent, must belong to `submitter.countryId`.
         - each `categoryIds.N` must exist and be a `STORY` category.
-        - each `galleryImageIds.N` / `flyerImageIds.N` must reference an uploaded,
-          still-unbound `Image` with `entityType=story-submission` (from
-          `POST /story-submissions/images`).
+        - each `galleryImageIds.N` / `flyerItems.N.imageIds.M` (legacy `flyerImageIds.N`)
+          must reference an uploaded, still-unbound `Image` with
+          `entityType=story-submission` (from `POST /story-submissions/images`).
+        - `flyerItems` group `type` values must be unique case-insensitively
+          (else 422 `flyerItems.N.type`) and image ids must be unique within and
+          across groups (else 422 `flyerItems.N.imageIds.M`).
         - `thumbnail`, when sent, must be an EGS storage URL referencing an
           uploaded, still-unbound image with `entityType=story-submission`.
       required: [name, content, submitter]
@@ -4499,10 +4530,20 @@ components:
           items:
             type: string
             format: uuid
+        flyerItems:
+          type: array
+          maxItems: 20
+          description: Ordered typed flyer groups (same shape as `Post.flyerItems`).
+          items:
+            $ref: '#/components/schemas/FlyerItemRequest'
         flyerImageIds:
           type: array
           maxItems: 50
-          description: Ordered `Image` ids from `POST /story-submissions/images`.
+          deprecated: true
+          description: |
+            Deprecated — use `flyerItems`. Ordered `Image` ids from
+            `POST /story-submissions/images`; when sent without `flyerItems` it
+            is mapped to a single `flyer` group `[{ type: 'flyer', imageIds }]`.
           items:
             type: string
             format: uuid

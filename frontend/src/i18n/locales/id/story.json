@@ -150,6 +150,21 @@
   },
   "flyer": {
     "title": "Flyer",
+    "typeLabel": "Tipe flyer",
+    "presets": {
+      "flyer": "Flyer",
+      "poster": "Poster",
+      "banner": "Banner",
+      "brosur": "Brosur"
+    },
+    "addType": "Tambah tipe lain",
+    "customTypePlaceholder": "Nama tipe (mis. Spanduk)",
+    "duplicateType": "Tipe ini sudah dipakai.",
+    "removeType": "Hapus tipe",
+    "removeTypeConfirmTitle": "Hapus tipe flyer",
+    "removeTypeConfirmDescription": "Tipe \"{{type}}\" beserta gambarnya akan dihapus. Lanjutkan?",
+    "removeTypeConfirmConfirm": "Hapus",
+    "removeTypeConfirmCancel": "Batal",
     "add": "Tambah flyer",
     "empty": "Belum ada flyer.",
     "formats": "Format: PNG, JPG, atau WebP. Maks 5 MB.",
@@ -170,8 +185,7 @@
     "notFound": "Story tidak ditemukan.",
     "authorFallback": "Penulis tidak diketahui",
     "noContent": "Story ini belum memiliki konten.",
-    "gallery": "Galeri",
-    "flyer": "Flyer"
+    "gallery": "Galeri"
   },
   "toast": {
     "created": "Story berhasil dibuat",

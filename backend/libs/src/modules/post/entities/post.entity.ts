@@ -1,5 +1,6 @@
 import { CategoryType, Prisma } from '@prisma/client';
 import type { ImageResponse } from '@app/libs/modules/image/image.service';
+import { FlyerItem, normalizeFlyerItems } from '@app/libs/common/utils/flyer.util';
 
 // `postSelect` query raw (join shape). JANGAN dikembalikan langsung ke API —
 // map lewat `mapPost()` agar `categories` flat `[{ id, name, type }]`.
@@ -13,7 +14,7 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
-  flyerImageIds: true,
+  flyerItems: true,
   visibility: true,
   createdBy: true,
   creator: { select: { id: true, fullName: true, networkId: true } },
@@ -46,22 +47,35 @@ export type PostCategoryEntity = { id: string; name: string; type: CategoryType 
 
 export type PostAuthorEntity = PostRow['authors'][number]['author'];
 
+// Elemen kolom Json `flyerItems` (di-cast saat mapping).
+export type PostFlyerItem = FlyerItem;
+
 // Kontrak response API: `categories` flat (bukan `[{ category }]`).
-export type PostEntity = Omit<PostRow, 'categories' | 'authors'> & {
+export type PostEntity = Omit<PostRow, 'categories' | 'authors' | 'flyerItems'> & {
   categories: PostCategoryEntity[];
   authors: PostAuthorEntity[];
+  flyerItems: PostFlyerItem[];
 };
 
 // `creator.networkId` hanya dipakai internal (scope); tidak pernah keluar ke FE.
 export type CreatorRef = { id: string; fullName: string };
 
-// Kontrak response ke FE: `galleryImageIds`/`flyerImageIds` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
-export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerImageIds' | 'creator'> & {
+// Grup flyer ter-resolve untuk response.
+export type PostFlyerGroup = { type: string; images: ImageResponse[] };
+
+// Kontrak response ke FE: `galleryImageIds`/`flyerItems` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
+export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerItems' | 'creator'> & {
   creator: CreatorRef | null;
   gallery: ImageResponse[];
-  flyer: ImageResponse[];
+  flyer: PostFlyerGroup[];
 };
 
 export function mapPost(row: PostRow): PostEntity {
-  return { ...row, categories: row.categories.map((link) => link.category), authors: row.authors.map((link) => link.author) };
+  const { flyerItems, ...rest } = row;
+  return {
+    ...rest,
+    categories: row.categories.map((link) => link.category),
+    authors: row.authors.map((link) => link.author),
+    flyerItems: normalizeFlyerItems(flyerItems),
+  };
 }

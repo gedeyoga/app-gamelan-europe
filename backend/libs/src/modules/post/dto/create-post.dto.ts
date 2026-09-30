@@ -1,8 +1,23 @@
-import { Transform } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { ContentStatus, ContentVisibility } from '@prisma/client';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+
+// Satu grup flyer bertipe. Tipe = teks bebas (bukan enum); duplikat tipe/id dicek di service → 422.
+export class FlyerItemDto {
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  type: string;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(50)
+  imageIds: string[];
+}
 
 export class CreatePostDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -64,10 +79,11 @@ export class CreatePostDto {
   @ArrayMaxSize(100)
   galleryImageIds?: string[];
 
-  // Urutan flyer = urutan array ini. Diganti seluruhnya bila dikirim saat update.
+  // Daftar grup flyer bertipe; urutan array = urutan grup. Diganti seluruhnya bila dikirim saat update.
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
-  @ArrayMaxSize(100)
-  flyerImageIds?: string[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => FlyerItemDto)
+  flyerItems?: FlyerItemDto[];
 }

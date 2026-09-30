@@ -36,6 +36,7 @@ import { slugify } from '../lib/slug'
 import type {
   ContentStatus,
   CreateStoryInput,
+  FlyerGroup,
   StoryCategory,
   StoryFormAction,
   UploadedImage,
@@ -52,7 +53,7 @@ export interface StoryFormProps {
   initialValues: StoryFormValues
   initialPublishedAt?: string | null
   initialGallery?: UploadedImage[]
-  initialFlyer?: UploadedImage[]
+  initialFlyer?: FlyerGroup[]
   isPending: boolean
   submissionError: Error | null
   onSubmit: (payload: CreateStoryInput, action: StoryFormAction) => void
@@ -119,9 +120,9 @@ export function StoryForm({
   const [galleryImages, setGalleryImages] = useState<UploadedImage[]>(initialGallery ?? [])
   const [isUploadingGallery, setIsUploadingGallery] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
-  const [flyerImages, setFlyerImages] = useState<UploadedImage[]>(initialFlyer ?? [])
-  const [isUploadingFlyer, setIsUploadingFlyer] = useState(false)
-  const [flyerError, setFlyerError] = useState<string | null>(null)
+  const [flyerGroups, setFlyerGroups] = useState<FlyerGroup[]>(initialFlyer ?? [])
+  const [uploadingFlyerType, setUploadingFlyerType] = useState<string | null>(null)
+  const [flyerErrors, setFlyerErrors] = useState<Record<string, string | null>>({})
   const [showSettings, setShowSettings] = useState(true)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
@@ -215,20 +216,24 @@ export function StoryForm({
     }
   }
 
-  async function handleFlyerUpload(file: File) {
-    setFlyerError(null)
-    setIsUploadingFlyer(true)
+  async function handleFlyerUpload(type: string, file: File) {
+    setFlyerErrors((prev) => ({ ...prev, [type]: null }))
+    setUploadingFlyerType(type)
     try {
       const image = await onUploadImage(file)
-      setFlyerImages((prev) => [...prev, image])
+      setFlyerGroups((prev) =>
+        prev.map((group) =>
+          group.type === type ? { ...group, images: [...group.images, image] } : group,
+        ),
+      )
     } catch (error) {
       if (isValidationError(error)) {
-        setFlyerError(t('story:flyer.uploadInvalid'))
+        setFlyerErrors((prev) => ({ ...prev, [type]: t('story:flyer.uploadInvalid') }))
       } else {
         onUploadError(error)
       }
     } finally {
-      setIsUploadingFlyer(false)
+      setUploadingFlyerType(null)
     }
   }
 
@@ -252,9 +257,11 @@ export function StoryForm({
     // Galeri terpisah dari `imageIds` (hindari dobel); edit selalu kirim agar bisa dikosongkan.
     const galleryImageIds = galleryImages.map((image) => image.id)
     if (mode === 'edit' || galleryImageIds.length > 0) payload.galleryImageIds = galleryImageIds
-    // Flyer terpisah dari `imageIds`; edit selalu kirim agar bisa dikosongkan.
-    const flyerImageIds = flyerImages.map((image) => image.id)
-    if (mode === 'edit' || flyerImageIds.length > 0) payload.flyerImageIds = flyerImageIds
+    // Flyer terpisah dari `imageIds`; edit selalu kirim agar semua grup bisa dikosongkan.
+    const flyerItems = flyerGroups
+      .filter((group) => group.images.length > 0)
+      .map((group) => ({ type: group.type, imageIds: group.images.map((image) => image.id) }))
+    if (mode === 'edit' || flyerItems.length > 0) payload.flyerItems = flyerItems
     // Hanya kirim `thumbnail` bila berubah: hapus → `null`, ganti → url baru.
     if (thumbnail !== initialThumbnail) payload.thumbnail = thumbnail
     onSubmit(payload, action)
@@ -453,11 +460,11 @@ export function StoryForm({
                     onUploadGalleryImage={(file) => void handleGalleryUpload(file)}
                     isUploadingGallery={isUploadingGallery}
                     galleryError={galleryError}
-                    flyerImages={flyerImages}
-                    onChangeFlyer={setFlyerImages}
-                    onUploadFlyerImage={(file) => void handleFlyerUpload(file)}
-                    isUploadingFlyer={isUploadingFlyer}
-                    flyerError={flyerError}
+                    flyerGroups={flyerGroups}
+                    onChangeFlyerGroups={setFlyerGroups}
+                    onUploadFlyerImage={(type, file) => void handleFlyerUpload(type, file)}
+                    uploadingFlyerType={uploadingFlyerType}
+                    flyerErrors={flyerErrors}
                     categories={categories}
                     isLoadingCategories={isLoadingCategories}
                     canReadCategories={canReadCategories}

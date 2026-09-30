@@ -7,6 +7,7 @@ import { CountryRepository } from '@app/libs/modules/country/country.repository'
 import { StateRepository } from '@app/libs/modules/state/state.repository';
 import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { ImageService, ImageResponse } from '@app/libs/modules/image/image.service';
+import { FlyerItem, assertUniqueFlyerItems } from '@app/libs/common/utils/flyer.util';
 import { StorySubmissionRepository, CreateStorySubmissionData } from './story-submission.repository';
 import {
   StorySubmissionEntity,
@@ -77,22 +78,29 @@ export class StorySubmissionService {
     const categories = await this.categoryRepository.findByIds(ids);
     const byId = new Map(categories.map((category) => [category.id, category]));
     return submissions.map((submission) => {
-      const { content, categoryIds, galleryImageIds, flyerImageIds, ...rest } = submission;
+      const { content, categoryIds, galleryImageIds, flyerItems, ...rest } = submission;
       return {
         ...rest,
         categories: this.categoryRefs(categoryIds, byId),
         galleryCount: galleryImageIds.length,
-        flyerCount: flyerImageIds.length,
+        flyerCount: this.flyerIdCount(flyerItems),
       };
     });
   }
 
+  // Jumlah id flyer (flattened), bukan jumlah grup — semantik `flyerCount` tidak berubah.
+  private flyerIdCount(items: FlyerItem[]): number {
+    return items.reduce((count, item) => count + item.imageIds.length, 0);
+  }
+
   // Detail: item list + `content` + `categoryIds` mentah + galeri/flyer ter-resolve berurut.
   private async hydrate(submission: StorySubmissionEntity): Promise<StorySubmissionDetail> {
-    const { galleryImageIds, flyerImageIds, categoryIds, ...rest } = submission;
+    const { galleryImageIds, flyerItems, categoryIds, ...rest } = submission;
     const [categories, images] = await Promise.all([
       this.categoryRepository.findByIds(categoryIds),
-      this.imageRepository.findByIds([...new Set([...galleryImageIds, ...flyerImageIds])]),
+      this.imageRepository.findByIds([
+        ...new Set([...galleryImageIds, ...flyerItems.flatMap((item) => item.imageIds)]),
+      ]),
     ]);
     const byId = new Map(images.map((image) => [image.id, image]));
     const resolve = (imageIds: string[]): ImageResponse[] =>
@@ -106,9 +114,10 @@ export class StorySubmissionService {
       categories: this.categoryRefs(categoryIds, catById),
       categoryIds,
       galleryCount: galleryImageIds.length,
-      flyerCount: flyerImageIds.length,
+      flyerCount: this.flyerIdCount(flyerItems),
       gallery: resolve(galleryImageIds),
-      flyer: resolve(flyerImageIds),
+      // Grup berurut; tiap grup di-resolve dari lookup gabungan, id hilang di-skip.
+      flyer: flyerItems.map((item) => ({ type: item.type, images: resolve(item.imageIds) })),
     };
   }
 
@@ -169,6 +178,25 @@ export class StorySubmissionService {
     }
   }
 
+  // Ownership flyer per-grup: satu lookup, field path `flyerItems.N.imageIds.M` (IDOR guard).
+  private async assertValidFlyerItems(items: FlyerItem[]): Promise<void> {
+    const ids = items.flatMap((item) => item.imageIds);
+    if (ids.length === 0) return;
+    const images = await this.imageRepository.findByIds(ids);
+    const byId = new Map(images.map((image) => [image.id, image]));
+    items.forEach((item, i) => {
+      item.imageIds.forEach((id, j) => {
+        const image = byId.get(id);
+        if (!image || image.entityType !== SUBMISSION_ENTITY_TYPE || image.entityId !== null) {
+          throw this.validationError(
+            `flyerItems.${i}.imageIds.${j}`,
+            'image not found, wrong type, or already bound',
+          );
+        }
+      });
+    });
+  }
+
   async create(dto: CreateStorySubmissionDto): Promise<{ id: string; status: StorySubmissionStatus }> {
     // Section `submitter` (data pengirim) — geo wajib valid (422 per-field).
     await this.requireCountry(dto.submitter.countryId, 'submitter.countryId');
@@ -195,7 +223,17 @@ export class StorySubmissionService {
     if (dto.galleryImageIds && dto.galleryImageIds.length > 0) {
       await this.assertValidImageIds(dto.galleryImageIds, 'galleryImageIds');
     }
-    if (dto.flyerImageIds && dto.flyerImageIds.length > 0) {
+    if (dto.flyerItems != null) {
+      assertUniqueFlyerItems(dto.flyerItems);
+      await this.assertValidFlyerItems(dto.flyerItems);
+    } else if (dto.flyerImageIds && dto.flyerImageIds.length > 0) {
+      // Legacy (deprecated): satu daftar id → satu grup `flyer`. Field path lama dipertahankan.
+      // Invariant sama dgn `flyerItems`: id duplikat ditolak 422 (path legacy `flyerImageIds.N`).
+      const seen = new Set<string>();
+      dto.flyerImageIds.forEach((id, i) => {
+        if (seen.has(id)) throw this.validationError(`flyerImageIds.${i}`, 'image id must be unique');
+        seen.add(id);
+      });
       await this.assertValidImageIds(dto.flyerImageIds, 'flyerImageIds');
     }
 
@@ -214,12 +252,18 @@ export class StorySubmissionService {
       throw this.validationError('content', 'content must not be empty');
     }
 
+    const flyerItems: FlyerItem[] =
+      dto.flyerItems ??
+      (dto.flyerImageIds && dto.flyerImageIds.length > 0
+        ? [{ type: 'flyer', imageIds: dto.flyerImageIds }]
+        : []);
+
     const data: CreateStorySubmissionData = {
       name: dto.name,
       content,
       categoryIds: dto.categoryIds ?? [],
       galleryImageIds: dto.galleryImageIds ?? [],
-      flyerImageIds: dto.flyerImageIds ?? [],
+      flyerItems,
       thumbnail,
       submitterFullName: dto.submitter.fullName,
       submitterEmail: dto.submitter.email,

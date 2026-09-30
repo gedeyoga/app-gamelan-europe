@@ -7,7 +7,6 @@ import {
   Plus,
   RotateCcw,
   Trash2,
-  User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -17,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 
-import { formatEventDate } from '../lib/format'
+import { formatEventDate, getEventCreditName } from '../lib/format'
 import { STATUS_VARIANT } from './status-variant'
 import type { Event } from '../types'
 
@@ -146,17 +145,7 @@ export function EventCard({
               </div>
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">
-                  {event.creator?.network?.name ?? event.creator?.fullName ?? '—'}
-                </span>
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <User className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">
-                  {event.authors.map((author) => author.fullName).join(', ') ||
-                    event.creator?.fullName ||
-                    '—'}
-                </span>
+                <span className="truncate">{getEventCreditName(event) ?? '—'}</span>
               </span>
               {showActions && (
                 <div className="relative z-20 mt-auto grid grid-cols-1 gap-2 sm:grid-cols-2">

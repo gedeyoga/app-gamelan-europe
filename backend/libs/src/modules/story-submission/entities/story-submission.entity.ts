@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { ImageResponse } from '@app/libs/modules/image/image.service';
+import type { PostFlyerGroup } from '@app/libs/modules/post/entities/post.entity';
+import { FlyerItem, normalizeFlyerItems } from '@app/libs/common/utils/flyer.util';
 
 // Query raw (join shape). JANGAN dikembalikan langsung ke API — map lewat
 // `mapStorySubmission()` agar relasi `post` ter-flatten ke `{ id, slug, status }`.
@@ -9,7 +11,7 @@ export const storySubmissionSelect = {
   content: true,
   categoryIds: true,
   galleryImageIds: true,
-  flyerImageIds: true,
+  flyerItems: true,
   thumbnail: true,
   submitterFullName: true,
   submitterEmail: true,
@@ -43,11 +45,12 @@ export type StorySubmissionSubmitterRef = {
 };
 
 // Kontrak response API: relasi join flat ke `{ id, slug, status }` (null bila belum ditautkan).
-// `content`/`categoryIds`/`galleryImageIds`/`flyerImageIds` (scalar) tetap di entity internal —
+// `content`/`categoryIds`/`galleryImageIds`/`flyerItems` (scalar) tetap di entity internal —
 // dipakai saat approve & hydrate detail.
 export type StorySubmissionEntity = Omit<
   StorySubmissionPayload,
   | 'post'
+  | 'flyerItems'
   | 'submitterFullName'
   | 'submitterEmail'
   | 'submitterCountryId'
@@ -57,6 +60,8 @@ export type StorySubmissionEntity = Omit<
 > & {
   post: { id: string; slug: string; status: string } | null;
   submitter: StorySubmissionSubmitterRef;
+  // Kolom Json warisan di-normalisasi ke bentuk grup bertipe (mirror `Post.flyerItems`).
+  flyerItems: FlyerItem[];
 };
 
 export type SubmissionCategoryRef = { id: string; name: string };
@@ -64,7 +69,7 @@ export type SubmissionCategoryRef = { id: string; name: string };
 // Item LIST: buang id/HTML mentah (tanpa lookup), ekspos nama kategori + jumlah gambar.
 export type StorySubmissionListItem = Omit<
   StorySubmissionEntity,
-  'content' | 'categoryIds' | 'galleryImageIds' | 'flyerImageIds'
+  'content' | 'categoryIds' | 'galleryImageIds' | 'flyerItems'
 > & {
   categories: SubmissionCategoryRef[];
   galleryCount: number;
@@ -76,12 +81,13 @@ export type StorySubmissionDetail = StorySubmissionListItem & {
   content: string;
   categoryIds: string[];
   gallery: ImageResponse[];
-  flyer: ImageResponse[];
+  flyer: PostFlyerGroup[];
 };
 
 export function mapStorySubmission(row: StorySubmissionPayload): StorySubmissionEntity {
   const {
     post,
+    flyerItems,
     submitterFullName,
     submitterEmail,
     submitterCountryId,
@@ -93,6 +99,7 @@ export function mapStorySubmission(row: StorySubmissionPayload): StorySubmission
   return {
     ...rest,
     post: post ? { id: post.id, slug: post.slug, status: post.status } : null,
+    flyerItems: normalizeFlyerItems(flyerItems),
     submitter: {
       fullName: submitterFullName,
       email: submitterEmail,

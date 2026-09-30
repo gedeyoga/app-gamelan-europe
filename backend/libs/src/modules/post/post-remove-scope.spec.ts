@@ -15,7 +15,7 @@ function makePostService() {
     createdBy: 'someone-else',
     creator: null,
     galleryImageIds: [],
-    flyerImageIds: [],
+    flyerItems: [],
   };
   const postRepository = {
     findById: jest.fn().mockResolvedValue(post),

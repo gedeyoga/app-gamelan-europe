@@ -104,7 +104,7 @@ model Post {
   content         String
   thumbnail       String?
   galleryImageIds String[]          @default([]) @map("gallery_image_ids")
-  flyerImageIds   String[]          @default([]) @map("flyer_image_ids")
+  flyerItems      Json              @default("[]") @map("flyer_items")
   visibility      ContentVisibility @default(PUBLIC)
   createdBy       String?           @map("created_by")
   creator         User?          @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
@@ -150,7 +150,7 @@ Catatan:
 - `Post.content` menyimpan **HTML rich text** (hasil editor WYSIWYG, sudah disanitasi di FE).
 - `Post.thumbnail` menyimpan **URL gambar absolut S3** (mis. `https://cdn.example.com/posts/<uuid>.webp`). FE tetap mengirim id `Image` terkait lewat `imageIds` agar baris `images` ter-bind ke post ([§4](#4-dto)).
 - `Post.galleryImageIds` = daftar id `Image` **berurut** (array Postgres `TEXT[]`, default `[]`). Urutan array = urutan galeri. Diganti **seluruhnya** bila `galleryImageIds` dikirim saat update. Response detail/list tidak mengembalikan field ini mentah — di-resolve jadi `gallery: ImageResponse[]` berurut ([§3](#3-entity-payload-type), [§9](#9-upload-gambar-s3--tabel-images)).
-- `Post.flyerImageIds` = daftar id `Image` **berurut** (array Postgres `TEXT[]`, default `[]`). Urutan array = urutan flyer. Diganti **seluruhnya** bila `flyerImageIds` dikirim saat update. Response detail/list tidak mengembalikan field ini mentah — di-resolve jadi `flyer: ImageResponse[]` berurut ([§3](#3-entity-payload-type), [§9](#9-upload-gambar-s3--tabel-images)).
+- `Post.flyerItems` = daftar **grup bertipe** (kolom `flyer_items`, Postgres `JSONB`, default `[]`, bentuk `[{ "type": string, "imageIds": string[] }]`). Urutan array = urutan grup; urutan `imageIds` = urutan gambar dalam grup. `type` = teks bebas (bukan enum). Diganti **seluruhnya** bila `flyerItems` dikirim saat update. Response detail/list tidak mengembalikan field ini mentah — di-resolve jadi `flyer: [{ type, images: ImageResponse[] }]` berurut ([§3](#3-entity-payload-type), [§9](#9-upload-gambar-s3--tabel-images)).
 - `PostCategory` = relasi N : M ke `Category`; `@@unique([postId, categoryId])` mencegah duplikat link.
 - `Category.type` ∈ `STORY | ARCHIVE`. Halaman story memfilter `type=STORY`.
 - `createdBy` nullable + `onDelete: SetNull`; user dihapus → story tetap ada, `creator` null.
@@ -192,13 +192,15 @@ Catatan: `url` **tidak** ada di `Image` (tidak disimpan di DB) — dihitung saat
 
 ### Kebutuhan migration
 
-Tabel `Post`, `Category`, `PostCategory`, `Image` sudah ada dari migration init repo + `add_posts_categories` (tweak `Image`). Kolom `galleryImageIds`/`flyerImageIds` ditambahkan lewat migration terpisah (lihat juga [§9](#9-upload-gambar-s3--tabel-images)):
+Tabel `Post`, `Category`, `PostCategory`, `Image` sudah ada dari migration init repo + `add_posts_categories` (tweak `Image`). Kolom `galleryImageIds`/`flyerItems` ditambahkan lewat migration terpisah (lihat juga [§9](#9-upload-gambar-s3--tabel-images)):
 
 ```bash
 # sudah dibuat: libs/prisma/migrations/20260920120000_add_post_gallery_image_ids/migration.sql
 # ALTER TABLE "posts" ADD COLUMN "gallery_image_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
-# sudah dibuat: libs/prisma/migrations/20260923120000_add_post_flyer_image_ids/migration.sql
-# ALTER TABLE "posts" ADD COLUMN "flyer_image_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+# sudah dibuat: libs/prisma/migrations/20260930130000_add_post_flyer_items/migration.sql
+# ALTER TABLE "posts" ADD COLUMN "flyer_items" JSONB NOT NULL DEFAULT '[]';
+# UPDATE "posts" SET "flyer_items" = jsonb_build_array(jsonb_build_object('type','flyer','imageIds',to_jsonb("flyer_image_ids"))) WHERE cardinality("flyer_image_ids") > 0;
+# ALTER TABLE "posts" DROP COLUMN "flyer_image_ids";
 pnpm prisma:generate
 ```
 
@@ -224,7 +226,7 @@ export const postSelect = {
   content: true,
   thumbnail: true,
   galleryImageIds: true,
-  flyerImageIds: true,
+  flyerItems: true,
   visibility: true,
   createdBy: true,
   creator: { select: { id: true, fullName: true } },
@@ -241,13 +243,19 @@ export type PostRow = Prisma.PostGetPayload<{ select: typeof postSelect }>;
 
 export type PostCategoryEntity = { id: string; name: string; type: CategoryType };
 
-// Kontrak response API: `categories` flat (bukan `[{ category }]`).
-export type PostEntity = Omit<PostRow, 'categories'> & { categories: PostCategoryEntity[] };
+// Elemen kolom Json `flyerItems` (di-cast/normalisasi saat mapping).
+export type PostFlyerItem = FlyerItem;
 
-// Kontrak response ke FE: `galleryImageIds`/`flyerImageIds` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
-export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerImageIds'> & {
+// Kontrak response API: `categories` flat (bukan `[{ category }]`).
+export type PostEntity = Omit<PostRow, 'categories'> & {
+  categories: PostCategoryEntity[];
+  flyerItems: PostFlyerItem[];
+};
+
+// Kontrak response ke FE: `galleryImageIds`/`flyerItems` (raw) diganti `gallery`/`flyer` hasil resolusi berurut.
+export type PostResponse = Omit<PostEntity, 'galleryImageIds' | 'flyerItems'> & {
   gallery: ImageResponse[];
-  flyer: ImageResponse[];
+  flyer: { type: string; images: ImageResponse[] }[];
 };
 
 export function mapPost(row: PostRow): PostEntity {
@@ -259,7 +267,7 @@ export function mapPost(row: PostRow): PostEntity {
 
 > **Resolve `gallery`.** `PostService.hydrate()` mengubah `PostEntity.galleryImageIds` → `PostResponse.gallery: ImageResponse[]` lewat `ImageRepository.findByIds` + `ImageService.toImageResponse` (jangan duplikasi logika URL/variants). Urutan `gallery` = urutan `galleryImageIds`; id yang tidak ditemukan di-skip. `galleryImageIds` **tidak** dikembalikan ke FE.
 
-> **Resolve `flyer`.** Sama seperti `gallery`: `PostService.hydrate()` mengubah `PostEntity.flyerImageIds` → `PostResponse.flyer: ImageResponse[]` berurut (satu lookup `findByIds` untuk gabungan galeri + flyer). `flyerImageIds` **tidak** dikembalikan ke FE.
+> **Resolve `flyer`.** Sama seperti `gallery`, tetapi `PostEntity.flyerItems` (grup mentah) → `PostResponse.flyer: { type, images: ImageResponse[] }[]` berurut: `PostService.hydrate()` melakukan **satu** lookup `findByIds` untuk gabungan galeri + **semua** `flyerItems[].imageIds` (flatten), lalu menyusun ulang per grup. Id yang tidak ditemukan di-skip. `flyerItems` **tidak** dikembalikan ke FE.
 
 
 ```typescript
@@ -413,14 +421,37 @@ export class CreatePostDto {
   @ArrayMaxSize(100)
   galleryImageIds?: string[];
 
-  // Urutan flyer = urutan array ini. Diganti seluruhnya bila dikirim saat update.
+  // Daftar grup flyer bertipe; urutan array = urutan grup. Diganti seluruhnya bila dikirim saat update.
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
-  @ArrayMaxSize(100)
-  flyerImageIds?: string[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => FlyerItemDto)
+  flyerItems?: FlyerItemDto[];
 }
 ```
+
+```typescript
+// libs/src/modules/post/dto/flyer-item.dto.ts (atau di file yang sama dengan CreatePostDto)
+import { Transform } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
+
+// Satu grup flyer bertipe. `type` = teks bebas (bukan enum).
+export class FlyerItemDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  type: string;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(50)
+  imageIds: string[];
+}
+```
+
+> Tipe duplikat (case-insensitive) & id gambar duplikat (dalam/antar grup) dicek di **service** → **422** `flyerItems.N.type` / `flyerItems.N.imageIds.M` (bukan lewat dekorator DTO).
 
 ```typescript
 // libs/src/modules/post/dto/update-post.dto.ts
@@ -518,7 +549,9 @@ export class ListCategoriesQueryDto extends ListQueryDto {}
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })` | 422 `{ field: 'categoryIds.0', message }` |
 | `imageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)` | 422 `{ field: 'imageIds.0', message }` |
 | `galleryImageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)`; urutan = urutan galeri; update = replace seluruh array | 422 `{ field: 'galleryImageIds.0', message }` |
-| `flyerImageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)`; urutan = urutan flyer; update = replace seluruh array | 422 `{ field: 'flyerImageIds.0', message }` |
+| `flyerItems` | opsional, `@IsArray()`, `@ArrayMaxSize(20)`, `@ValidateNested({ each: true })`, `@Type(() => FlyerItemDto)`; update = replace seluruh grup | 422 `{ field: 'flyerItems', message }` (class-validator, tanpa indeks; field berindeks dari service) |
+| `flyerItems[].type` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(40)`; unik case-insensitive (service) | 422 `{ field: 'flyerItems.N.type', message }` |
+| `flyerItems[].imageIds` | `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)`; unik dalam/antar grup (service) | 422 `{ field: 'flyerItems.N.imageIds.M', message }` |
 | `name` (category) | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(100)` | 422 `{ field: 'name', message }` |
 | `type` (category) | `@IsEnum(CategoryType)` | 422 `{ field: 'type', message }` |
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
@@ -609,7 +642,7 @@ async function uniqueSlug(base: string): Promise<string> {
   - `publishedAt` dikirim → `publishedAt = new Date(dto.publishedAt)` (**menimpa** nilai lama — untuk ubah/backdate jadwal terbit) **dan** `status = PUBLISHED`. `publishedAt` menang atas `status` bila keduanya dikirim.
   - `publishedAt` tidak dikirim → perilaku lama: menaikkan `status` ke `PUBLISHED` mengisi `publishedAt = now` hanya bila masih `null` (re-publish tidak mengubah waktu publish pertama). Bila hasil update `PUBLISHED` (`publishedAt` dikirim atau `status = PUBLISHED`) → `approvedAt = existing.approvedAt ?? now`.
 - `approvedAt` **tidak** dapat dikirim client (tidak ada di DTO) → kirim `approvedAt` = **422** (`forbidNonWhitelisted`). Kolom `approvedAt` = audit marker **"pertama kali terbit"** (server-managed); **bukan** penanda status `APPROVED` (status `APPROVED` tetap deprecated, tidak diproduksi).
-- `galleryImageIds`/`flyerImageIds` tidak memengaruhi aturan status: pada create/update disimpan apa adanya (update = replace seluruh array) dan id galeri/flyer ikut di-bind ke post (union `imageIds` + `galleryImageIds` + `flyerImageIds`) — lihat [§9](#9-upload-gambar-s3--tabel-images).
+- `galleryImageIds`/`flyerItems` tidak memengaruhi aturan status: pada create/update disimpan apa adanya (update = replace seluruh array/grup) dan id galeri/flyer ikut di-bind ke post (union `imageIds` + `galleryImageIds` + flatten `flyerItems[].imageIds`) — lihat [§9](#9-upload-gambar-s3--tabel-images).
 
 ```typescript
 // libs/src/modules/post/post.service.ts
@@ -891,11 +924,11 @@ create(
 
 ### Binding ke post
 
-- Saat `POST /posts` / `PATCH /posts/:id`, FE mengirim daftar id `Image` lewat `imageIds` (gambar di `content` **dan** `thumbnail`), `galleryImageIds` (galeri berurut), dan `flyerImageIds` (flyer berurut).
-- Service meng-`updateMany` row `Image` pada **union** `imageIds` + `galleryImageIds` + `flyerImageIds` → set `entityId = post.id` (dan pastikan `entityType='post'`). Pada **create**, post dibuat dulu (mendapat `id`) lalu binding di dalam `$transaction`.
+- Saat `POST /posts` / `PATCH /posts/:id`, FE mengirim daftar id `Image` lewat `imageIds` (gambar di `content` **dan** `thumbnail`), `galleryImageIds` (galeri berurut), dan `flyerItems` (grup flyer bertipe; tiap grup punya `imageIds` berurut).
+- Service meng-`updateMany` row `Image` pada **union** `imageIds` + `galleryImageIds` + flatten `flyerItems[].imageIds` → set `entityId = post.id` (dan pastikan `entityType='post'`). Pada **create**, post dibuat dulu (mendapat `id`) lalu binding di dalam `$transaction`.
 - `thumbnail` tetap URL string absolut (FE mengirim URL + id-nya lewat `imageIds` agar baris ter-bind).
-- Id di `imageIds`/`galleryImageIds`/`flyerImageIds` yang tidak ada / bukan milik upload post → abaikan atau 422 (ditentukan saat implementasi; minimal jangan bind id milik entity lain). `bindImages` hanya menyentuh row yang `entityId=null` atau sudah milik post ini.
-- **Unbind galeri/flyer saat update.** `PATCH /posts/:id` yang mengirim `galleryImageIds` (atau `flyerImageIds`) = replace seluruh array. Selisih id lama yang tidak lagi ada di array baru (`removedGalleryImageIds = existing.galleryImageIds − dto.galleryImageIds`, `removedFlyerImageIds = existing.flyerImageIds − dto.flyerImageIds`) di-`unbindImages` (set `entityId = null`) dalam transaksi yang sama dengan bind. Ini mencegah gambar lama tetap menempel `entityId = postId` sehingga tak bisa dipakai post lain. Hanya berlaku untuk galeri/flyer; `imageIds` inline/thumbnail lama **tidak** di-unbind (FE tidak mengirim ulang id lama, unbind justru salah). Objek S3 & row `images` tidak dihapus (tetap orphan — batasan existing, lihat [§9 Orphan](#orphan)).
+- Id di `imageIds`/`galleryImageIds`/`flyerItems[].imageIds` yang tidak ada / bukan milik upload post → di-`filterBindableIds` (abaikan). `bindImages` hanya menyentuh row yang `entityId=null` atau sudah milik post ini.
+- **Unbind galeri/flyer saat update.** `PATCH /posts/:id` yang mengirim `galleryImageIds` (atau `flyerItems`) = replace seluruh array/grup. Selisih id lama yang tidak lagi ada di array baru (`removedGalleryImageIds = existing.galleryImageIds − dto.galleryImageIds`, `removedFlyerImageIds = flatten(existing.flyerItems) − flatten(dto.flyerItems)`) di-`unbindImages` (set `entityId = null`) dalam transaksi yang sama dengan bind. Ini mencegah gambar lama tetap menempel `entityId = postId` sehingga tak bisa dipakai post lain. Hanya berlaku untuk galeri/flyer; `imageIds` inline/thumbnail lama **tidak** di-unbind (FE tidak mengirim ulang id lama, unbind justru salah). Objek S3 & row `images` tidak dihapus (tetap orphan — batasan existing, lihat [§9 Orphan](#orphan)).
 
 ### Galeri post (`galleryImageIds` → `gallery`)
 
@@ -929,14 +962,58 @@ create(
 }
 ```
 
-### Flyer post (`flyerImageIds` → `flyer`)
+### Flyer post (`flyerItems` → `flyer`)
 
-Paralel dengan galeri: daftar gambar berurut kedua.
+Berbeda dari galeri: flyer adalah **daftar grup bertipe** (mis. `Flyer`, `Poster`), tiap grup punya daftar gambar sendiri.
 
-- `Post.flyerImageIds` = `String[]` (Postgres `TEXT[]`, `@default([])`, kolom `flyer_image_ids`). Urutan array = urutan flyer.
-- **Create/update**: disimpan apa adanya; pada update, `flyerImageIds` dikirim → **replace seluruh array** (tidak ada saat tidak dikirim = jangan sentuh).
-- **Response** (`GET /posts`, `GET /posts/:id`, `POST/PATCH/DELETE /posts`): field `flyer: ImageResponse[]` berurut sesuai `flyerImageIds`, bentuk sama dengan `gallery`/respons `POST /images`. `flyerImageIds` mentah **tidak** dikembalikan.
-- Resolusi lewat `ImageRepository.findByIds` + `ImageService.toImageResponse` (tidak menduplikasi logika URL/variants); `hydrate()` melakukan **satu** lookup untuk gabungan id galeri + flyer, lalu menyusun ulang per post. Id yang tidak ditemukan di-skip.
+- `Post.flyerItems` = kolom Postgres **`JSONB`** (`@default("[]")`, kolom `flyer_items`), bentuk `[{ "type": string, "imageIds": string[] }]`. Urutan array = urutan grup; urutan `imageIds` = urutan gambar dalam grup. `type` = teks bebas (bukan enum).
+- **Create/update**: disimpan apa adanya; pada update, `flyerItems` dikirim → **replace seluruh grup** (tidak ada saat tidak dikirim = jangan sentuh).
+- **Validasi:**
+  - `type` wajib, `@MaxLength(40)`, trim; **duplikat tipe (case-insensitive)** → **422** `flyerItems.N.type`.
+  - `imageIds` = id `Image` (`@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)`); **duplikat id dalam/antar grup** → **422** `flyerItems.N.imageIds.M`.
+  - `flyerItems` maks **20** grup (`@ArrayMaxSize(20)`).
+- **Response** (`GET /posts`, `GET /posts/:id`, `POST/PATCH/DELETE /posts`): field `flyer: { type: string; images: ImageResponse[] }[]` berurut sesuai `flyerItems`; bentuk tiap `images` sama dengan `gallery`/respons `POST /images`. `flyerItems` mentah **tidak** dikembalikan.
+- Resolusi lewat `ImageRepository.findByIds` + `ImageService.toImageResponse` (tidak menduplikasi logika URL/variants); `hydrate()` melakukan **satu** lookup untuk gabungan id galeri + **flatten** semua `flyerItems[].imageIds`, lalu menyusun ulang per grup. Id yang tidak ditemukan di-skip.
+
+```json
+// potongan request create/update
+{
+  "flyerItems": [
+    { "type": "Flyer", "imageIds": ["b7e2c1a0-1111-4222-8333-000000000001"] },
+    { "type": "Poster", "imageIds": ["b7e2c1a0-1111-4222-8333-000000000002"] }
+  ]
+}
+```
+
+```json
+// potongan response post detail
+{
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "flyer": [
+      {
+        "type": "Flyer",
+        "images": [
+          {
+            "id": "b7e2c1a0-1111-4222-8333-000000000001",
+            "url": "https://cdn.example.com/posts/b7e2c1a0-...-large.webp",
+            "key": "posts/original/b7e2c1a0-....png",
+            "filename": "flyer.png",
+            "mimeType": "image/png",
+            "size": 204800,
+            "width": 1600,
+            "height": 900,
+            "variants": [
+              { "name": "large", "url": "https://cdn.example.com/posts/b7e2c1a0-...-large.webp", "key": "posts/b7e2c1a0-...-large.webp", "width": 1600, "height": 900, "size": 120000, "mimeType": "image/webp" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "message": "success"
+}
+```
 
 ### Hapus post (`DELETE /posts/:id`)
 

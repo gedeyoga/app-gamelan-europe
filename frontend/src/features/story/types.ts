@@ -20,6 +20,18 @@ export interface Creator {
 export type { ImageVariant, ImageVariantName, UploadedImage } from '@/types/image'
 import type { UploadedImage } from '@/types/image'
 
+/** Satu blok media flyer bertipe (mis. Flyer, Poster, Banner) — heading + gambar berurut. */
+export interface FlyerGroup {
+  type: string
+  images: UploadedImage[]
+}
+
+/** Payload grup flyer: `type` teks bebas (trim, 1–40), `imageIds` id `Image` berurut. */
+export interface FlyerItemInput {
+  type: string
+  imageIds: string[]
+}
+
 export interface Story {
   id: string
   name: string
@@ -34,8 +46,8 @@ export interface Story {
   creator: Creator | null
   /** Galeri gambar berurut (kontrak `GET /posts/:id`). */
   gallery: UploadedImage[]
-  /** Flyer gambar berurut (kontrak `GET /posts/:id`). */
-  flyer: UploadedImage[]
+  /** Flyer bertipe berurut (kontrak `GET /posts/:id`). */
+  flyer: FlyerGroup[]
   createdAt: string
   updatedAt: string
 }
@@ -52,8 +64,8 @@ export interface CreateStoryInput {
   imageIds?: string[]
   /** Galeri gambar berurut (id `Image`); bila dikirim = replace seluruh galeri. */
   galleryImageIds?: string[]
-  /** Flyer gambar berurut (id `Image`); bila dikirim = replace seluruh flyer. */
-  flyerImageIds?: string[]
+  /** Grup flyer berurut; bila dikirim = replace seluruh grup flyer. */
+  flyerItems?: FlyerItemInput[]
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
 }

@@ -27,6 +27,7 @@
   },
   "form": {
     "createTitle": "Tambah Network",
+    "createDescription": "Buat network baru.",
     "editTitle": "Edit Network",
     "name": "Nama",
     "state": "Negara Bagian",

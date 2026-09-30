@@ -13,7 +13,8 @@ import { cn } from '@/lib/utils'
 import type { UploadedImage } from '@/types/image'
 
 import { createNetworkSchema, type NetworkFormValues } from '../lib/schema'
-import type { CreateNetworkInput, NetworkSocialMedia } from '../types'
+import { buildNetworkPayload } from '../lib/payload'
+import type { CreateNetworkInput } from '../types'
 import { NetworkMetaPanel } from './network-meta-panel'
 
 export interface NetworkFormProps {
@@ -59,27 +60,6 @@ export function NetworkForm({
       ? submissionError.message
       : null
 
-  function buildPayload(values: NetworkFormValues): CreateNetworkInput {
-    // Baris sosial media kosong (platform & url kosong) di-strip sebelum submit.
-    const socialMedia: NetworkSocialMedia[] = values.socialMedia
-      .map((row) => ({ platform: row.platform.trim(), url: row.url.trim() }))
-      .filter((row) => row.platform.length > 0 && row.url.length > 0)
-
-    // Field opsional dikirim `null` eksplisit saat kosong (backend map null → clear), bukan di-omit.
-    return {
-      name: values.name,
-      state: values.state ? values.state : null,
-      country: values.country ? values.country : null,
-      address: values.address ? values.address : null,
-      website: values.website ? values.website : null,
-      contact: values.contact ? values.contact : null,
-      socialMedia: socialMedia.length > 0 ? socialMedia : null,
-      lat: values.lat.trim() ? Number(values.lat) : null,
-      lng: values.lng.trim() ? Number(values.lng) : null,
-      content: values.content ? values.content : null,
-    }
-  }
-
   const cancelButton = (
     <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onCancel}>
       <X className="size-4" data-icon="inline-start" />
@@ -97,7 +77,7 @@ export function NetworkForm({
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit((values) => onSubmit(buildPayload(values)))}
+        onSubmit={form.handleSubmit((values) => onSubmit(buildNetworkPayload(values)))}
         className="flex flex-1 flex-col gap-4 lg:min-h-0"
       >
         {globalMessage && (

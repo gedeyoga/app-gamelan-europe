@@ -41,6 +41,8 @@ export interface Event {
   thumbnail: string | null
   eventTypes: EventType[]
   authors: { id: string; fullName: string }[]
+  /** Organisasi penyelenggara event. */
+  network: { id: string; name: string } | null
   /** Tanggal event, berurut. */
   dates: EventDate[]
   location: EventLocation | null
@@ -74,6 +76,8 @@ export interface CreateEventInput {
   publishedAt?: string
   eventTypeIds?: string[]
   authorIds?: string[]
+  /** `null` = clear (edit); `undefined` = biarkan. */
+  networkId?: string | null
   /** Tanggal event; bila diisi minimal 1. */
   dates?: EventDateInput[]
   /** Wajib — satu event = satu lokasi. */

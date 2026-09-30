@@ -27,6 +27,7 @@
   },
   "form": {
     "createTitle": "Add Network",
+    "createDescription": "Create a new network.",
     "editTitle": "Edit Network",
     "name": "Name",
     "state": "State",

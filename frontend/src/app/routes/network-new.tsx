@@ -7,22 +7,9 @@ import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from 
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { NetworkForm } from '@/features/network/components/network-form'
 import { useCreateNetwork } from '@/features/network/hooks/use-create-network'
-import type { NetworkFormValues } from '@/features/network/lib/schema'
+import { EMPTY_NETWORK_VALUES } from '@/features/network/lib/schema'
 import type { CreateNetworkInput } from '@/features/network/types'
 import { useUploadImage } from '@/features/story/hooks/use-upload-image'
-
-const INITIAL_VALUES: NetworkFormValues = {
-  name: '',
-  state: '',
-  country: '',
-  address: '',
-  website: '',
-  contact: '',
-  socialMedia: [],
-  lat: '',
-  lng: '',
-  content: '',
-}
 
 export function NetworkNewPage() {
   const { t } = useTranslation()
@@ -68,7 +55,7 @@ export function NetworkNewPage() {
   return (
     <div className="flex flex-1 flex-col lg:min-h-0">
       <NetworkForm
-        initialValues={INITIAL_VALUES}
+        initialValues={EMPTY_NETWORK_VALUES}
         isPending={createNetwork.isPending}
         submissionError={createNetwork.error}
         onSubmit={handleSubmit}

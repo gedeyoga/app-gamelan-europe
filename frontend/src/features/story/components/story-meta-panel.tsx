@@ -21,10 +21,11 @@ import { useAuth } from '@/features/auth/auth-provider'
 import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
 import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
 import { GalleryUpload } from './gallery-upload'
+import { FlyerMediaPanel } from './flyer-media-panel'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
 import type { StoryFormValues } from '../lib/schema'
 import { VISIBILITIES } from '../types'
-import type { StoryCategory, UploadedImage } from '../types'
+import type { FlyerGroup, StoryCategory, UploadedImage } from '../types'
 
 export interface StoryMetaPanelProps {
   form: UseFormReturn<StoryFormValues>
@@ -43,11 +44,11 @@ export interface StoryMetaPanelProps {
   onUploadGalleryImage: (file: File) => void
   isUploadingGallery: boolean
   galleryError: string | null
-  flyerImages: UploadedImage[]
-  onChangeFlyer: (next: UploadedImage[]) => void
-  onUploadFlyerImage: (file: File) => void
-  isUploadingFlyer: boolean
-  flyerError: string | null
+  flyerGroups: FlyerGroup[]
+  onChangeFlyerGroups: (next: FlyerGroup[]) => void
+  onUploadFlyerImage: (type: string, file: File) => void
+  uploadingFlyerType: string | null
+  flyerErrors: Record<string, string | null>
   categories: StoryCategory[]
   isLoadingCategories: boolean
   canReadCategories: boolean
@@ -79,11 +80,11 @@ export function StoryMetaPanel({
   onUploadGalleryImage,
   isUploadingGallery,
   galleryError,
-  flyerImages,
-  onChangeFlyer,
+  flyerGroups,
+  onChangeFlyerGroups,
   onUploadFlyerImage,
-  isUploadingFlyer,
-  flyerError,
+  uploadingFlyerType,
+  flyerErrors,
   categories,
   isLoadingCategories,
   canReadCategories,
@@ -295,13 +296,12 @@ export function StoryMetaPanel({
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium">{t('story:flyer.title')}</label>
-        <GalleryUpload
-          i18nPrefix="flyer"
-          value={flyerImages}
-          onChange={onChangeFlyer}
+        <FlyerMediaPanel
+          groups={flyerGroups}
+          onChange={onChangeFlyerGroups}
           onUpload={onUploadFlyerImage}
-          isUploading={isUploadingFlyer}
-          error={flyerError}
+          uploadingType={uploadingFlyerType}
+          errors={flyerErrors}
           disabled={disabled}
         />
       </div>

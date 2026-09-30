@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { SearchSelectOption } from '@/components/shared/search-select'
 import {
   getApiErrorMessage,
   isConflictError,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/toast'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
+import { useNetworks } from '@/features/network/hooks/use-networks'
 import { useUsers } from '@/features/user/hooks/use-users'
 import { EventForm } from '@/features/event/components/event-form'
 import { toDateOnly } from '@/features/event/lib/format'
@@ -37,6 +39,7 @@ function toFormValues(event: Event): EventFormValues {
     visibility: event.visibility,
     eventTypeIds: event.eventTypes.map((eventType) => eventType.id),
     authorIds: event.authors.map((author) => author.id),
+    networkId: event.network?.id ?? '',
     dates: event.dates.map((entry) => ({
       date: toDateOnly(entry.date),
       startTime: entry.startTime ?? '',
@@ -66,10 +69,13 @@ export function EventEditPage() {
   const canSubmitEvent = can('event:submit')
   const canApproveEvent = can('event:approve')
   const canRejectEvent = can('event:reject')
+  const canReadNetworks = can('network:read')
+  const canCreateNetwork = can('network:create')
 
   const eventQuery = useEvent(id)
   const eventTypesQuery = useEventTypes(canReadEventTypes)
   const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
+  const networksQuery = useNetworks({ page: 1, limit: 100, enabled: canReadNetworks })
   const updateEvent = useUpdateEvent()
   const submitEvent = useSubmitEvent()
   const approveEvent = useApproveEvent()
@@ -147,6 +153,11 @@ export function EventEditPage() {
     email: user.email,
   }))
 
+  const networkOptions: SearchSelectOption[] = (networksQuery.data?.items ?? []).map((network) => ({
+    value: network.id,
+    label: network.name,
+  }))
+
   if (!canUpdate) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
@@ -214,6 +225,10 @@ export function EventEditPage() {
           isLoadingUsers={usersQuery.isPending}
           canManageAuthors={canManageAuthors}
           canDeleteAuthors={canDeleteAuthors}
+          networks={networkOptions}
+          isLoadingNetworks={networksQuery.isPending}
+          canReadNetworks={canReadNetworks}
+          canCreateNetwork={canCreateNetwork}
           onUploadImage={uploadImage.mutateAsync}
           onUploadError={handleUploadError}
         />

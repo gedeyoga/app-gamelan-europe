@@ -1,4 +1,4 @@
-import { CalendarDays, User } from 'lucide-react'
+import { Building2, CalendarDays } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,6 +7,7 @@ import { formatDateTime } from '@/lib/datetime'
 import { sanitizeHtml } from '@/lib/sanitize-html'
 import { cn } from '@/lib/utils'
 
+import { getEventCreditName } from '../lib/format'
 import { EventInfoCard } from './event-info-card'
 import { STATUS_VARIANT, VISIBILITY_VARIANT } from './status-variant'
 import type { Event } from '../types'
@@ -32,7 +33,7 @@ const CONTENT_CLASS = cn(
 
 export function EventDetail({ event, className }: EventDetailProps) {
   const { t } = useTranslation()
-  const creatorName = event.creator?.fullName ?? t('event:detail.creatorFallback')
+  const creditName = getEventCreditName(event) ?? t('event:detail.creatorFallback')
   const hasContent = Boolean(event.content && event.content.trim().length > 0)
   const safeContent = useMemo(() => sanitizeHtml(event.content ?? ''), [event.content])
   const hasThumbnail = Boolean(event.thumbnail)
@@ -89,8 +90,8 @@ export function EventDetail({ event, className }: EventDetailProps) {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm opacity-80">
               <span className="flex items-center gap-1.5">
-                <User className="size-4" />
-                {creatorName}
+                <Building2 className="size-4" />
+                {creditName}
               </span>
               {event.publishedAt && (
                 <span className="flex items-center gap-1.5">
