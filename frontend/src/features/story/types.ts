@@ -4,6 +4,9 @@ export type StoryFormAction = 'save' | 'draft' | 'request' | 'publish' | 'approv
 
 export type Visibility = 'PUBLIC' | 'PRIVATE'
 
+/** Asal konten: pengajuan publik (situs EGS) vs pengajuan member internal. */
+export type ContentSource = 'PUBLIC' | 'REGISTERED'
+
 export type CategoryType = 'STORY' | 'ARCHIVE'
 
 export interface StoryCategory {
@@ -38,6 +41,8 @@ export interface Story {
   slug: string
   status: ContentStatus
   visibility: Visibility
+  /** Asal konten (`PUBLIC` = pengajuan publik, `REGISTERED` = member internal). */
+  source: ContentSource
   publishedAt: string | null
   content?: string
   thumbnail: string | null

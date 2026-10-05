@@ -31,6 +31,10 @@ function makePostService() {
     imageRepository as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
     storage as never,
     ownScope() as unknown as AccessScopeService,
   );
@@ -45,6 +49,12 @@ function makeEventService() {
   };
   const service = new EventService(
     eventRepository as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
     {} as never,
     {} as never,
     ownScope() as unknown as AccessScopeService,

@@ -50,6 +50,10 @@
     "PUBLIC": "Public",
     "PRIVATE": "Members Only"
   },
+  "source": {
+    "PUBLIC": "Public",
+    "REGISTERED": "Member"
+  },
   "form": {
     "createTitle": "Add Event",
     "editTitle": "Edit Event",

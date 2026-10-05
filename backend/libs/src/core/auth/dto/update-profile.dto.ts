@@ -9,7 +9,7 @@ export class UpdateProfileDto {
   @MaxLength(100)
   fullName?: string;
 
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsOptional()
   @IsEmail()
   @IsNotEmpty()

@@ -1,4 +1,4 @@
-import { Check, Eye, ImageOff, X } from 'lucide-react'
+import { Check, ImageOff, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +17,6 @@ export interface DashboardPendingArchivesProps {
   canReject: boolean
   /** Query list sedang refetch (mis. setelah mutation); tombol aksi ditahan. */
   isRefreshing?: boolean
-  onViewDetail: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
   /** Id arsip yang sedang diproses; tombol aksi baris tsb dinonaktifkan. */
@@ -32,7 +31,6 @@ export function DashboardPendingArchives({
   canApprove,
   canReject,
   isRefreshing = false,
-  onViewDetail,
   onApprove,
   onReject,
   busyId,
@@ -96,10 +94,6 @@ export function DashboardPendingArchives({
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onViewDetail(item.id)}>
-                  <Eye className="size-4" data-icon="inline-start" />
-                  {t('pending.viewDetail')}
-                </Button>
                 {canApprove && (
                   <Button
                     size="sm"

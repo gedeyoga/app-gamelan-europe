@@ -43,16 +43,6 @@
       "error": "Failed to load data.",
       "publicEmpty": "No public archive submissions yet."
     },
-    "pendingSubmissions": {
-      "empty": "No event submissions awaiting review.",
-      "error": "Failed to load data."
-    },
-    "pendingStorySubmissions": {
-      "title": "Public Story Submissions",
-      "subtitle": "Story submissions from the public awaiting review.",
-      "empty": "No public story submissions awaiting review.",
-      "error": "Failed to load data."
-    },
     "pendingStories": {
       "title": "Stories Awaiting Approval",
       "subtitle": "Stories submitted by members and the public.",
@@ -68,47 +58,16 @@
     }
   },
   "column": {
-    "member": "Member Submissions",
-    "public": "Public Submissions"
+    "member": "Member Submissions"
   },
   "pending": {
     "approve": "Approve",
     "reject": "Reject",
-    "viewDetail": "View detail",
     "unknown": "Unknown organizer"
   },
-  "pendingSubmission": {
-    "approve": "Approve",
-    "reject": "Reject",
-    "statusRequest": "Request",
-    "unknown": "Unknown organizer",
-    "approved": "Submission approved.",
-    "rejected": "Submission rejected.",
-    "approveFailed": "Failed to approve submission.",
-    "rejectFailed": "Failed to reject submission.",
-    "confirmApproveTitle": "Approve this submission?",
-    "confirmApproveDescription": "An event draft will be created. You will be redirected to its editor.",
-    "confirmRejectTitle": "Reject this submission?",
-    "confirmRejectDescription": "This cannot be undone. No event will be created.",
-    "confirmCancel": "Cancel",
-    "confirmSubmit": "Confirm"
-  },
-  "pendingStorySubmission": {
-    "approve": "Approve",
-    "reject": "Reject",
-    "statusRequest": "Request",
-    "galleryCount": "Gallery images",
-    "flyerCount": "Flyers",
-    "approved": "Story submission approved.",
-    "rejected": "Story submission rejected.",
-    "approveFailed": "Failed to approve story submission.",
-    "rejectFailed": "Failed to reject story submission.",
-    "confirmApproveTitle": "Approve this story submission?",
-    "confirmApproveDescription": "A story draft will be created. You will be redirected to its editor.",
-    "confirmRejectTitle": "Reject this story submission?",
-    "confirmRejectDescription": "This cannot be undone. No story will be created.",
-    "confirmCancel": "Cancel",
-    "confirmSubmit": "Confirm"
+  "source": {
+    "PUBLIC": "Public",
+    "REGISTERED": "Member"
   },
   "card": {
     "noThumbnail": "No thumbnail",

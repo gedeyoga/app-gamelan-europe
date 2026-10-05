@@ -11,7 +11,7 @@ async function bootstrap(): Promise<void> {
   app.use(compression());
 
   // Express default JSON limit (~100kb) menolak 413 sebelum validasi, padahal
-  // `CreateStorySubmissionDto.content` mengiklankan @MaxLength(100000). Naikkan
+  // `CreatePublicPostDto.content` mengiklankan @MaxLength(100000). Naikkan
   // limit json (hanya JSON; multipart/urlencoded tak terpengaruh). Parser ini
   // didaftarkan sebelum parser default Nest → yang menang.
   app.useBodyParser('json', { limit: '1mb' });

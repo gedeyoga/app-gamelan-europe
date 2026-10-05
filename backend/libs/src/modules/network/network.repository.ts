@@ -22,7 +22,7 @@ export class NetworkRepository {
     return Boolean(found);
   }
 
-  // `name` tidak unik → ambil row pertama. Dipakai approve event-submission (find-or-create).
+  // `name` tidak unik → ambil row pertama. Dipakai find-or-create network (submit publik).
   async findByNameInsensitive(name: string, tx?: Prisma.TransactionClient): Promise<NetworkEntity | null> {
     const network = await this.client(tx).network.findFirst({
       where: { name: { equals: name, mode: 'insensitive' } },

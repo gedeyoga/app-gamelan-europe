@@ -25,9 +25,7 @@ import { ArchiveModule } from './modules/archive/archive.module';
 import { NetworkModule } from './modules/network/network.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { BillingModule } from './modules/billing/billing.module';
-import { EventSubmissionModule } from './modules/event-submission/event-submission.module';
 import { ArchiveSubmissionModule } from './modules/archive-submission/archive-submission.module';
-import { StorySubmissionModule } from './modules/story-submission/story-submission.module';
 import { StatsModule } from './modules/stats/stats.module';
 
 const redisProvider = {
@@ -62,9 +60,7 @@ const redisProvider = {
     NetworkModule,
     SubscriptionModule,
     BillingModule,
-    EventSubmissionModule,
     ArchiveSubmissionModule,
-    StorySubmissionModule,
     StatsModule,
   ],
   providers: [redisProvider, PrismaService, CacheService, InternalAuthGuard, AccessScopeService],
@@ -93,9 +89,7 @@ const redisProvider = {
     NetworkModule,
     SubscriptionModule,
     BillingModule,
-    EventSubmissionModule,
     ArchiveSubmissionModule,
-    StorySubmissionModule,
     StatsModule,
   ],
 })

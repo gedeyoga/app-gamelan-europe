@@ -18,6 +18,10 @@ function makeService(overrides: {
     { toImageResponse: (image: unknown) => image } as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
     allScope() as never,
   );
 }

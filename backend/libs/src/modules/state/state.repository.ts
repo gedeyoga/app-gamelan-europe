@@ -13,7 +13,7 @@ export class StateRepository {
     return state;
   }
 
-  // Non-throwing lookup (validasi body trust boundary, mis. event-submission).
+  // Non-throwing lookup (validasi body trust boundary).
   async findByIdOrNull(id: number): Promise<StateWithCountryEntity | null> {
     return this.prisma.state.findUnique({ where: { id }, select: stateWithCountrySelect });
   }

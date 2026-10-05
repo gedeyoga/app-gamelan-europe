@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { mapPost, postSelect, PostEntity, PostFlyerItem } from './entities/post.entity';
 
@@ -9,6 +9,7 @@ export interface CreatePostData {
   content: string;
   thumbnail?: string;
   status?: ContentStatus;
+  source?: ContentSource;
   visibility: ContentVisibility;
   publishedAt?: Date;
   approvedAt?: Date;
@@ -151,6 +152,7 @@ export class PostRepository {
         content: data.content,
         thumbnail: data.thumbnail,
         status: data.status,
+        source: data.source,
         visibility: data.visibility,
         publishedAt: data.publishedAt,
         approvedAt: data.approvedAt,
@@ -183,12 +185,6 @@ export class PostRepository {
       this.mapUnique(e);
       throw e;
     }
-  }
-
-  // Dipakai lintas modul (story-submission approve) di dalam transaksi milik caller.
-  // P2002 TIDAK dimap di sini agar caller bisa retry slug tanpa tx aborted.
-  async createInTransaction(tx: Prisma.TransactionClient, data: CreatePostData): Promise<PostEntity> {
-    return this.createWith(tx, data);
   }
 
   // Update status atomik (conditional). true = tepat 1 row berubah → guard anti-TOCTOU.

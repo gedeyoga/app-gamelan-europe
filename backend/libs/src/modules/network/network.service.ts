@@ -41,7 +41,7 @@ export class NetworkService {
     return this.networkRepository.findById(id);
   }
 
-  // Find-or-create untuk approve submission publik (event-submission §5.2.1).
+  // Find-or-create untuk submit event publik (submit langsung ke tabel `events`).
   // `name` tidak unik → findFirst case-insensitive; typo bisa membuat network duplikat (backlog).
   // Opsi `tx` dipakai bila dipanggil di dalam transaksi caller (approve).
   async findOrCreateByName(

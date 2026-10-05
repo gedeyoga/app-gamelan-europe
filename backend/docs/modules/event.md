@@ -200,6 +200,16 @@ event.network?.name            // 1. org event (approve submission publik / di-s
 
 `EventDateDto` (nested di `dates`): `date` wajib `@IsISO8601()`; `startTime`/`endTime` opsional `@Matches(/^([01]\d|2[0-3]):[0-5]\d$/)` → `"HH:mm"` 24h.
 
+### `CreatePublicEventDto` — tanggal & jam (submission publik)
+
+`startDate`/`endDate` menerima `@IsISO8601()` sehingga bentuk `YYYY-MM-DD` **maupun** `YYYY-MM-DDTHH:mm` (24h) valid. `toUtcDate()` tetap menormalkan tiap hari ke UTC midnight untuk enumerasi; komponen jam (bila ada) diambil `toTime()` dan **diterapkan identik ke setiap hari** hasil enumerasi:
+
+- jam pada `startDate` → `EventDate.startTime` untuk **semua** hari;
+- jam pada `endDate` → `EventDate.endTime` untuk **semua** hari;
+- event multi-hari berbagi window jam yang sama; field hanya `undefined` bila jam tak dikirim.
+
+Aturan validasi (`rangeError`, dipakai `@IsEventDateRange` → 422 `endDate`): `endDate >= startDate`, rentang inklusif ≤ 31 hari, dan bila `startDate` **dan** `endDate` sama-sama membawa komponen jam (`/[T ]\d{2}:\d{2}/`) maka `endTime >= startTime` (pesan `endDate time must not be before startDate time`) — tanpa ini setiap hari akan berakhir sebelum mulai.
+
 ### Contoh payload `dates`
 
 ```json
@@ -364,13 +374,11 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 
 - **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
 - `approvedAt` = **audit marker "pertama kali terbit"** (server-managed): di-set `existing.approvedAt ?? now` saat transisi `approve`/`publish`, atau saat `create`/`update` menghasilkan `PUBLISHED`. **Bukan** penanda status `APPROVED`.
-- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` menerima `DRAFT → PUBLISHED` (jalur utama, mis. event hasil approve submission) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` menerima `DRAFT → PUBLISHED` (jalur utama) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
 - `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).
 - ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `event:publish`/`event:approve`) yang masih bisa memaksa `status`/`publishedAt` lewat body `PATCH`/`POST`; scope `network`/`own` dipaksa `DRAFT` saat create dan `status`/`publishedAt`-nya diabaikan saat update — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik event-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` ([Scoping Baca & Tulis](#scoping-baca--tulis)). Role bawaan `member`/`author` (seed baru) hanya punya `event:create/update/submit` (transisi sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi.
-- **`Event` `DRAFT` dari approve `event-submission`.** Modul `event-submission` (`event-submission.md` §5.2) membuat `Event` `DRAFT` saat admin approve submission, langsung lewat service modul tersebut (bukan `POST /events`); `createdBy` = admin penyetuju, `networkId` = hasil find-or-create `Network` dari `organiser` submission (event belum ada sebelum approve). Alur `event:submit`/`REQUEST` **dilewati** — event sudah `DRAFT`, jadi admin mengedit (`PATCH /events/:id`) lalu mem-publish lewat `event:publish`. Transisi `publish: DRAFT → PUBLISHED` **sudah diputuskan/ditambahkan** ke `EVENT_TRANSITIONS` (lihat tabel di atas; `APPROVED` deprecated tetap legacy). **RENCANA — belum ada di kode** saat catatan ini ditulis; tandai saat implementasi. Submission sumber **tetap menyimpan `eventId`** untuk audit (`EventSubmission.eventId`, `onDelete: SetNull`), bahkan setelah event diterbitkan.
-
 ### Scoping Baca & Tulis
 
 Row-level scoping (`AccessScopeService.resolve(userId, 'event')`, per-resource; lihat [rbac.md §10](./rbac.md#10-row-level-scoping)) membatasi baris `Event`:

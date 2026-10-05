@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { hash as argon2Hash } from '@node-rs/argon2';
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { hasAdminAccess } from '@app/libs/modules/permission/permission.constants';
 import { PermissionService } from '@app/libs/modules/permission/permission.service';
@@ -117,6 +118,35 @@ export class UserService {
       roleId: dto.roleId,
       networkId: dto.networkId,
     });
+  }
+
+  // Identitas submitter publik → User. Email sudah ada → pakai user itu apa adanya
+  // (jangan timpa data). Belum ada → buat user login-less: password acak tak diketahui,
+  // role/network null. `countryId` = ISO-2 (bukan numeric id) agar cocok `User.countryId`.
+  async findOrCreatePublicUser(input: {
+    fullName: string;
+    email: string;
+    countryId?: string | null;
+    stateId?: number | null;
+  }): Promise<UserEntity> {
+    const existing = await this.userRepository.findByEmail(input.email);
+    if (existing) return existing;
+
+    const passwordHash = await argon2Hash(randomUUID(), this.argon2Options());
+    try {
+      return await this.userRepository.create({
+        email: input.email,
+        fullName: input.fullName,
+        passwordHash,
+        countryId: input.countryId ?? null,
+        stateId: input.stateId ?? null,
+      });
+    } catch (e) {
+      // Race unique email (dua submit paralel) → pakai row yang menang; error lain rethrow.
+      const raced = await this.userRepository.findByEmail(input.email);
+      if (raced) return raced;
+      throw e;
+    }
   }
 
   async list(query: ListQueryDto, userId: string): Promise<{ items: UserEntity[]; total: number }> {

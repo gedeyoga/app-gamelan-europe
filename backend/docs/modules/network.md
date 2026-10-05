@@ -271,7 +271,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | --- | --- |
 | `list(query)` | `buildWhere` (filter + date) + `buildSearch` + `combineWhere` + `buildOrderBy`; delegasi ke repo. |
 | `findOne(id)` | `repository.findById`. |
-| `findOrCreateByName(name, { state?, country? })` | Find-or-create untuk approve submission publik (event-submission §5.2.1): `findByNameInsensitive(name)` → bila ada kembalikan; bila tidak → `repository.create({ name, state: state ?? null, country: country ?? null })`. Dipanggil di dalam transaksi approve. `name` tidak unik → bisa duplikat (typo); dedupe/merge = backlog. |
+| `findOrCreateByName(name, { state?, country? })` | Find-or-create untuk submit event publik (`POST /event-submissions`): `findByNameInsensitive(name)` → bila ada kembalikan; bila tidak → `repository.create({ name, state: state ?? null, country: country ?? null })`. Dipanggil di dalam transaksi submit. `name` tidak unik → bisa duplikat (typo); dedupe/merge = backlog. |
 | `create(dto)` | Petakan field DTO → `repository.create`. Bila `dto.content !== undefined` → simpan hasil `sanitizeStoryContent(dto.content)`. `website`/`contact` → `?? null`; `socialMedia` → `dto.socialMedia ?? undefined` (biarkan DB default NULL bila tidak dikirim). |
 | `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; `content` disanitasi via `sanitizeStoryContent` bila dikirim; `website`/`contact` ditulis apa adanya (termasuk `null`); `socialMedia`: `null` → `Prisma.DbNull`, selain itu array `[{ platform, url }]` apa adanya; body kosong → kembalikan `findOne(id)` tanpa update. |
 | `remove(id)` | `repository.remove`. |
@@ -280,7 +280,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 
 > Tidak ada row-level scoping di modul ini — CRUD network murni admin-only lewat permission. Scoping berbasis `networkId` diterapkan di modul `post`/`event`/`user` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)).
 
-> **Inter-module:** modul `event-submission` mengimpor `NetworkModule` dan memanggil `NetworkService.findOrCreateByName` saat approve — **bukan** query Prisma lintas modul. `NetworkModule` wajib meng-`exports` service/repository agar bisa di-inject (RULES bab 3/11).
+> **Inter-module:** modul `event` (jalur submit publik) mengimpor `NetworkModule` dan memanggil `NetworkService.findOrCreateByName` saat submit — **bukan** query Prisma lintas modul. `NetworkModule` wajib meng-`exports` service/repository agar bisa di-inject (RULES bab 3/11).
 
 ---
 

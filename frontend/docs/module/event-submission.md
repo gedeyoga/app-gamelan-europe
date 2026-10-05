@@ -1,5 +1,7 @@
 # Module: Event Submission (Admin) — Brief
 
+> **⛔ SUPERSEDED / REMOVED (2026-10).** Fitur `event-submission` **dihapus dari frontend**. Endpoint `/event-submissions*`, permission `event-submission:*`, folder `src/features/event-submission/`, komponen `dashboard-pending-submissions.tsx`, dan view type `DashboardPendingSubmissionItem` **sudah tidak ada**. Pengajuan publik kini langsung menulis ke `events` dengan `status=REQUEST` + field `source` (`PUBLIC`/`REGISTERED`); review admin memakai `GET /events?status=REQUEST` + `POST /events/:id/approve|reject` via hooks `features/event/hooks/*`. Dokumen ini dipertahankan hanya sebagai catatan historis.
+
 Dokumen ini mencatat bagian **sisi ADMIN** modul Event Submission pada frontend React: **API + hooks** untuk list usulan masuk + flow approve/reject, **dikonsumsi oleh container dashboard** (`src/app/routes/dashboard-home.tsx`). Mengikuti konvensi `frontend/AGENTS.md`.
 
 **Tujuan fitur**: consumer eksternal (website/pihak di luar EGS) mengirim usulan event lewat **API publik** backend → admin meninjau di **section dashboard** → usulan yang **di-approve direcreate backend menjadi row `Event` berstatus `DRAFT`** → admin **diarahkan ke editor `/events/:id/edit`** untuk mengedit, lalu **publish langsung** (alur publish existing, permission `event:publish`) agar tayang. **Reject = tidak dipindahkan** (usulan ditolak, tidak ada `Event` dibuat).

@@ -19,15 +19,22 @@ const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? val
 const trimLower = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
-// Cap durasi inklusif (dipakai juga saat approve membangun EventDate) — mencegah DoS tanggal (§8.8).
-export const MAX_EVENT_SUBMISSION_RANGE_DAYS = 31;
+// Cap durasi inklusif (dipakai saat enumerasi EventDate) — mencegah DoS tanggal.
+export const MAX_EVENT_RANGE_DAYS = 31;
 const MS_PER_DAY = 86_400_000;
+const TIME_RE = /[T ](\d{2}:\d{2})/;
+// "HH:mm" dari ISO lokal; string zero-padded → perbandingan lexikografis = kronologis.
+
+function toTimeParts(iso: string): string {
+  const m = TIME_RE.exec(iso);
+  return m ? m[1] : '';
+}
 
 // Cross-field `endDate` vs `startDate`: endDate >= startDate DAN rentang inklusif <= 31 hari.
-function IsEventSubmissionDateRange(validationOptions?: ValidationOptions) {
+function IsEventDateRange(validationOptions?: ValidationOptions) {
   return (object: object, propertyName: string) => {
     registerDecorator({
-      name: 'isEventSubmissionDateRange',
+      name: 'isEventDateRange',
       target: object.constructor,
       propertyName,
       options: validationOptions,
@@ -49,16 +56,22 @@ function rangeError(obj: { startDate?: string; endDate?: string }): string | nul
   const end = Date.parse(obj.endDate);
   if (Number.isNaN(start) || Number.isNaN(end)) return null; // format ditangani @IsISO8601
   if (end < start) return 'endDate must not be before startDate';
+  // Jam diterapkan identik ke tiap hari → endTime < startTime bikin tiap hari berakhir sebelum mulai.
+  if (TIME_RE.test(obj.startDate) && TIME_RE.test(obj.endDate)) {
+    const startTime = toTimeParts(obj.startDate);
+    const endTime = toTimeParts(obj.endDate);
+    if (endTime < startTime) return 'endDate time must not be before startDate time';
+  }
   const inclusiveDays = Math.floor((end - start) / MS_PER_DAY) + 1;
-  if (inclusiveDays > MAX_EVENT_SUBMISSION_RANGE_DAYS) {
-    return `date range must not exceed ${MAX_EVENT_SUBMISSION_RANGE_DAYS} days`;
+  if (inclusiveDays > MAX_EVENT_RANGE_DAYS) {
+    return `date range must not exceed ${MAX_EVENT_RANGE_DAYS} days`;
   }
   return null;
 }
 
-// Section `author` (data pengirim) — section tersendiri, terpisah dari geo/organiser event.
+// Section `author` (data pengirim) — dipakai find-or-create User publik.
 // Cross-field `author.stateId` milik `author.countryId` dicek di service → 422 `author.stateId`.
-export class EventSubmissionAuthorDto {
+export class PublicEventAuthorDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
@@ -80,7 +93,8 @@ export class EventSubmissionAuthorDto {
   stateId?: number;
 }
 
-export class CreateEventSubmissionDto {
+// Bentuk body sama dengan `CreateEventSubmissionDto` lama (kontrak konsumen eksternal EGS).
+export class CreatePublicEventDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
@@ -91,7 +105,7 @@ export class CreateEventSubmissionDto {
   startDate: string;
 
   @IsISO8601()
-  @IsEventSubmissionDateRange()
+  @IsEventDateRange()
   endDate: string;
 
   @Type(() => Number)
@@ -112,8 +126,8 @@ export class CreateEventSubmissionDto {
   // Section terpisah "data pengirim" (wajib) — bukan bagian dari geo/organiser event.
   @IsNotEmptyObject()
   @ValidateNested()
-  @Type(() => EventSubmissionAuthorDto)
-  author: EventSubmissionAuthorDto;
+  @Type(() => PublicEventAuthorDto)
+  author: PublicEventAuthorDto;
 
   @IsUUID('4')
   eventTypeId: string;

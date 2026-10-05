@@ -1,6 +1,6 @@
 # Module: Archive Submission
 
-Menu: [archive.md](./archive.md) (resource tujuan) · [event-submission.md](./event-submission.md) (pola acuan) · [rbac.md](./rbac.md) (master)
+Menu: [archive.md](./archive.md) (resource tujuan) · [rbac.md](./rbac.md) (master)
 
 > **STATUS: RENCANA — BELUM DIIMPLEMENTASIKAN.** Tidak ada `schema.prisma` entry, service, repository, controller, DTO, permission seed, maupun migration untuk `ArchiveSubmission` saat dokumen ini ditulis. Semua isi dokumen bersifat **spesifikasi final yang akan diimplementasikan**. Tandai setiap langkah saat mulai mengerjakan. Dokumen ini **hanya brief** — tidak ada kode yang diubah oleh dokumen ini.
 
@@ -41,7 +41,7 @@ apps/app/src/controllers/
 └── archive-submissions.controller.ts   ← controller di apps/, bukan libs (RULES bab 3)
 ```
 
-Alur baku `Controller → Service → Repository → Prisma`; repository satu-satunya tempat query Prisma (RULES bab 3). Modul didaftarkan di `libs/src/libs.module.ts` (imports + exports) dan controller di `apps/app/src/app.module.ts` — mengikuti modul `event-submission`.
+Alur baku `Controller → Service → Repository → Prisma`; repository satu-satunya tempat query Prisma (RULES bab 3). Modul didaftarkan di `libs/src/libs.module.ts` (imports + exports) dan controller di `apps/app/src/app.module.ts` — mengikuti pola modul `archive`.
 
 Perubahan file existing (rencana):
 
@@ -160,7 +160,7 @@ export type ArchiveSubmissionResponse = Omit<ArchiveSubmissionListItem, 'attachm
 };
 ```
 
-`mapArchiveSubmission()` mem-flatten `archive` → `{ id, status }` (null bila kosong), mengikuti pola `mapEventSubmission()`. Join shape mentah tidak bocor ke service/controller. List admin **wajib** menyertakan rujukan `archive` (id + status), bukan hanya `archiveId`.
+`mapArchiveSubmission()` mem-flatten `archive` → `{ id, status }` (null bila kosong), mengikuti pola mapper modul ini. Join shape mentah tidak bocor ke service/controller. List admin **wajib** menyertakan rujukan `archive` (id + status), bukan hanya `archiveId`.
 
 - **List**: `attachmentCount = attachmentIds.length`; `attachmentIds` mentah dibuang. Tanpa lookup dokumen (murah, hindari N+1 — mirror `ArchiveService.toListItem`).
 - **Detail** (`GET /archive-submissions/:id`): `attachmentIds` diselesaikan via `DocumentRepository.findByIds` + `DocumentService.toDocumentResponse`, hasil `attachments: DocumentResponse[]` **berurut** sesuai `attachmentIds`. Raw `attachmentIds` tidak dikembalikan — **mirror `ArchiveService.hydrate`**.
@@ -218,7 +218,7 @@ File: `libs/src/modules/archive-submission/dto/create-archive-submission.dto.ts`
 
 ### `ReviewArchiveSubmissionDto`
 
-File: `libs/src/modules/archive-submission/dto/review-archive-submission.dto.ts`. Mirror `ReviewEventSubmissionDto`.
+File: `libs/src/modules/archive-submission/dto/review-archive-submission.dto.ts`. Body opsional `{ adminNote? }`.
 
 ```typescript
 import { Transform } from 'class-transformer';
@@ -259,7 +259,7 @@ Semua path prefix **`/api/v1`** (RULES bab 1). Sukses `{ data, message }`; list 
 | POST | `/api/v1/archive-submissions/thumbnail` | Upload thumbnail usulan | multipart `file` | 201 `{ data: ImageResponse, message }` |
 | POST | `/api/v1/archive-submissions/attachments` | Upload **PDF** attachment usulan | multipart `file` (`application/pdf`) | 201 `{ data: DocumentResponse, message }` |
 
-- `POST /archive-submissions` → service `create()` men-set `status=REQUEST`, lalu balikan **hanya** `{ id, status }` (bukan seluruh row/PII echo, §8 poin 11). Throttle ~**5/menit** (`ThrottlerGuard` + `@Throttle`, mirror event-submission). 422 validasi per-field. Bila `attachments` dikirim, service memvalidasi tiap id sebelum insert (§4).
+- `POST /archive-submissions` → service `create()` men-set `status=REQUEST`, lalu balikan **hanya** `{ id, status }` (bukan seluruh row/PII echo, §8 poin 11). Throttle ~**5/menit** (`ThrottlerGuard` + `@Throttle`). 422 validasi per-field. Bila `attachments` dikirim, service memvalidasi tiap id sebelum insert (§4).
 - `POST /archive-submissions/thumbnail` → panggil `ImageService.upload(file, 'archive-submission')`; **hardcode** `entityType` di controller, **jangan** terima dari body publik. Throttle ~**10/menit**. Balikan `ImageResponse` (`{ id, url, key, filename, mimeType, size, width, height, variants[] }` — bentuk `ImageService.toImageResponse`). Key S3 memakai prefix existing `posts/...` (image service tidak diubah).
 - `POST /archive-submissions/attachments` → `@Public()` + `@UseGuards(ThrottlerGuard)` + `@Throttle({ default: { limit: 10, ttl: 60_000 } })` (mirror thumbnail) + `@UseInterceptors(DocumentUploadInterceptor)`. Controller memanggil `DocumentService.upload(file, 'archive-submission')` — **`entityType` di-hardcode server-side**, body `entityType` **tidak** diterima dari publik. PDF-only + max `UPLOAD_DOCUMENT_MAX_SIZE_MB` (10) ditegakkan interceptor + `DocumentService` (magic-byte `%PDF-`). Balikan 201 `{ data: DocumentResponse, message }`, `DocumentResponse = { id, url, key, filename, mimeType, size }` (**tanpa** `width`/`height`/`variants`). Bentuk sama dengan `POST /documents` existing, hanya publik + `entityType='archive-submission'`. Baris `Document` tersimpan `entityId=null` (belum ter-bind); FE mengirim id-nya lewat `attachments` saat `POST /archive-submissions`.
 
@@ -321,18 +321,18 @@ Contoh respons upload attachment (PDF):
 | POST | `/api/v1/archive-submissions/:id/approve` | `archive-submission:approve` | body opsional `{ adminNote? }` | 200 `{ data: { submission, archive: { id, status: 'DRAFT' } }, message }` |
 | POST | `/api/v1/archive-submissions/:id/reject` | `archive-submission:reject` | body `{ adminNote? }` | 200 `{ data, message }` |
 
-- `GET /archive-submissions` — list paginasi + search + sort (kontrak §5.3). **Dashboard admin memakai endpoint ini** (tanpa endpoint dashboard/stats baru): `GET /archive-submissions?filter[status]=REQUEST`; jumlah cukup dibaca dari `meta.total` per filter. Controller mengembalikan `{ data: items, meta: { page, limit: Math.min(query.limit ?? 20, 100), total } }` (ikuti `event-submissions.controller.ts`).
+- `GET /archive-submissions` — list paginasi + search + sort (kontrak §5.3). **Dashboard admin memakai endpoint ini** (tanpa endpoint dashboard/stats baru): `GET /archive-submissions?filter[status]=REQUEST`; jumlah cukup dibaca dari `meta.total` per filter. Controller mengembalikan `{ data: items, meta: { page, limit: Math.min(query.limit ?? 20, 100), total } }`.
 - `GET /archive-submissions/:id` — `ParseUUIDPipe`; tidak ada → 404 `NotFoundException('Archive submission not found')`. **Hydrate** `attachments: DocumentResponse[]` berurut via `DocumentRepository.findByIds` + `DocumentService.toDocumentResponse` (mirror `ArchiveService.hydrate`); raw `attachmentIds` **tidak** dikembalikan.
 - `GET /archive-submissions` (list) — item memakai `attachmentCount` (`attachmentIds.length`), **tanpa** hydrate dokumen; raw `attachmentIds` **tidak** dikembalikan (hindari N+1).
 - `POST .../approve` — **membuat `Archive` `status=DRAFT`** dalam satu transaksi (alur lengkap §5.2.1). Response menyertakan `archive.id` agar FE admin dapat **redirect ke `/archives/:id/edit`**. Body opsional `{ adminNote? }`.
 - `POST .../reject` — set `status=REJECTED`, `reviewedBy=user.id`, `reviewedAt=now`. Body `{ adminNote? }`. **Tidak** membuat `Archive`.
-- Perubahan status pada row yang **sudah final** (`APPROVED`/`REJECTED`) → **409** `ConflictException` (mis. `Cannot approve archive submission in status APPROVED`). Conditional update (`updateMany` dengan `where: { id, status: REQUEST }`) menutup race, mengikuti pola `EventSubmissionRepository` (event-submission.md §5.2).
+- Perubahan status pada row yang **sudah final** (`APPROVED`/`REJECTED`) → **409** `ConflictException` (mis. `Cannot approve archive submission in status APPROVED`). Conditional update (`updateMany` dengan `where: { id, status: REQUEST }`) menutup race, mengikuti pola `ArchiveSubmissionRepository`.
 
 #### 5.2.1 `POST /:id/approve` — alur transaksional (approve → insert `archives` sebagai `DRAFT`)
 
 **Wajib** dibungkus `prisma.$transaction` agar `Archive` + tautan `archiveId` atomik. Urutan:
 
-1. **Conditional update** `archiveSubmission.updateMany({ where: { id, status: 'REQUEST' }, data: { status: 'APPROVED', reviewedBy, reviewedAt: now, adminNote? } })`. `count === 0` → **404** (row tidak ada) atau **409** (sudah final) — bedakan dengan `findUnique` bila perlu pesan akurat (pola `updateStatusFinal` event-submission).
+1. **Conditional update** `archiveSubmission.updateMany({ where: { id, status: 'REQUEST' }, data: { status: 'APPROVED', reviewedBy, reviewedAt: now, adminNote? } })`. `count === 0` → **404** (row tidak ada) atau **409** (sudah final) — bedakan dengan `findUnique` bila perlu pesan akurat.
 2. **Buat `Archive`**: pakai `ArchiveService.create(...)` di dalam transaksi. **Signature existing berbeda dari contoh brief** — kode nyata: `ArchiveService.create(dto: CreateArchiveDto, userId: string): Promise<ArchiveResponse>` (`libs/src/modules/archive/archive.service.ts`). Panggilan persis:
 
    ```typescript
@@ -515,7 +515,7 @@ Seed di `libs/prisma/seed-data.ts` (`DEFAULT_PERMISSIONS`, dikonsumsi `libs/pris
 
 **Rencana.** Endpoint tulis publik tanpa auth = permukaan serangan terbuka. Pertahanan konkret (per poin, wajib ditandai saat implementasi). `ThrottlerModule` **sudah ada** di `apps/app/src/app.module.ts` (global) — cukup pakai `@UseGuards(ThrottlerGuard)` + `@Throttle` per route (tidak perlu tambah dep).
 
-1. **Rate limit** — `POST /archive-submissions` (~**5/menit**) + `POST /archive-submissions/thumbnail` (~**10/menit**) + `POST /archive-submissions/attachments` (~**10/menit**), per-IP, mirror event-submission. **Wajib** `app.set('trust proxy', 1)` (Express) agar IP benar di belakang reverse proxy; tanpa ini semua request terlihat dari IP proxy → throttle per-IP bocor.
+1. **Rate limit** — `POST /archive-submissions` (~**5/menit**) + `POST /archive-submissions/thumbnail` (~**10/menit**) + `POST /archive-submissions/attachments` (~**10/menit**), per-IP. **Wajib** `app.set('trust proxy', 1)` (Express) agar IP benar di belakang reverse proxy; tanpa ini semua request terlihat dari IP proxy → throttle per-IP bocor.
 2. **Validasi ketat** — global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`. DTO pakai `@MaxLength`/`@ArrayMaxSize` (§4). `forbidNonWhitelisted` menolak field asing → `status`/`reviewedBy`/`archiveId`/`categoryIds`/`documentIds` **tidak bisa disuntik** dari body; server yang menentukannya. Set **body JSON limit** ketat untuk route publik (mis. **64–100 kb**).
 3. **Upload hardening (thumbnail/gambar)** — pertahankan MIME allowlist + size cap (`UPLOAD_MAX_SIZE_MB`), **tambah**: sniff **magic bytes** (bukan cuma header `Content-Type`), **tolak SVG** (XSS), re-encode/downscale via `ImageProcessor` (strip EXIF + normalisasi format), key acak UUID (sudah), `entityType` **di-hardcode server-side** (`'archive-submission'`, jangan dari body).
 3b. **Upload hardening (PDF attachment publik = abuse surface).** `POST /archive-submissions/attachments` menerima file anonim, jadi dipertahankan ketat:
@@ -530,7 +530,7 @@ Seed di `libs/prisma/seed-data.ts` (`DEFAULT_PERMISSIONS`, dikonsumsi `libs/pris
 4. **Thumbnail URL trust** — `POST /archive-submissions` hanya menerima URL milik storage EGS: `imageService.isTrustedUnboundUrl(url, 'archive-submission')` (prefix `S3_PUBLIC_BASE_URL` **DAN** baris `Image` `entityType='archive-submission'` & `entityId=null`). Selain itu → **422** `thumbnail must reference an uploaded EGS image`. Cegah SSRF/hotlink ke domain asing.
 5. **CORS** — origin **allowlist dari env** (domain website EGS), bukan `*`; `credentials: false` untuk route publik (tanpa cookie).
 6. **Bot mitigation** — honeypot tersembunyi (mis. field `website` harus kosong) → bila terisi, tolak. Rekomendasi captcha (**Cloudflare Turnstile**) sebagai **opsional**: bila diaktifkan, verifikasi token di **controller/service** (bukan DTO), env untuk secret; jangan log token.
-7. **Anti-duplikat/abuse** — tolak duplikat identik (`name`) dalam window singkat (mis. **10 menit**) → **409**, mirror `DUPLICATE_WINDOW_MS` event-submission (`$transaction` `Serializable` menutup race insert). Opsional cap per-IP/hari.
+7. **Anti-duplikat/abuse** — tolak duplikat identik (`name`) dalam window singkat (mis. **10 menit**) → **409** (`$transaction` `Serializable` menutup race insert). Opsional cap per-IP/hari.
 8. **Anti stored-XSS** — `description` adalah teks biasa (textarea), bukan rich HTML; tetap escape bila FE merender sebagai HTML. `externalLinks` hanya URL tervalidasi (`@IsUrl`) — cegah `javascript:`/`data:`.
 9. **Privasi/GDPR (Eropa)** — simpan data minimum (tidak ada identitas submitter, §9.3). Bila IP disimpan untuk anti-abuse, simpan **hash** (bukan mentah) dan sebut retensi/log. Jangan simpan PII yang tak perlu.
 10. **No info leak** — respons `POST` publik hanya `{ id, status }` (§5.1), **jangan** echo row/PII. Error generik, **tanpa stack trace**.

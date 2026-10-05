@@ -22,24 +22,24 @@ describe('ImageService.isTrustedUnboundUrl', () => {
   });
 
   it('URL di luar prefix S3 → false, tanpa query', async () => {
-    await expect(service.isTrustedUnboundUrl('https://evil.test/posts/original/x.png', 'event-submission')).resolves.toBe(false);
+    await expect(service.isTrustedUnboundUrl('https://evil.test/posts/original/x.png', 'event')).resolves.toBe(false);
     expect(findUnboundById).not.toHaveBeenCalled();
   });
 
   it('key tanpa uuid → false, tanpa query', async () => {
-    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/nope.png`, 'event-submission')).resolves.toBe(false);
+    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/nope.png`, 'event')).resolves.toBe(false);
     expect(findUnboundById).not.toHaveBeenCalled();
   });
 
   it('row tidak ada / sudah terikat → false', async () => {
     findUnboundById.mockResolvedValue(null);
-    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/${UUID}.png`, 'event-submission')).resolves.toBe(false);
-    expect(findUnboundById).toHaveBeenCalledWith(UUID, 'event-submission');
+    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/${UUID}.png`, 'event')).resolves.toBe(false);
+    expect(findUnboundById).toHaveBeenCalledWith(UUID, 'event');
   });
 
   it('key original cocok → true', async () => {
     findUnboundById.mockResolvedValue({ id: UUID, key: `posts/original/${UUID}.png`, variants: [] });
-    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/${UUID}.png`, 'event-submission')).resolves.toBe(true);
+    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/${UUID}.png`, 'event')).resolves.toBe(true);
   });
 
   it('key varian cocok → true', async () => {
@@ -48,7 +48,7 @@ describe('ImageService.isTrustedUnboundUrl', () => {
       key: `posts/original/${UUID}.png`,
       variants: [{ name: 'large', key: `posts/${UUID}-large.webp` }],
     });
-    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/${UUID}-large.webp`, 'event-submission')).resolves.toBe(true);
+    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/${UUID}-large.webp`, 'event')).resolves.toBe(true);
   });
 
   it('row ada tapi key/variants tidak cocok → false', async () => {
@@ -57,6 +57,6 @@ describe('ImageService.isTrustedUnboundUrl', () => {
       key: `posts/original/${UUID}.png`,
       variants: [{ name: 'large', key: `posts/${UUID}-large.webp` }],
     });
-    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/other-${UUID}.png`, 'event-submission')).resolves.toBe(false);
+    await expect(service.isTrustedUnboundUrl(`${BASE}/posts/original/other-${UUID}.png`, 'event')).resolves.toBe(false);
   });
 });

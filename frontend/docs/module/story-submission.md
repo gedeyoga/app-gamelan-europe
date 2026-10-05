@@ -1,5 +1,7 @@
 # Module: Story Submission (Admin) — Brief
 
+> **⛔ SUPERSEDED / REMOVED (2026-10).** Fitur `story-submission` **dihapus dari frontend**. Endpoint `/story-submissions*`, permission `story-submission:*`, route `/story-submissions/:id`, folder `src/features/story-submission/`, komponen `dashboard-pending-story-submissions.tsx`, dan view type `DashboardPendingStorySubmissionItem` **sudah tidak ada**. Pengajuan publik kini langsung menulis ke `posts` dengan `status=REQUEST` + field `source` (`PUBLIC`/`REGISTERED`); review admin memakai `GET /posts?status=REQUEST` + `POST /posts/:id/approve|reject` via hooks `features/story/hooks/*`. Dokumen ini dipertahankan hanya sebagai catatan historis.
+
 Dokumen ini mencatat bagian **sisi ADMIN** modul Story Submission pada frontend React: **API + hooks** untuk list usulan story masuk + flow approve/reject, **dikonsumsi oleh container dashboard** (`src/app/routes/dashboard-home.tsx`). Mengikuti konvensi `frontend/AGENTS.md` dan meniru persis brief analog `docs/module/archive-submission.md`.
 
 **Tujuan fitur**: consumer eksternal (website/pihak di luar EGS) mengirim usulan story lewat **API publik** backend → admin meninjau di **section dashboard** → usulan yang **di-approve direcreate backend menjadi row `Post`/`Story` berstatus `DRAFT`** → admin **diarahkan ke editor `/stories/:id/edit`** untuk mengedit, lalu **publish langsung** (alur publish existing, permission `story:publish`) agar tayang. **Reject = tidak dipindahkan** (usulan ditolak, tidak ada `Post` dibuat).

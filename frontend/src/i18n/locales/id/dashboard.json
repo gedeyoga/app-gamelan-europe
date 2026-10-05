@@ -43,16 +43,6 @@
       "error": "Gagal memuat data.",
       "publicEmpty": "Belum ada usulan arsip publik."
     },
-    "pendingSubmissions": {
-      "empty": "Tidak ada usulan event yang menunggu review.",
-      "error": "Gagal memuat data."
-    },
-    "pendingStorySubmissions": {
-      "title": "Usulan Story Publik",
-      "subtitle": "Usulan story dari publik yang menunggu review.",
-      "empty": "Tidak ada usulan story publik yang menunggu review.",
-      "error": "Gagal memuat data."
-    },
     "pendingStories": {
       "title": "Story Menunggu Persetujuan",
       "subtitle": "Story yang diajukan member dan publik.",
@@ -68,47 +58,16 @@
     }
   },
   "column": {
-    "member": "Pengajuan Member",
-    "public": "Usulan Publik"
+    "member": "Pengajuan Member"
   },
   "pending": {
     "approve": "Setujui",
     "reject": "Tolak",
-    "viewDetail": "Lihat detail",
     "unknown": "Penyelenggara tidak diketahui"
   },
-  "pendingSubmission": {
-    "approve": "Setujui",
-    "reject": "Tolak",
-    "statusRequest": "Diajukan",
-    "unknown": "Penyelenggara tidak diketahui",
-    "approved": "Usulan event disetujui.",
-    "rejected": "Usulan event ditolak.",
-    "approveFailed": "Gagal menyetujui usulan.",
-    "rejectFailed": "Gagal menolak usulan.",
-    "confirmApproveTitle": "Setujui usulan ini?",
-    "confirmApproveDescription": "Draft event akan dibuat. Anda akan diarahkan ke editornya.",
-    "confirmRejectTitle": "Tolak usulan ini?",
-    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada event yang dibuat.",
-    "confirmCancel": "Batal",
-    "confirmSubmit": "Konfirmasi"
-  },
-  "pendingStorySubmission": {
-    "approve": "Setujui",
-    "reject": "Tolak",
-    "statusRequest": "Diajukan",
-    "galleryCount": "Gambar galeri",
-    "flyerCount": "Flyer",
-    "approved": "Usulan story disetujui.",
-    "rejected": "Usulan story ditolak.",
-    "approveFailed": "Gagal menyetujui usulan story.",
-    "rejectFailed": "Gagal menolak usulan story.",
-    "confirmApproveTitle": "Setujui usulan story ini?",
-    "confirmApproveDescription": "Draft story akan dibuat. Anda akan diarahkan ke editornya.",
-    "confirmRejectTitle": "Tolak usulan story ini?",
-    "confirmRejectDescription": "Tindakan ini tidak bisa dibatalkan. Tidak ada story yang dibuat.",
-    "confirmCancel": "Batal",
-    "confirmSubmit": "Konfirmasi"
+  "source": {
+    "PUBLIC": "Publik",
+    "REGISTERED": "Member"
   },
   "card": {
     "noThumbnail": "Tanpa thumbnail",

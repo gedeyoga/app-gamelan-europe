@@ -48,6 +48,10 @@
     "PUBLIC": "Public",
     "PRIVATE": "Members Only"
   },
+  "source": {
+    "PUBLIC": "Public",
+    "REGISTERED": "Member"
+  },
   "form": {
     "createTitle": "Add Story",
     "editTitle": "Edit Story",

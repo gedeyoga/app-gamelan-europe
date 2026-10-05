@@ -1,16 +1,22 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { CategoryType, ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
+import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
+import { CategoryRepository } from '@app/libs/modules/category/category.repository';
+import { CountryRepository } from '@app/libs/modules/country/country.repository';
+import { StateRepository } from '@app/libs/modules/state/state.repository';
 import { ImageRepository } from '@app/libs/modules/image/image.repository';
 import { ImageService } from '@app/libs/modules/image/image.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
+import { UserService } from '@app/libs/modules/user/user.service';
 import { PostRepository, CreatePostData, UpdatePostData } from './post.repository';
 import { PostEntity, PostFlyerItem, PostResponse } from './entities/post.entity';
 import { assertUniqueFlyerItems } from '@app/libs/common/utils/flyer.util';
 import { CreatePostDto } from './dto/create-post.dto';
+import { CreatePublicPostDto } from './dto/create-public-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { slugify } from './utils/slug.util';
 
@@ -39,6 +45,10 @@ export class PostService {
     private readonly imageRepository: ImageRepository,
     private readonly imageService: ImageService,
     private readonly userRepository: UserRepository,
+    private readonly userService: UserService,
+    private readonly categoryRepository: CategoryRepository,
+    private readonly countryRepository: CountryRepository,
+    private readonly stateRepository: StateRepository,
     private readonly storage: StorageService,
     private readonly accessScope: AccessScopeService,
   ) {}
@@ -244,6 +254,7 @@ export class PostService {
       content: dto.content ?? '',
       thumbnail: dto.thumbnail,
       status: autoPublish ? ContentStatus.PUBLISHED : status,
+      source: ContentSource.REGISTERED,
       visibility: dto.visibility ?? ContentVisibility.PUBLIC,
       createdBy,
       publishedAt: autoPublish
@@ -293,6 +304,109 @@ export class PostService {
       }
     }
     throw new ConflictException('Slug already exists');
+  }
+
+  // Submit publik (tanpa JWT): tulis langsung `Post` status REQUEST, source PUBLIC.
+  // Validasi/kontrak body sama dengan form EGS lama; respons hanya { id, status } (tanpa PII echo).
+  // ponytail: window anti-duplikat 10 menit dihapus — throttle 5/60s sudah cukup; tambah lagi bila spam muncul.
+  async createPublicSubmission(dto: CreatePublicPostDto): Promise<{ id: string; status: ContentStatus }> {
+    const country = await this.countryRepository.findByIdOrNull(dto.submitter.countryId);
+    if (!country) {
+      throw this.validationError('submitter.countryId', 'submitter.countryId does not exist');
+    }
+    if (dto.submitter.stateId !== undefined) {
+      const state = await this.stateRepository.findByIdOrNull(dto.submitter.stateId);
+      if (!state || state.countryId !== dto.submitter.countryId) {
+        throw this.validationError('submitter.stateId', 'submitter.stateId must belong to submitter.countryId');
+      }
+    }
+
+    await this.assertStoryCategories(dto.categoryIds);
+
+    assertUniqueFlyerItems(dto.flyerItems);
+    // Buang id gambar asing / sudah ter-bind (post belum ada → hanya gambar unbound entityType `post`).
+    const galleryImageIds = await this.imageRepository.filterBindableIds(dto.galleryImageIds ?? [], 'post', null);
+    const flyerItems: PostFlyerItem[] =
+      dto.flyerItems ??
+      (dto.flyerImageIds && dto.flyerImageIds.length > 0
+        ? [{ type: 'flyer', imageIds: dto.flyerImageIds }]
+        : []);
+    const filteredFlyerItems = await Promise.all(
+      flyerItems.map(async (item) => ({
+        type: item.type,
+        imageIds: await this.imageRepository.filterBindableIds(item.imageIds, 'post', null),
+      })),
+    );
+
+    const thumbnail = dto.thumbnail?.trim() || null;
+    if (thumbnail) {
+      const trusted = await this.imageService.isTrustedUnboundUrl(thumbnail, 'post');
+      if (!trusted) {
+        throw this.validationError('thumbnail', 'thumbnail must reference an uploaded EGS image');
+      }
+    }
+
+    // Sanitasi server-side (stored-XSS); payload murni tag jadi kosong → tolak.
+    const content = sanitizeStoryContent(dto.content);
+    if (!content.trim()) {
+      throw this.validationError('content', 'content must not be empty');
+    }
+
+    const user = await this.userService.findOrCreatePublicUser({
+      fullName: dto.submitter.fullName,
+      email: dto.submitter.email,
+      countryId: country.iso2,
+      stateId: dto.submitter.stateId ?? null,
+    });
+
+    const base = slugify(dto.name);
+    const data: CreatePostData = {
+      name: dto.name,
+      slug: await this.uniqueSlug(base),
+      content,
+      thumbnail: thumbnail ?? undefined,
+      status: ContentStatus.REQUEST,
+      source: ContentSource.PUBLIC,
+      visibility: ContentVisibility.PUBLIC,
+      createdBy: user.id,
+      categoryIds: dto.categoryIds ?? [],
+      authorIds: [user.id],
+      galleryImageIds,
+      flyerItems: filteredFlyerItems,
+    };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const post = await this.postRepository.create(data);
+        return { id: post.id, status: post.status };
+      } catch (e) {
+        if (!(e instanceof ConflictException)) throw e;
+        data.slug = await this.uniqueSlug(base);
+      }
+    }
+    throw new ConflictException('Slug already exists');
+  }
+
+  // Kategori STORY untuk dropdown form publik (tanpa auth).
+  async listStoryCategories(): Promise<{ items: { id: string; name: string }[]; total: number }> {
+    const { items, total } = await this.categoryRepository.findMany({
+      where: { type: CategoryType.STORY },
+      skip: 0,
+      take: 100,
+      orderBy: { name: 'asc' },
+    });
+    return { items: items.map((category) => ({ id: category.id, name: category.name })), total };
+  }
+
+  private async assertStoryCategories(categoryIds?: string[]): Promise<void> {
+    if (!categoryIds || categoryIds.length === 0) return;
+    const categories = await this.categoryRepository.findByIds(categoryIds);
+    const byId = new Map(categories.map((category) => [category.id, category]));
+    for (let i = 0; i < categoryIds.length; i++) {
+      const category = byId.get(categoryIds[i]);
+      if (!category || category.type !== CategoryType.STORY) {
+        throw this.validationError(`categoryIds.${i}`, 'category not found or not a STORY category');
+      }
+    }
   }
 
   async update(id: string, dto: UpdatePostDto, userId: string): Promise<PostResponse> {

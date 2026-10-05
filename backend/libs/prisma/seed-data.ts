@@ -69,15 +69,9 @@ export const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'archive:reject', description: 'Menolak archive (REQUEST -> DRAFT)' },
   { code: 'archive:publish', description: 'Menerbitkan archive (APPROVED -> PUBLISHED)' },
   { code: 'archive:unpublish', description: 'Menarik archive dari publikasi (PUBLISHED -> DRAFT)' },
-  { code: 'event-submission:read', description: 'Melihat daftar/detail usulan event' },
-  { code: 'event-submission:approve', description: 'Menyetujui usulan event + recreate ke tabel events (DRAFT)' },
-  { code: 'event-submission:reject', description: 'Menolak usulan event' },
   { code: 'archive-submission:read', description: 'Melihat daftar/detail usulan archive' },
   { code: 'archive-submission:approve', description: 'Menyetujui usulan archive + recreate ke tabel archives (DRAFT)' },
   { code: 'archive-submission:reject', description: 'Menolak usulan archive' },
-  { code: 'story-submission:read', description: 'Melihat daftar/detail usulan story' },
-  { code: 'story-submission:approve', description: 'Menyetujui usulan story + recreate ke tabel posts (DRAFT)' },
-  { code: 'story-submission:reject', description: 'Menolak usulan story' },
   // Gerbang manajemen user/role — HANYA role `admin` (dipetakan otomatis dari DEFAULT_PERMISSIONS).
   { code: 'admin:access', description: 'Akses penuh manajemen user/role (admin)' },
 ];

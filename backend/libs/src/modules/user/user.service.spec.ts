@@ -1,5 +1,8 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
 import { UserService } from './user.service';
+import { UserRepository } from './user.repository';
+import { RegisterUserDto } from './dto/register-user.dto';
 
 function makeService() {
   const userRepository = {
@@ -36,5 +39,36 @@ describe('UserService.remove', () => {
     userRepository.findById.mockRejectedValue(new NotFoundException('User not found'));
     await expect(service.remove('admin', 'admin')).rejects.toBeInstanceOf(NotFoundException);
     expect(userRepository.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('email case-insensitive', () => {
+  it('RegisterUserDto menormalkan email ke lowercase', () => {
+    expect(plainToInstance(RegisterUserDto, { email: ' BUDI@x.com ' }).email).toBe('budi@x.com');
+  });
+
+  it('submit publik "BUDI@x.com" memakai ulang user "budi@x.com", tanpa baris baru', async () => {
+    const stored = { id: 'existing', email: 'budi@x.com' };
+    // findFirst meniru Prisma `mode: 'insensitive'` (Postgres): cocok tanpa peduli casing.
+    const prisma = {
+      user: {
+        findFirst: jest.fn(({ where }: { where: { email: { equals: string } } }) =>
+          Promise.resolve(where.email.equals.toLowerCase() === stored.email ? stored : null),
+        ),
+        create: jest.fn(),
+      },
+    };
+    const repository = new UserRepository(prisma as never);
+    const service = new UserService(repository as never, {} as never, {} as never, {} as never);
+
+    const user = await service.findOrCreatePublicUser({ fullName: 'Budi', email: 'BUDI@x.com' });
+
+    expect(user).toBe(stored);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: { equals: 'budi@x.com', mode: 'insensitive' } },
+      }),
+    );
   });
 });

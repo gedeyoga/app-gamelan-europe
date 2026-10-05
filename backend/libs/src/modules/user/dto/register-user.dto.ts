@@ -9,7 +9,7 @@ const trimOrUndefined = ({ value }: { value: unknown }) => {
 };
 
 export class RegisterUserDto {
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   @IsNotEmpty()
   @MaxLength(255)

@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 export type FlyerItem = { type: string; imageIds: string[] };
 
 // Tipe unik (case-insensitive) & id gambar unik (dalam/antar grup) → 422 per-field.
-// Satu definisi dipakai `Post` & `StorySubmission` (jangan bercabang).
+// Satu definisi dipakai `Post` (jangan bercabang).
 export function assertUniqueFlyerItems(items?: ReadonlyArray<FlyerItem> | null): void {
   if (!items) return;
   const types = new Set<string>();

@@ -4,17 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
 import { DataTablePagination } from '@/components/shared/data-table-pagination'
 import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import { DashboardArchiveCard } from '@/features/dashboard/components/dashboard-archive-card'
@@ -22,10 +11,8 @@ import { DashboardApprovalColumn } from '@/features/dashboard/components/dashboa
 import { EventHighlightCard } from '@/components/shared/event-highlight-card'
 import { DashboardHero } from '@/features/dashboard/components/dashboard-hero'
 import { DashboardPendingArchives } from '@/features/dashboard/components/dashboard-pending-archives'
-import { DashboardPendingStorySubmissions } from '@/features/dashboard/components/dashboard-pending-story-submissions'
 import { DashboardPendingStories } from '@/features/dashboard/components/dashboard-pending-stories'
 import { DashboardPendingEvents } from '@/features/dashboard/components/dashboard-pending-events'
-import { DashboardPendingSubmissions } from '@/features/dashboard/components/dashboard-pending-submissions'
 import { DashboardSection } from '@/features/dashboard/components/dashboard-section'
 import { DashboardCardSkeleton } from '@/features/dashboard/components/dashboard-skeletons'
 import { DashboardStatCard } from '@/features/dashboard/components/dashboard-stat-card'
@@ -36,8 +23,6 @@ import type {
   DashboardPendingArchiveItem,
   DashboardPendingEventItem,
   DashboardPendingStoryItem,
-  DashboardPendingStorySubmissionItem,
-  DashboardPendingSubmissionItem,
   DashboardStoryItem,
 } from '@/features/dashboard/types'
 import { useAuth } from '@/features/auth/auth-provider'
@@ -49,18 +34,10 @@ import { useApproveEvent } from '@/features/event/hooks/use-approve-event'
 import { useEvents } from '@/features/event/hooks/use-events'
 import { useRejectEvent } from '@/features/event/hooks/use-reject-event'
 import { formatEventDate } from '@/features/event/lib/format'
-import { useApproveEventSubmission } from '@/features/event-submission/hooks/use-approve-event-submission'
-import { useEventSubmissions } from '@/features/event-submission/hooks/use-event-submissions'
-import { useRejectEventSubmission } from '@/features/event-submission/hooks/use-reject-event-submission'
-import { useApproveStorySubmission } from '@/features/story-submission/hooks/use-approve-story-submission'
-import { useStorySubmissions } from '@/features/story-submission/hooks/use-story-submissions'
-import { useRejectStorySubmission } from '@/features/story-submission/hooks/use-reject-story-submission'
 import { useStories } from '@/features/story/hooks/use-stories'
 import { useApproveStory } from '@/features/story/hooks/use-approve-story'
 import { useRejectStory } from '@/features/story/hooks/use-reject-story'
 import { useUsers } from '@/features/user/hooks/use-users'
-import { formatDate } from '@/lib/datetime'
-import { cn } from '@/lib/utils'
 import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from '@/lib/toast'
 
 const CARD_GRID_CLASS = 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3'
@@ -69,14 +46,6 @@ const STATE_MESSAGE_CLASS =
 const MAX_ITEMS = 6
 const PAGE = MAX_ITEMS
 const PENDING_LIMIT = 5
-
-/** Label rentang tanggal; satu tanggal bila mulai = selesai. */
-function formatDateRange(start: string, end: string): string | null {
-  if (!start) return null
-  const startLabel = formatDate(start)
-  const endLabel = end ? formatDate(end) : ''
-  return !endLabel || endLabel === startLabel ? startLabel : `${startLabel} – ${endLabel}`
-}
 
 export function DashboardHomePage() {
   const { t } = useTranslation('dashboard')
@@ -90,16 +59,12 @@ export function DashboardHomePage() {
   const isStoryModerator = canAny(['story:approve', 'story:reject'])
   const canReadUsers = can('user:read')
   const canReadArchives = can('archive:read')
-  const canReadSubmissions = can('event-submission:read')
-  const canReadStorySubmissions = can('story-submission:read')
   const [storiesPage, setStoriesPage] = useState(1)
   const [archivesPage, setArchivesPage] = useState(1)
   const [eventsPage, setEventsPage] = useState(1)
   const [pendingEventsPage, setPendingEventsPage] = useState(1)
   const [pendingArchivesPage, setPendingArchivesPage] = useState(1)
   const [pendingStoriesPage, setPendingStoriesPage] = useState(1)
-  const [pendingSubmissionsPage, setPendingSubmissionsPage] = useState(1)
-  const [pendingStorySubmissionsPage, setPendingStorySubmissionsPage] = useState(1)
   // Cutoff = awal hari ini UTC (bukan `Date.now()`) agar event "hari ini" tetap upcoming.
   // ponytail: cutoff diambil sekali per mount; upgrade ke live clock bila dashboard
   // harus tetap benar saat dibiarkan terbuka melewati tengah malam.
@@ -156,18 +121,6 @@ export function DashboardHomePage() {
     filter: { status: 'REQUEST' },
     enabled: isStoryModerator,
   })
-  const pendingSubmissionsQuery = useEventSubmissions({
-    page: pendingSubmissionsPage,
-    limit: PENDING_LIMIT,
-    filter: { status: 'REQUEST' },
-    enabled: canReadSubmissions,
-  })
-  const pendingStorySubmissionsQuery = useStorySubmissions({
-    page: pendingStorySubmissionsPage,
-    limit: PENDING_LIMIT,
-    filter: { status: 'REQUEST' },
-    enabled: canReadStorySubmissions,
-  })
   const totalEventsQuery = useEvents({ page: 1, limit: 1, enabled: isAdmin })
   const totalStoriesQuery = useStories({ page: 1, limit: 1, enabled: isAdmin })
   const totalMembersQuery = useUsers({ page: 1, limit: 1, enabled: isAdmin && canReadUsers })
@@ -178,17 +131,9 @@ export function DashboardHomePage() {
   const rejectArchive = useRejectArchive()
   const approveStory = useApproveStory()
   const rejectStory = useRejectStory()
-  const approveEventSubmission = useApproveEventSubmission()
-  const rejectEventSubmission = useRejectEventSubmission()
-  const approveStorySubmission = useApproveStorySubmission()
-  const rejectStorySubmission = useRejectStorySubmission()
   const [approveTargetId, setApproveTargetId] = useState<string | null>(null)
   const [archiveApproveTargetId, setArchiveApproveTargetId] = useState<string | null>(null)
   const [storyApproveTargetId, setStoryApproveTargetId] = useState<string | null>(null)
-  const [approveSubmissionId, setApproveSubmissionId] = useState<string | null>(null)
-  const [rejectSubmissionId, setRejectSubmissionId] = useState<string | null>(null)
-  const [approveStorySubmissionId, setApproveStorySubmissionId] = useState<string | null>(null)
-  const [rejectStorySubmissionId, setRejectStorySubmissionId] = useState<string | null>(null)
 
   const busyId = approveEvent.isPending
     ? approveEvent.variables?.id
@@ -206,18 +151,6 @@ export function DashboardHomePage() {
     ? approveStory.variables?.id
     : rejectStory.isPending
       ? rejectStory.variables
-      : undefined
-
-  const submissionBusyId = approveEventSubmission.isPending
-    ? approveEventSubmission.variables
-    : rejectEventSubmission.isPending
-      ? rejectEventSubmission.variables
-      : undefined
-
-  const storySubmissionBusyId = approveStorySubmission.isPending
-    ? approveStorySubmission.variables
-    : rejectStorySubmission.isPending
-      ? rejectStorySubmission.variables
       : undefined
 
   // Nilai kartu statistik admin: `…` saat memuat, `—` saat gagal, angka setelah ada data.
@@ -295,9 +228,10 @@ export function DashboardHomePage() {
         id: event.id,
         name: event.name,
         thumbnail: event.thumbnail,
-        creatorName: event.creator?.network?.name ?? event.creator?.fullName ?? null,
+        creatorName: event.network?.name ?? event.creator?.fullName ?? null,
         locationName: event.location?.name ?? null,
         dateLabel: event.dates[0] ? formatEventDate(event.dates[0]) : null,
+        source: event.source,
       })),
     [pendingQuery.data],
   )
@@ -323,36 +257,9 @@ export function DashboardHomePage() {
         thumbnail: story.thumbnail,
         creatorName: story.creator?.fullName ?? null,
         categories: story.categories.map((category) => category.name),
+        source: story.source,
       })),
     [pendingStoriesQuery.data],
-  )
-
-  const pendingSubmissions = useMemo<DashboardPendingSubmissionItem[]>(
-    () =>
-      (pendingSubmissionsQuery.data?.items ?? []).map((submission) => ({
-        id: submission.id,
-        title: submission.title,
-        thumbnail: submission.thumbnail ?? null,
-        organiser: submission.organiser,
-        country: submission.country?.name ?? null,
-        state: submission.state?.name ?? null,
-        dateLabel: formatDateRange(submission.startDate, submission.endDate),
-      })),
-    [pendingSubmissionsQuery.data],
-  )
-
-  const pendingStorySubmissions = useMemo<DashboardPendingStorySubmissionItem[]>(
-    () =>
-      (pendingStorySubmissionsQuery.data?.items ?? []).map((submission) => ({
-        id: submission.id,
-        name: submission.name,
-        thumbnail: submission.thumbnail ?? null,
-        categories: submission.categories.map((category) => category.name),
-        galleryCount: submission.galleryCount,
-        flyerCount: submission.flyerCount,
-        dateLabel: formatDate(submission.createdAt),
-      })),
-    [pendingStorySubmissionsQuery.data],
   )
 
   const eventsTotalPages = Math.max(1, Math.ceil(events.length / PAGE))
@@ -362,16 +269,6 @@ export function DashboardHomePage() {
   const pendingArchivesPages = Math.max(1, Math.ceil(pendingArchivesTotal / PENDING_LIMIT))
   const pendingStoriesTotal = pendingStoriesQuery.data?.total ?? 0
   const pendingStoriesPages = Math.max(1, Math.ceil(pendingStoriesTotal / PENDING_LIMIT))
-  const pendingSubmissionsTotal = pendingSubmissionsQuery.data?.total ?? 0
-  const pendingSubmissionsPages = Math.max(
-    1,
-    Math.ceil(pendingSubmissionsTotal / PENDING_LIMIT),
-  )
-  const pendingStorySubmissionsTotal = pendingStorySubmissionsQuery.data?.total ?? 0
-  const pendingStorySubmissionsPages = Math.max(
-    1,
-    Math.ceil(pendingStorySubmissionsTotal / PENDING_LIMIT),
-  )
 
   // Clamp boundary halaman klien bila daftar menyusut (mis. approve/reject item terakhir).
   useEffect(() => {
@@ -401,20 +298,6 @@ export function DashboardHomePage() {
       setPendingStoriesPage(pendingStoriesPages)
     }
   }, [pendingStoriesPage, pendingStoriesPages])
-
-  useEffect(() => {
-    if (pendingSubmissionsPage > pendingSubmissionsPages) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPendingSubmissionsPage(pendingSubmissionsPages)
-    }
-  }, [pendingSubmissionsPage, pendingSubmissionsPages])
-
-  useEffect(() => {
-    if (pendingStorySubmissionsPage > pendingStorySubmissionsPages) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPendingStorySubmissionsPage(pendingStorySubmissionsPages)
-    }
-  }, [pendingStorySubmissionsPage, pendingStorySubmissionsPages])
 
   function handleConfirmApprove(publishedAt: string) {
     if (!approveTargetId) return
@@ -503,64 +386,6 @@ export function DashboardHomePage() {
     })
   }
 
-  function handleConfirmApproveSubmission() {
-    if (!approveSubmissionId) return
-    approveEventSubmission.mutate(approveSubmissionId, {
-      onSuccess: (res) => {
-        setApproveSubmissionId(null)
-        toastSuccess(t('pendingSubmission.approved'))
-        navigate(`/events/${res.event.id}/edit`)
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingSubmission.approveFailed')))
-      },
-    })
-  }
-
-  function handleConfirmRejectSubmission() {
-    if (!rejectSubmissionId) return
-    rejectEventSubmission.mutate(rejectSubmissionId, {
-      onSuccess: () => {
-        setRejectSubmissionId(null)
-        toastSuccess(t('pendingSubmission.rejected'))
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingSubmission.rejectFailed')))
-      },
-    })
-  }
-
-  function handleConfirmApproveStorySubmission() {
-    if (!approveStorySubmissionId) return
-    approveStorySubmission.mutate(approveStorySubmissionId, {
-      onSuccess: (res) => {
-        setApproveStorySubmissionId(null)
-        toastSuccess(t('pendingStorySubmission.approved'))
-        navigate(`/stories/${res.story.id}/edit`)
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingStorySubmission.approveFailed')))
-      },
-    })
-  }
-
-  function handleConfirmRejectStorySubmission() {
-    if (!rejectStorySubmissionId) return
-    rejectStorySubmission.mutate(rejectStorySubmissionId, {
-      onSuccess: () => {
-        setRejectStorySubmissionId(null)
-        toastSuccess(t('pendingStorySubmission.rejected'))
-      },
-      onError: (err: unknown) => {
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('pendingStorySubmission.rejectFailed')))
-      },
-    })
-  }
-
   return (
     <div className="flex flex-1 flex-col gap-6">
       <DashboardHero fullName={user?.fullName ?? ''} roleName={roleName} />
@@ -607,60 +432,30 @@ export function DashboardHomePage() {
           title={t('section.pendingEvents.title')}
           subtitle={t('section.pendingEvents.subtitle')}
         >
-          <div className={cn('grid gap-4', canReadSubmissions && 'lg:grid-cols-2')}>
-            <DashboardApprovalColumn title={t('column.member')}>
-              <DashboardPendingEvents
-                items={pendingEvents}
-                isPending={pendingQuery.isPending}
-                isError={pendingQuery.isError}
-                canApprove={can('event:approve')}
-                canReject={can('event:reject')}
-                isRefreshing={pendingQuery.isFetching}
-                onViewDetail={(id) => navigate(`/events/${id}`)}
-                onApprove={setApproveTargetId}
-                onReject={handleReject}
-                busyId={busyId}
+          <div className="flex flex-col gap-3">
+            <DashboardPendingEvents
+              items={pendingEvents}
+              isPending={pendingQuery.isPending}
+              isError={pendingQuery.isError}
+              canApprove={can('event:approve')}
+              canReject={can('event:reject')}
+              canUpdate={can('event:update')}
+              isRefreshing={pendingQuery.isFetching}
+              onEdit={(id) => navigate(`/events/${id}/edit`)}
+              onApprove={setApproveTargetId}
+              onReject={handleReject}
+              busyId={busyId}
+            />
+            {!pendingQuery.isError && !pendingQuery.isPending && pendingEventsTotal > 0 && (
+              <DataTablePagination
+                page={pendingEventsPage}
+                limit={PENDING_LIMIT}
+                total={pendingEventsTotal}
+                entityName={t('section.pendingEvents.title')}
+                isPending={pendingQuery.isFetching}
+                onPrev={() => setPendingEventsPage((page) => Math.max(1, page - 1))}
+                onNext={() => setPendingEventsPage((page) => page + 1)}
               />
-              {!pendingQuery.isError && !pendingQuery.isPending && pendingEventsTotal > 0 && (
-                <DataTablePagination
-                  page={pendingEventsPage}
-                  limit={PENDING_LIMIT}
-                  total={pendingEventsTotal}
-                  entityName={t('column.member')}
-                  isPending={pendingQuery.isFetching}
-                  onPrev={() => setPendingEventsPage((page) => Math.max(1, page - 1))}
-                  onNext={() => setPendingEventsPage((page) => page + 1)}
-                />
-              )}
-            </DashboardApprovalColumn>
-
-            {canReadSubmissions && (
-              <DashboardApprovalColumn title={t('column.public')}>
-                <DashboardPendingSubmissions
-                  items={pendingSubmissions}
-                  isPending={pendingSubmissionsQuery.isPending}
-                  isError={pendingSubmissionsQuery.isError}
-                  canApprove={can('event-submission:approve')}
-                  canReject={can('event-submission:reject')}
-                  isRefreshing={pendingSubmissionsQuery.isFetching}
-                  onApprove={setApproveSubmissionId}
-                  onReject={setRejectSubmissionId}
-                  busyId={submissionBusyId}
-                />
-                {!pendingSubmissionsQuery.isError &&
-                  !pendingSubmissionsQuery.isPending &&
-                  pendingSubmissionsTotal > 0 && (
-                    <DataTablePagination
-                      page={pendingSubmissionsPage}
-                      limit={PENDING_LIMIT}
-                      total={pendingSubmissionsTotal}
-                      entityName={t('column.public')}
-                      isPending={pendingSubmissionsQuery.isFetching}
-                      onPrev={() => setPendingSubmissionsPage((page) => Math.max(1, page - 1))}
-                      onNext={() => setPendingSubmissionsPage((page) => page + 1)}
-                    />
-                  )}
-              </DashboardApprovalColumn>
             )}
           </div>
         </DashboardSection>
@@ -679,7 +474,6 @@ export function DashboardHomePage() {
               canApprove={can('archive:approve')}
               canReject={can('archive:reject')}
               isRefreshing={pendingArchivesQuery.isFetching}
-              onViewDetail={(id) => navigate(`/archives/${id}`)}
               onApprove={setArchiveApproveTargetId}
               onReject={handleRejectArchive}
               busyId={archiveBusyId}
@@ -701,78 +495,38 @@ export function DashboardHomePage() {
         </DashboardSection>
       )}
 
-      {(isStoryModerator || canReadStorySubmissions) && (
+      {isStoryModerator && (
         <DashboardSection
           title={t('section.pendingStories.title')}
           subtitle={t('section.pendingStories.subtitle')}
         >
-          <div
-            className={cn(
-              'grid gap-4',
-              isStoryModerator && canReadStorySubmissions && 'lg:grid-cols-2',
-            )}
-          >
-            {isStoryModerator && (
-              <DashboardApprovalColumn title={t('column.member')}>
-                <DashboardPendingStories
-                  items={pendingStories}
-                  isPending={pendingStoriesQuery.isPending}
-                  isError={pendingStoriesQuery.isError}
-                  canApprove={can('story:approve')}
-                  canReject={can('story:reject')}
-                  isRefreshing={pendingStoriesQuery.isFetching}
-                  onViewDetail={(id) => navigate(`/stories/${id}`)}
-                  onApprove={setStoryApproveTargetId}
-                  onReject={handleRejectStory}
-                  busyId={storyBusyId}
+          <div className="flex flex-col gap-3">
+            <DashboardPendingStories
+              items={pendingStories}
+              isPending={pendingStoriesQuery.isPending}
+              isError={pendingStoriesQuery.isError}
+              canApprove={can('story:approve')}
+              canReject={can('story:reject')}
+              canUpdate={can('story:update')}
+              isRefreshing={pendingStoriesQuery.isFetching}
+              onEdit={(id) => navigate(`/stories/${id}/edit`)}
+              onApprove={setStoryApproveTargetId}
+              onReject={handleRejectStory}
+              busyId={storyBusyId}
+            />
+            {!pendingStoriesQuery.isError &&
+              !pendingStoriesQuery.isPending &&
+              pendingStoriesTotal > 0 && (
+                <DataTablePagination
+                  page={pendingStoriesPage}
+                  limit={PENDING_LIMIT}
+                  total={pendingStoriesTotal}
+                  entityName={t('section.pendingStories.title')}
+                  isPending={pendingStoriesQuery.isFetching}
+                  onPrev={() => setPendingStoriesPage((page) => Math.max(1, page - 1))}
+                  onNext={() => setPendingStoriesPage((page) => page + 1)}
                 />
-                {!pendingStoriesQuery.isError &&
-                  !pendingStoriesQuery.isPending &&
-                  pendingStoriesTotal > 0 && (
-                    <DataTablePagination
-                      page={pendingStoriesPage}
-                      limit={PENDING_LIMIT}
-                      total={pendingStoriesTotal}
-                      entityName={t('column.member')}
-                      isPending={pendingStoriesQuery.isFetching}
-                      onPrev={() => setPendingStoriesPage((page) => Math.max(1, page - 1))}
-                      onNext={() => setPendingStoriesPage((page) => page + 1)}
-                    />
-                  )}
-              </DashboardApprovalColumn>
-            )}
-
-            {canReadStorySubmissions && (
-              <DashboardApprovalColumn title={t('column.public')}>
-                <DashboardPendingStorySubmissions
-                  items={pendingStorySubmissions}
-                  isPending={pendingStorySubmissionsQuery.isPending}
-                  isError={pendingStorySubmissionsQuery.isError}
-                  canApprove={can('story-submission:approve')}
-                  canReject={can('story-submission:reject')}
-                  isRefreshing={pendingStorySubmissionsQuery.isFetching}
-                  onViewDetail={(id) => navigate('/story-submissions/' + id)}
-                  onApprove={setApproveStorySubmissionId}
-                  onReject={setRejectStorySubmissionId}
-                  busyId={storySubmissionBusyId}
-                />
-                {!pendingStorySubmissionsQuery.isError &&
-                  !pendingStorySubmissionsQuery.isPending &&
-                  pendingStorySubmissionsTotal > 0 && (
-                    <DataTablePagination
-                      page={pendingStorySubmissionsPage}
-                      limit={PENDING_LIMIT}
-                      total={pendingStorySubmissionsTotal}
-                      entityName={t('column.public')}
-                      isPending={pendingStorySubmissionsQuery.isFetching}
-                      onPrev={() =>
-                        setPendingStorySubmissionsPage((page) => Math.max(1, page - 1))
-                      }
-                      onNext={() => setPendingStorySubmissionsPage((page) => page + 1)}
-                    />
-                  )}
-              </DashboardApprovalColumn>
-            )}
+              )}
           </div>
         </DashboardSection>
       )}
@@ -944,139 +698,6 @@ export function DashboardHomePage() {
         cancelLabel={t('common:actions.cancel')}
       />
 
-      <AlertDialog
-        open={approveSubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setApproveSubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('pendingSubmission.confirmApproveTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingSubmission.confirmApproveDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={approveEventSubmission.isPending}>
-                {t('pendingSubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                disabled={approveEventSubmission.isPending}
-                onClick={handleConfirmApproveSubmission}
-              >
-                {t('pendingSubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={rejectSubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setRejectSubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('pendingSubmission.confirmRejectTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingSubmission.confirmRejectDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={rejectEventSubmission.isPending}>
-                {t('pendingSubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={rejectEventSubmission.isPending}
-                onClick={handleConfirmRejectSubmission}
-              >
-                {t('pendingSubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={approveStorySubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setApproveStorySubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('pendingStorySubmission.confirmApproveTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingStorySubmission.confirmApproveDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={approveStorySubmission.isPending}>
-                {t('pendingStorySubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                disabled={approveStorySubmission.isPending}
-                onClick={handleConfirmApproveStorySubmission}
-              >
-                {t('pendingStorySubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={rejectStorySubmissionId !== null}
-        onOpenChange={(open) => {
-          if (!open) setRejectStorySubmissionId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('pendingStorySubmission.confirmRejectTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('pendingStorySubmission.confirmRejectDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button type="button" variant="outline" disabled={rejectStorySubmission.isPending}>
-                {t('pendingStorySubmission.confirmCancel')}
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={rejectStorySubmission.isPending}
-                onClick={handleConfirmRejectStorySubmission}
-              >
-                {t('pendingStorySubmission.confirmSubmit')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

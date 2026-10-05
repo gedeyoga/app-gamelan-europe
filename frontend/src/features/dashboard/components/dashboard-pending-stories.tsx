@@ -1,4 +1,4 @@
-import { Check, Eye, ImageOff, X } from 'lucide-react'
+import { Check, ImageOff, Pencil, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -15,9 +15,10 @@ export interface DashboardPendingStoriesProps {
   isError: boolean
   canApprove: boolean
   canReject: boolean
+  canUpdate: boolean
   /** Query list sedang refetch (mis. setelah mutation); tombol aksi ditahan. */
   isRefreshing?: boolean
-  onViewDetail: (id: string) => void
+  onEdit: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
   /** Id story yang sedang diproses; tombol aksi baris tsb dinonaktifkan. */
@@ -31,8 +32,9 @@ export function DashboardPendingStories({
   isError,
   canApprove,
   canReject,
+  canUpdate,
   isRefreshing = false,
-  onViewDetail,
+  onEdit,
   onApprove,
   onReject,
   busyId,
@@ -82,6 +84,9 @@ export function DashboardPendingStories({
                 <div className="flex items-center gap-2">
                   <p className="truncate font-medium">{item.name}</p>
                   <Badge variant="secondary">{t('story:statusOptions.REQUEST')}</Badge>
+                  <Badge variant="outline" className="shrink-0">
+                    {t(`source.${item.source}`)}
+                  </Badge>
                 </div>
                 <p className="truncate text-sm text-muted-foreground">
                   {item.creatorName ?? t('pending.unknown')}
@@ -94,10 +99,18 @@ export function DashboardPendingStories({
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onViewDetail(item.id)}>
-                  <Eye className="size-4" data-icon="inline-start" />
-                  {t('pending.viewDetail')}
-                </Button>
+                {canUpdate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={actionsDisabled}
+                    aria-busy={busy}
+                    onClick={() => onEdit(item.id)}
+                  >
+                    <Pencil className="size-4" data-icon="inline-start" />
+                    {t('common:actions.edit')}
+                  </Button>
+                )}
                 {canApprove && (
                   <Button
                     size="sm"

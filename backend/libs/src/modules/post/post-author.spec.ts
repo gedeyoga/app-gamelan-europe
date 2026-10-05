@@ -67,6 +67,10 @@ describe('PostService author validation', () => {
       {} as never,
       { findByIds } as never,
       {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
       allScope() as never,
     );
   }
@@ -115,7 +119,13 @@ describe('EventService author validation', () => {
     const service = new EventService(
       {} as never,
       {} as never,
+      {} as never,
       { findByIds } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
       allScope() as never,
     );
 

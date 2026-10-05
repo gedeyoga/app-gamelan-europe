@@ -19,9 +19,9 @@ const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? val
 const trimLower = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
-// Section `submitter` (data pengirim) — section tersendiri, audit-only.
+// Section `submitter` (data pengirim) — audit-only, dipakai untuk find-or-create User publik.
 // Cross-field `submitter.stateId` milik `submitter.countryId` dicek di service → 422 `submitter.stateId`.
-export class StorySubmissionSubmitterDto {
+export class PublicPostSubmitterDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
@@ -43,14 +43,15 @@ export class StorySubmissionSubmitterDto {
   stateId?: number;
 }
 
-export class CreateStorySubmissionDto {
+// Bentuk body sama dengan `CreateStorySubmissionDto` lama (kontrak konsumen eksternal EGS).
+export class CreatePublicPostDto {
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   name: string;
 
-  // Rich HTML; disanitasi server-side (`sanitizeStoryContent`) di create & approve.
+  // Rich HTML; disanitasi server-side (`sanitizeStoryContent`) sebelum disimpan.
   @IsString()
   @IsNotEmpty()
   @MaxLength(100000)
@@ -63,14 +64,14 @@ export class CreateStorySubmissionDto {
   @ArrayMaxSize(20)
   categoryIds?: string[];
 
-  // Id baris `Image` hasil `POST /story-submissions/images` (entityType='story-submission', entityId=null).
+  // Id baris `Image` hasil `POST /story-submissions/images` (entityType='post', entityId=null).
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(50)
   galleryImageIds?: string[];
 
-  // Daftar grup flyer bertipe; urutan array = urutan grup. Duplikat tipe/id & ownership dicek di service → 422.
+  // Daftar grup flyer bertipe; urutan array = urutan grup. Duplikat tipe/id dicek di service → 422.
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
@@ -92,9 +93,9 @@ export class CreateStorySubmissionDto {
   @MaxLength(2048)
   thumbnail?: string;
 
-  // Section terpisah "data pengirim" (wajib) — audit-only, tidak disalin ke Post saat approve.
+  // Section terpisah "data pengirim" (wajib) — dipakai find-or-create User publik.
   @IsNotEmptyObject()
   @ValidateNested()
-  @Type(() => StorySubmissionSubmitterDto)
-  submitter: StorySubmissionSubmitterDto;
+  @Type(() => PublicPostSubmitterDto)
+  submitter: PublicPostSubmitterDto;
 }

@@ -11,7 +11,6 @@ import {
   DocumentModule,
   EventModule,
   EventTypeModule,
-  EventSubmissionModule,
   ImageModule,
   JwtAuthGuard,
   LibsModule,
@@ -19,7 +18,6 @@ import {
   PermissionsGuard,
   PostModule,
   StorageModule,
-  StorySubmissionModule,
 } from '@app/libs';
 import { appEnvValidationSchema } from '@app/libs/common/config/env.validation';
 import { HealthController } from './controllers/health.controller';
@@ -57,9 +55,7 @@ import { StatsController } from './controllers/stats.controller';
     CategoryModule,
     EventModule,
     EventTypeModule,
-    EventSubmissionModule,
     ArchiveSubmissionModule,
-    StorySubmissionModule,
     ImageModule,
     StorageModule,
     ArchiveModule,

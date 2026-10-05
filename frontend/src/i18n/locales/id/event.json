@@ -50,6 +50,10 @@
     "PUBLIC": "Publik",
     "PRIVATE": "Khusus Member"
   },
+  "source": {
+    "PUBLIC": "Publik",
+    "REGISTERED": "Member"
+  },
   "form": {
     "createTitle": "Tambah Event",
     "editTitle": "Edit Event",

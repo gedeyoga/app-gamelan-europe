@@ -29,7 +29,6 @@ import { StoriesPage } from './stories'
 import { StoryDetailPage } from './story-detail'
 import { StoryEditPage } from './story-edit'
 import { StoryNewPage } from './story-new'
-import { StorySubmissionDetailPage } from './story-submission-detail'
 import { UsersPage } from './users'
 
 export const router = createBrowserRouter([
@@ -69,14 +68,6 @@ export const router = createBrowserRouter([
       { path: 'stories/new', element: <StoryNewPage /> },
       { path: 'stories/:id/edit', element: <StoryEditPage /> },
       { path: 'stories/:id', element: <StoryDetailPage /> },
-      {
-        path: 'story-submissions/:id',
-        element: (
-          <RequirePermission code="story-submission:read">
-            <StorySubmissionDetailPage />
-          </RequirePermission>
-        ),
-      },
       {
         path: 'archives',
         element: (

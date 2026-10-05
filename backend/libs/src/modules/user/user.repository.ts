@@ -19,7 +19,11 @@ export class UserRepository {
   }
 
   async findByEmailWithPassword(email: string): Promise<UserAuthEntity | null> {
-    return this.prisma.user.findUnique({ where: { email }, select: userWithPasswordSelect });
+    // `mode: 'insensitive'` untuk menemukan baris legacy ber-campur huruf; `findUnique` tak mendukung `mode`.
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } },
+      select: userWithPasswordSelect,
+    });
   }
 
   async findByIdWithPassword(id: string): Promise<UserAuthEntity | null> {
@@ -27,7 +31,11 @@ export class UserRepository {
   }
 
   async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.prisma.user.findUnique({ where: { email }, select: userSelect });
+    // `mode: 'insensitive'` untuk menemukan baris legacy ber-campur huruf; `findUnique` tak mendukung `mode`.
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } },
+      select: userSelect,
+    });
   }
 
   async findMany(params: {

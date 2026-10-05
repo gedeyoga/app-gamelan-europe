@@ -3,113 +3,67 @@ import {
   Controller,
   Get,
   HttpCode,
-  Param,
-  ParseUUIDPipe,
   Post,
-  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
-  AuthenticatedUser,
-  CreateStorySubmissionDto,
-  CurrentUser,
+  CreatePublicPostDto,
   ImageResponse,
   ImageService,
-  ListStorySubmissionsQueryDto,
   MulterUploadManyInterceptor,
-  Permissions,
+  PostService,
   Public,
   requireUploadedFiles,
-  ReviewStorySubmissionDto,
-  StorySubmissionService,
 } from '@app/libs';
 
+// API konsumen eksternal (website EGS) — publik anonim. Route dipertahankan sama;
+// submit menulis langsung ke `posts` (`status=REQUEST`, `source=PUBLIC`).
 @Controller('story-submissions')
 export class StorySubmissionsController {
   constructor(
-    private readonly storySubmissionService: StorySubmissionService,
+    private readonly postService: PostService,
     private readonly imageService: ImageService,
   ) {}
 
-  // API konsumen eksternal (website EGS) — publik anonim, respons hanya `{ id, status }`.
   @Post()
   @Public()
   @HttpCode(201)
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  create(@Body() dto: CreateStorySubmissionDto) {
-    return this.storySubmissionService.create(dto);
+  create(@Body() dto: CreatePublicPostDto) {
+    return this.postService.createPublicSubmission(dto);
   }
 
-  // `entityType` di-hardcode server-side (tidak diterima dari body publik).
-  // Multi-file: field `files` (maks 10), respons array `ImageResponse[]`.
+  // `entityType` di-hardcode server-side (tidak diterima dari body publik). Field multipart `files` (maks 10), respons `ImageResponse[]`.
   @Post('thumbnail')
   @Public()
   @HttpCode(201)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseInterceptors(MulterUploadManyInterceptor)
   thumbnail(@UploadedFiles() files: Express.Multer.File[]): Promise<ImageResponse[]> {
-    return Promise.all(
-      requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'story-submission')),
-    );
+    return Promise.all(requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'post')));
   }
 
-  // Upload galeri/flyer form publik; `entityType` di-hardcode server-side. Multi-file (`files`, maks 10).
+  // Upload galeri/flyer form publik; multi-file (field `files`, maks 10), respons `ImageResponse[]`.
   @Post('images')
   @Public()
   @HttpCode(201)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseInterceptors(MulterUploadManyInterceptor)
   image(@UploadedFiles() files: Express.Multer.File[]): Promise<ImageResponse[]> {
-    return Promise.all(
-      requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'story-submission')),
-    );
+    return Promise.all(requireUploadedFiles(files).map((file) => this.imageService.upload(file, 'post')));
   }
 
-  // Kategori STORY untuk form publik (tanpa auth). Harus di atas `:id`.
+  // Kategori STORY untuk form publik (tanpa auth).
   @Get('categories')
   @Public()
   async categories() {
-    const { items, total } = await this.storySubmissionService.listCategories();
+    const { items, total } = await this.postService.listStoryCategories();
     return { data: items, meta: { page: 1, limit: 100, total } };
-  }
-
-  @Get()
-  @Permissions('story-submission:read')
-  async list(@Query() query: ListStorySubmissionsQueryDto) {
-    const { items, total } = await this.storySubmissionService.list(query);
-    return {
-      data: items,
-      meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },
-    };
-  }
-
-  @Get(':id')
-  @Permissions('story-submission:read')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.storySubmissionService.findOne(id);
-  }
-
-  @Post(':id/approve')
-  @Permissions('story-submission:approve')
-  @HttpCode(200)
-  approve(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ReviewStorySubmissionDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.storySubmissionService.approve(id, user.id, dto);
-  }
-
-  @Post(':id/reject')
-  @Permissions('story-submission:reject')
-  @HttpCode(200)
-  reject(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ReviewStorySubmissionDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.storySubmissionService.reject(id, user.id, dto);
   }
 }

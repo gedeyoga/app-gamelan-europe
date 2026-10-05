@@ -1,13 +1,21 @@
 import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
+import { escapeHtml } from '@app/libs/common/utils/html.util';
+import { CountryRepository } from '@app/libs/modules/country/country.repository';
+import { StateRepository } from '@app/libs/modules/state/state.repository';
+import { EventTypeRepository } from '@app/libs/modules/event-type/event-type.repository';
+import { ImageService } from '@app/libs/modules/image/image.service';
 import { NetworkRepository } from '@app/libs/modules/network/network.repository';
+import { NetworkService } from '@app/libs/modules/network/network.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
+import { UserService } from '@app/libs/modules/user/user.service';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
 import { EventRepository, CreateEventData, UpdateEventData } from './event.repository';
 import { EventEntity, EventResponse } from './entities/event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
+import { CreatePublicEventDto, MAX_EVENT_RANGE_DAYS } from './dto/create-public-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { slugify } from './utils/slug.util';
 
@@ -28,12 +36,42 @@ export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus[]; to:
   unpublish: { from: [ContentStatus.PUBLISHED], to: ContentStatus.DRAFT },
 };
 
+// "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm" → Date UTC midnight (kolom @db.Date).
+function toUtcDate(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+// Ambil komponen jam "HH:mm" dari ISO lokal `YYYY-MM-DDTHH:mm`; null bila tak ada.
+function toTime(iso: string): string | null {
+  const m = /[T ](\d{2}:\d{2})/.exec(iso);
+  return m ? m[1] : null;
+}
+
+// Satu EventDate per hari inklusif; cap `MAX_EVENT_RANGE_DAYS`.
+function enumerateDates(start: Date, end: Date): Date[] {
+  const dates: Date[] = [];
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const last = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  while (cursor.getTime() <= last && dates.length < MAX_EVENT_RANGE_DAYS) {
+    dates.push(new Date(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
 @Injectable()
 export class EventService {
   constructor(
     private readonly eventRepository: EventRepository,
     private readonly networkRepository: NetworkRepository,
+    private readonly networkService: NetworkService,
     private readonly userRepository: UserRepository,
+    private readonly userService: UserService,
+    private readonly countryRepository: CountryRepository,
+    private readonly stateRepository: StateRepository,
+    private readonly eventTypeRepository: EventTypeRepository,
+    private readonly imageService: ImageService,
     private readonly accessScope: AccessScopeService,
   ) {}
 
@@ -249,6 +287,7 @@ export class EventService {
       content: dto.content ?? '',
       thumbnail: dto.thumbnail,
       status: autoPublish ? ContentStatus.PUBLISHED : status,
+      source: ContentSource.REGISTERED,
       visibility: dto.visibility ?? ContentVisibility.PUBLIC,
       createdBy,
       networkId: dto.networkId ?? undefined,
@@ -292,6 +331,91 @@ export class EventService {
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
         slug = await this.uniqueSlug(base);
+      }
+    }
+    throw new ConflictException('Slug already exists');
+  }
+
+  // Submit publik (tanpa JWT): tulis langsung `Event` status REQUEST, source PUBLIC.
+  // Validasi/kontrak body sama dengan form EGS lama; respons hanya { id, status } (tanpa PII echo).
+  // ponytail: window anti-duplikat 10 menit dihapus — throttle 5/60s sudah cukup; tambah lagi bila spam muncul.
+  async createPublicSubmission(dto: CreatePublicEventDto): Promise<{ id: string; status: ContentStatus }> {
+    const country = await this.countryRepository.findByIdOrNull(dto.countryId);
+    if (!country) throw this.validationError('countryId', 'countryId does not exist');
+    let state = null;
+    if (dto.stateId !== undefined) {
+      state = await this.stateRepository.findByIdOrNull(dto.stateId);
+      if (!state || state.countryId !== dto.countryId) {
+        throw this.validationError('stateId', 'stateId must belong to countryId');
+      }
+    }
+
+    const authorCountry = await this.countryRepository.findByIdOrNull(dto.author.countryId);
+    if (!authorCountry) throw this.validationError('author.countryId', 'author.countryId does not exist');
+    if (dto.author.stateId !== undefined) {
+      const authorState = await this.stateRepository.findByIdOrNull(dto.author.stateId);
+      if (!authorState || authorState.countryId !== dto.author.countryId) {
+        throw this.validationError('author.stateId', 'author.stateId must belong to author.countryId');
+      }
+    }
+
+    const eventType = await this.eventTypeRepository.findByIdOrNull(dto.eventTypeId);
+    if (!eventType) throw this.validationError('eventTypeId', 'eventTypeId does not exist');
+
+    if (dto.thumbnail) {
+      const trusted = await this.imageService.isTrustedUnboundUrl(dto.thumbnail, 'event');
+      if (!trusted) {
+        throw this.validationError('thumbnail', 'thumbnail must reference an uploaded EGS image');
+      }
+    }
+
+    const user = await this.userService.findOrCreatePublicUser({
+      fullName: dto.author.fullName,
+      email: dto.author.email,
+      countryId: authorCountry.iso2,
+      stateId: dto.author.stateId ?? null,
+    });
+
+    const network = await this.networkService.findOrCreateByName(dto.organiser, {
+      state: state?.name ?? null,
+      country: country.name,
+    });
+
+    const startDate = toUtcDate(dto.startDate);
+    const endDate = toUtcDate(dto.endDate);
+    const startTime = toTime(dto.startDate);
+    const endTime = toTime(dto.endDate);
+    const days = enumerateDates(startDate, endDate);
+    const base = slugify(dto.title);
+    const data: CreateEventData = {
+      name: dto.title,
+      slug: await this.uniqueSlug(base),
+      content: `<p>${escapeHtml(dto.shortDescription)}</p>`,
+      thumbnail: dto.thumbnail ?? undefined,
+      status: ContentStatus.REQUEST,
+      source: ContentSource.PUBLIC,
+      visibility: ContentVisibility.PUBLIC,
+      createdBy: user.id,
+      networkId: network.id,
+      eventTypeIds: [dto.eventTypeId],
+      dates: days.map((date) => ({
+        date,
+        startTime: startTime ?? undefined,
+        endTime: endTime ?? undefined,
+      })),
+      location: {
+        name: state?.name ?? country.name,
+        address: state?.name ? `${state.name}, ${country.name}` : country.name,
+      },
+      authorIds: [user.id],
+    };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const event = await this.eventRepository.create(data);
+        return { id: event.id, status: event.status };
+      } catch (e) {
+        if (!(e instanceof ConflictException)) throw e;
+        data.slug = await this.uniqueSlug(base);
       }
     }
     throw new ConflictException('Slug already exists');

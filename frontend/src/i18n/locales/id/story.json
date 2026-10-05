@@ -48,6 +48,10 @@
     "PUBLIC": "Publik",
     "PRIVATE": "Khusus Member"
   },
+  "source": {
+    "PUBLIC": "Publik",
+    "REGISTERED": "Member"
+  },
   "form": {
     "createTitle": "Tambah Story",
     "editTitle": "Edit Story",

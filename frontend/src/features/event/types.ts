@@ -4,6 +4,9 @@ export type EventFormAction = 'save' | 'draft' | 'request' | 'publish' | 'approv
 
 export type Visibility = 'PUBLIC' | 'PRIVATE'
 
+/** Asal konten: pengajuan publik (situs EGS) vs pengajuan member internal. */
+export type ContentSource = 'PUBLIC' | 'REGISTERED'
+
 export interface EventType {
   id: string
   name: string
@@ -35,6 +38,8 @@ export interface Event {
   slug: string
   status: ContentStatus
   visibility: Visibility
+  /** Asal konten (`PUBLIC` = pengajuan publik, `REGISTERED` = member internal). */
+  source: ContentSource
   publishedAt: string | null
   approvedAt: string | null
   content?: string

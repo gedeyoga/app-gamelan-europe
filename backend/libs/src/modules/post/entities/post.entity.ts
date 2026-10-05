@@ -9,6 +9,7 @@ export const postSelect = {
   name: true,
   slug: true,
   status: true,
+  source: true,
   publishedAt: true,
   approvedAt: true,
   content: true,
@@ -29,6 +30,7 @@ export const postSelect = {
         select: {
           id: true,
           fullName: true,
+          avatar: true,
           countryId: true,
           country: { select: { id: true, iso2: true, name: true } },
           stateId: true,

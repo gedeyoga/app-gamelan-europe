@@ -60,22 +60,16 @@ enum ArchiveStatus {
   PUBLISHED
 }
 
-enum EventSubmissionStatus {
-  REQUEST
-  APPROVED
-  REJECTED
-}
-
 enum ArchiveSubmissionStatus {
   REQUEST
   APPROVED
   REJECTED
 }
 
-enum StorySubmissionStatus {
-  REQUEST
-  APPROVED
-  REJECTED
+// Diskriminator asal konten: REGISTERED (dibuat user login) vs PUBLIC (submit anonim).
+enum ContentSource {
+  PUBLIC
+  REGISTERED
 }
 
 model User {
@@ -248,6 +242,7 @@ model Event {
   name        String
   slug        String            @unique
   status      ContentStatus     @default(DRAFT)
+  source      ContentSource     @default(REGISTERED)
   publishedAt DateTime?         @map("published_at")
   approvedAt  DateTime?         @map("approved_at")
   content     String
@@ -261,7 +256,6 @@ model Event {
   eventTypes  AssignEventType[]
   locations   EventLocation[]
   authors     EventAuthor[]
-  submission  EventSubmission?
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 
@@ -288,7 +282,6 @@ model EventType {
   id               String            @id @default(uuid())
   name             String
   assignments      AssignEventType[]
-  eventSubmissions EventSubmission[]
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -325,41 +318,6 @@ model EventLocation {
   @@map("event_locations")
 }
 
-model EventSubmission {
-  id               String                @id @default(uuid())
-  title            String
-  startDate        DateTime              @map("start_date") @db.Date
-  endDate          DateTime              @map("end_date") @db.Date
-  countryId        Int                   @map("country_id")
-  country          Country               @relation("EventSubmissionCountry", fields: [countryId], references: [id], onDelete: Restrict)
-  stateId          Int?                  @map("state_id")
-  state            State?                @relation("EventSubmissionState", fields: [stateId], references: [id], onDelete: SetNull)
-  organiser        String
-  // Section `author` (data pengirim): audit-only, bukan bagian dari Event saat approve.
-  authorFullName   String                @map("author_full_name")
-  authorEmail      String                @map("author_email")
-  authorCountryId  Int                   @map("author_country_id")
-  authorCountry    Country               @relation("EventSubmissionAuthorCountry", fields: [authorCountryId], references: [id], onDelete: Restrict)
-  authorStateId    Int?                  @map("author_state_id")
-  authorState      State?                @relation("EventSubmissionAuthorState", fields: [authorStateId], references: [id], onDelete: SetNull)
-  eventTypeId      String?               @map("event_type_id")
-  eventType        EventType?            @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
-  shortDescription String                @map("short_description")
-  thumbnail        String?
-  status           EventSubmissionStatus @default(REQUEST)
-  adminNote        String?               @map("admin_note")
-  reviewedBy       String?               @map("reviewed_by")
-  reviewedAt       DateTime?             @map("reviewed_at")
-  eventId          String?               @unique @map("event_id")
-  event            Event?                @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
-
-  @@index([status])
-  @@index([countryId])
-  @@map("event_submissions")
-}
-
 model Image {
   id         String   @id @default(uuid())
   entityType String   @map("entity_type")
@@ -386,6 +344,7 @@ model Post {
   name            String
   slug            String            @unique
   status          ContentStatus     @default(DRAFT)
+  source          ContentSource     @default(REGISTERED)
   publishedAt     DateTime?         @map("published_at")
   approvedAt      DateTime?         @map("approved_at")
   content         String
@@ -397,7 +356,6 @@ model Post {
   creator         User?             @relation("PostCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   categories      PostCategory[]
   authors         PostAuthor[]
-  submission      StorySubmission?
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
 
@@ -537,36 +495,6 @@ model ArchiveSubmission {
   @@map("archive_submissions")
 }
 
-model StorySubmission {
-  id                 String                @id @default(uuid())
-  name               String
-  content            String                @db.Text
-  categoryIds        String[]              @default([]) @map("category_ids")
-  galleryImageIds    String[]              @default([]) @map("gallery_image_ids")
-  flyerItems         Json                  @default("[]") @map("flyer_items")
-  thumbnail          String?
-  // Section `submitter` (data pengirim): audit-only, bukan bagian dari Post saat approve.
-  submitterFullName  String                @map("submitter_full_name")
-  submitterEmail     String                @map("submitter_email")
-  // `submitterCountryId` nullable HANYA untuk legacy rows (backfill); API tetap mewajibkan
-  // `submitter.countryId` saat write (DTO required, non-null).
-  submitterCountryId Int?                  @map("submitter_country_id")
-  submitterCountry   Country?              @relation("StorySubmissionSubmitterCountry", fields: [submitterCountryId], references: [id], onDelete: Restrict)
-  submitterStateId   Int?                  @map("submitter_state_id")
-  submitterState     State?                @relation("StorySubmissionSubmitterState", fields: [submitterStateId], references: [id], onDelete: SetNull)
-  status             StorySubmissionStatus @default(REQUEST)
-  adminNote          String?               @map("admin_note")
-  reviewedBy         String?               @map("reviewed_by")
-  reviewedAt         DateTime?             @map("reviewed_at")
-  postId             String?               @unique @map("post_id")
-  post               Post?                 @relation(fields: [postId], references: [id], onDelete: SetNull)
-  createdAt          DateTime              @default(now()) @map("created_at")
-  updatedAt          DateTime              @updatedAt @map("updated_at")
-
-  @@index([status])
-  @@map("story_submissions")
-}
-
 // Tabel dokumen terpisah (mirror `images` minus kolom image-specific).
 model Document {
   id         String   @id @default(uuid())
@@ -624,9 +552,6 @@ model Country {
   region                    Region?           @relation(fields: [regionId], references: [id], onDelete: SetNull)
   users                     User[]
   states                    State[]
-  eventSubmissions          EventSubmission[] @relation("EventSubmissionCountry")
-  authorEventSubmissions    EventSubmission[] @relation("EventSubmissionAuthorCountry")
-  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterCountry")
   createdAt                 DateTime          @default(now()) @map("created_at")
   updatedAt                 DateTime          @updatedAt @map("updated_at")
 
@@ -680,9 +605,6 @@ model State {
   wikiDataId                String?           @map("wiki_data_id")
   countryId                 Int               @map("country_id")
   country                   Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  eventSubmissions          EventSubmission[] @relation("EventSubmissionState")
-  authorEventSubmissions    EventSubmission[] @relation("EventSubmissionAuthorState")
-  storySubmitterSubmissions StorySubmission[] @relation("StorySubmissionSubmitterState")
   users                     User[]
   createdAt                 DateTime          @default(now()) @map("created_at")
   updatedAt                 DateTime          @updatedAt @map("updated_at")

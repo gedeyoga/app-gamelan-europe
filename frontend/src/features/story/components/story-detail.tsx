@@ -63,6 +63,9 @@ export function StoryDetail({ story, className }: StoryDetailProps) {
         <Badge variant={VISIBILITY_VARIANT[story.visibility]}>
           {t(`story:visibilityOptions.${story.visibility}`, { defaultValue: story.visibility })}
         </Badge>
+        <Badge variant="outline">
+          {t(`story:source.${story.source}`, { defaultValue: story.source })}
+        </Badge>
       </div>
     </div>
   )

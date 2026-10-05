@@ -84,6 +84,9 @@ export function EventDetail({ event, className }: EventDetailProps) {
                   defaultValue: event.visibility,
                 })}
               </Badge>
+              <Badge variant="outline">
+                {t(`event:source.${event.source}`, { defaultValue: event.source })}
+              </Badge>
             </div>
 
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">{event.name}</h1>

@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, Check, Eye, MapPin, X } from 'lucide-react'
+import { Building2, CalendarDays, Check, MapPin, Pencil, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -17,9 +17,10 @@ export interface DashboardPendingEventsProps {
   isError: boolean
   canApprove: boolean
   canReject: boolean
+  canUpdate: boolean
   /** Query list sedang refetch (mis. setelah mutation); tombol aksi ditahan. */
   isRefreshing?: boolean
-  onViewDetail: (id: string) => void
+  onEdit: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
   /** Id event yang sedang diproses; tombol aksi baris tsb dinonaktifkan. */
@@ -33,8 +34,9 @@ export function DashboardPendingEvents({
   isError,
   canApprove,
   canReject,
+  canUpdate,
   isRefreshing = false,
-  onViewDetail,
+  onEdit,
   onApprove,
   onReject,
   busyId,
@@ -88,17 +90,30 @@ export function DashboardPendingEvents({
             thumbnail={item.thumbnail}
             title={item.name}
             badge={
-              <Badge variant="secondary" className="shrink-0">
-                {t('event:statusOptions.REQUEST')}
-              </Badge>
+              <>
+                <Badge variant="secondary" className="shrink-0">
+                  {t('event:statusOptions.REQUEST')}
+                </Badge>
+                <Badge variant="outline" className="shrink-0">
+                  {t(`source.${item.source}`)}
+                </Badge>
+              </>
             }
             metadata={metadata}
             actions={
               <>
-                <Button variant="ghost" size="sm" onClick={() => onViewDetail(item.id)}>
-                  <Eye className="size-4" data-icon="inline-start" />
-                  {t('pending.viewDetail')}
-                </Button>
+                {canUpdate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={actionsDisabled}
+                    aria-busy={busy}
+                    onClick={() => onEdit(item.id)}
+                  >
+                    <Pencil className="size-4" data-icon="inline-start" />
+                    {t('common:actions.edit')}
+                  </Button>
+                )}
                 {canApprove && (
                   <Button
                     size="sm"

@@ -319,6 +319,7 @@ export type ImageVariant = {
 
 - `Post.categories` dikembalikan **flat** `[{ id, name, type }]` (lihat `mapPost`); FE langsung memakainya.
 - `creator` sengaja minimal (`id`, `fullName`); tidak ada data sensitif.
+- `authors[]` (relasi author, `avatar` sudah ikut di-select) di-flatten `mapPost()`; tiap elemen `{ id, fullName, avatar, countryId, country, stateId, state }`. `avatar` = URL siap pakai (di-set via `POST /auth/me/avatar`).
 - **`url` TIDAK disimpan di DB** dan **tidak** ada di `imageSelect`. URL dihitung saat mapping dari `key` (dan tiap `variants[].key`) + env `S3_PUBLIC_BASE_URL` di service:
 
 ```typescript
