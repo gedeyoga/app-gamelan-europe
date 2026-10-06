@@ -31,9 +31,6 @@
 #   - the backend env file; set `BACKEND_ENV_FILE` there to the absolute path
 #     of the backend env on the server (the default `./backend/.env` will not
 #     exist without a clone)
-#   - `DEPLOY_PATH/.env` must define `MIGRATE_DATABASE_URL`: a DIRECT Postgres
-#     URL via 127.0.0.1 (never pgbouncer), used by the one-off `migrate` service.
-#     Migrations run automatically before `up -d`; a failure aborts the deploy.
 
 name: Build & Push Images
 
@@ -146,6 +143,5 @@ jobs:
           script: |
             cd "$DEPLOY_PATH"
             docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml run --rm -T migrate
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
