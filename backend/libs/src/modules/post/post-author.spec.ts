@@ -126,6 +126,7 @@ describe('EventService author validation', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
       allScope() as never,
     );
 

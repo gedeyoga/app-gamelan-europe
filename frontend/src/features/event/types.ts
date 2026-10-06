@@ -4,6 +4,9 @@ export type EventFormAction = 'save' | 'draft' | 'request' | 'publish' | 'approv
 
 export type Visibility = 'PUBLIC' | 'PRIVATE'
 
+/** Jenis masuk event: gratis atau berbayar/tiket. */
+export type EventEntry = 'FREE' | 'TICKET'
+
 /** Asal konten: pengajuan publik (situs EGS) vs pengajuan member internal. */
 export type ContentSource = 'PUBLIC' | 'REGISTERED'
 
@@ -17,6 +20,12 @@ export interface EventLocation {
   address: string | null
   lat: number | null
   lng: number | null
+  countryId: number | null
+  stateId: number | null
+  cityId: number | null
+  country: { id: number; name: string; iso2: string } | null
+  state: { id: number; name: string } | null
+  city: { id: number; name: string } | null
 }
 
 /** Tanggal event dari API: `date` ISO 8601 UTC; `startTime`/`endTime` "HH:mm" atau null. */
@@ -38,6 +47,7 @@ export interface Event {
   slug: string
   status: ContentStatus
   visibility: Visibility
+  entry: EventEntry
   /** Asal konten (`PUBLIC` = pengajuan publik, `REGISTERED` = member internal). */
   source: ContentSource
   publishedAt: string | null
@@ -61,6 +71,9 @@ export interface EventLocationInput {
   address?: string
   lat?: number
   lng?: number
+  countryId?: number
+  stateId?: number
+  cityId?: number
 }
 
 /** Payload tanggal: `date` "YYYY-MM-DD"; `startTime`/`endTime` "HH:mm" (opsional). */
@@ -77,6 +90,7 @@ export interface CreateEventInput {
   thumbnail?: string | null
   status?: ContentStatus
   visibility?: Visibility
+  entry?: EventEntry
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
   eventTypeIds?: string[]
@@ -95,3 +109,5 @@ export type UpdateEventInput = Partial<CreateEventInput>
 export const CONTENT_STATUSES = ['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED'] as const
 
 export const VISIBILITIES = ['PUBLIC', 'PRIVATE'] as const
+
+export const EVENT_ENTRIES = ['FREE', 'TICKET'] as const

@@ -1,24 +1,32 @@
-import { CalendarDays, Clock, Copy, ExternalLink, MapPin } from 'lucide-react'
+import { Copy, ExternalLink, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { DATETIME_FALLBACK } from '@/lib/datetime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-import { getEventDateParts } from '../lib/format'
 import { EventLocationMap } from './event-location-map'
-import type { EventDate, EventLocation } from '../types'
+import { formatEventDateLong } from '../lib/format'
+import type { EventDate, EventEntry, EventLocation, EventType } from '../types'
 
 export interface EventInfoCardProps {
   dates: EventDate[]
   location: EventLocation | null
+  eventTypes: EventType[]
+  entry: EventEntry
   className?: string
 }
 
 interface Coordinates {
   lat: number
   lng: number
+}
+
+interface DetailRow {
+  label: string
+  value: string
 }
 
 /** Koordinat valid → `{lat,lng}`; selain itu `null`. */
@@ -28,14 +36,44 @@ function toCoordinates(location: EventLocation | null): Coordinates | null {
   return { lat: location.lat, lng: location.lng }
 }
 
-/** Kartu info event: blok tanggal (per `EventDate`) + lokasi, peta read-only, aksi maps/copy. */
-export function EventInfoCard({ dates, location, className }: EventInfoCardProps) {
+/** `"HH:mm–HH:mm"`; salah satu sisi saja bila pasangannya kosong; `''` bila dua-duanya kosong. */
+function formatTimeRange({ startTime, endTime }: EventDate): string {
+  return startTime && endTime ? `${startTime}–${endTime}` : startTime || endTime || ''
+}
+
+/**
+ * Kartu "Event Details": baris LABEL — value (DATE/TIME per `EventDate`, LOCATION,
+ * VENUE, TYPE, ENTRY), plus alamat + aksi maps/copy + peta read-only.
+ */
+export function EventInfoCard({ dates, location, eventTypes, entry, className }: EventInfoCardProps) {
   const { t } = useTranslation()
   const coords = toCoordinates(location)
-  const hasDates = dates.length > 0
   const hasLocation = Boolean(location && (location.name || location.address || coords))
 
-  if (!hasDates && !hasLocation) return null
+  // LOCATION = City, Country saja (state tidak ditampilkan); kosong dibuang.
+  const locationName = [location?.city?.name, location?.country?.name]
+    .filter((name): name is string => Boolean(name))
+    .join(', ')
+  const venue = location?.name ?? ''
+  const typeNames = eventTypes.map((type) => type.name).join(', ')
+
+  const rows: DetailRow[] = [
+    ...dates.flatMap<DetailRow>((date) => [
+      {
+        label: t('event:detail.date'),
+        // `formatEventDateLong` proyeksikan noon lokal — hari tak bergeser di offset negatif.
+        value: formatEventDateLong(date),
+      },
+      {
+        label: t('event:detail.time'),
+        value: formatTimeRange(date) || DATETIME_FALLBACK,
+      },
+    ]),
+    ...(locationName ? [{ label: t('event:detail.location'), value: locationName }] : []),
+    ...(venue ? [{ label: t('event:detail.venue'), value: venue }] : []),
+    ...(typeNames ? [{ label: t('event:detail.type'), value: typeNames }] : []),
+    { label: t('event:detail.entry'), value: t(`event:entryOptions.${entry}`) },
+  ]
 
   async function handleCopy(address: string) {
     try {
@@ -50,57 +88,28 @@ export function EventInfoCard({ dates, location, className }: EventInfoCardProps
   return (
     <Card className={cn(className)}>
       <CardContent className="flex flex-col gap-6">
-        {hasDates && (
-          <section className="flex flex-col gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <CalendarDays className="size-4 text-muted-foreground" data-icon="inline-start" />
-              {t('event:detail.dates')}
-            </h2>
-            <ul className="flex flex-col gap-3">
-              {dates.map((date, index) => {
-                const parts = getEventDateParts(date)
-                return (
-                  <li key={`${parts.iso}-${index}`} className="flex items-center gap-3">
-                    <div className="flex size-14 shrink-0 flex-col items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                      <span className="text-lg font-bold leading-none">{parts.day}</span>
-                      <span className="text-xs font-medium uppercase leading-none tracking-wide">
-                        {parts.monthYear}
-                      </span>
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      {parts.iso ? (
-                        <time dateTime={parts.iso} className="text-sm font-medium">
-                          {parts.weekday}
-                        </time>
-                      ) : (
-                        <span className="text-sm font-medium">{parts.weekday}</span>
-                      )}
-                      {parts.timeRange && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="size-3" />
-                          {parts.timeRange}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )}
+        <section className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Info className="size-4 text-muted-foreground" data-icon="inline-start" />
+            {t('event:detail.detailsTitle')}
+          </h2>
+          <dl className="flex flex-col gap-3">
+            {rows.map((row, index) => (
+              <div key={`${row.label}-${index}`} className="flex flex-col gap-0.5">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {row.label}
+                </dt>
+                <dd className="text-sm font-medium">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
         {hasLocation && location && (
           <section className="flex flex-col gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <MapPin className="size-4 text-muted-foreground" data-icon="inline-start" />
-              {t('event:detail.location')}
-            </h2>
-            <div className="flex flex-col gap-0.5">
-              {location.name && <p className="text-sm font-medium">{location.name}</p>}
-              {location.address && (
-                <p className="text-sm text-muted-foreground">{location.address}</p>
-              )}
-            </div>
+            {location.address && (
+              <p className="text-sm text-muted-foreground">{location.address}</p>
+            )}
             <div className="flex flex-wrap gap-2">
               {coords && (
                 <Button asChild variant="outline" size="sm">

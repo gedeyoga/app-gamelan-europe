@@ -72,6 +72,12 @@ enum ContentSource {
   REGISTERED
 }
 
+// Tiket masuk event: gratis atau berbayar.
+enum EventEntry {
+  FREE
+  TICKET
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -248,6 +254,7 @@ model Event {
   content     String
   thumbnail   String?
   visibility  ContentVisibility @default(PUBLIC)
+  entry       EventEntry        @default(FREE)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   networkId   String?           @map("network_id")
@@ -311,10 +318,19 @@ model EventLocation {
   address   String?
   lat       Decimal? @db.Decimal(10, 7)
   lng       Decimal? @db.Decimal(10, 7)
+  countryId Int?     @map("country_id")
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  stateId   Int?     @map("state_id")
+  state     State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  cityId    Int?     @map("city_id")
+  city      City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([eventId])
+  @@index([countryId])
+  @@index([stateId])
+  @@index([cityId])
   @@map("event_locations")
 }
 
@@ -552,6 +568,8 @@ model Country {
   region                    Region?           @relation(fields: [regionId], references: [id], onDelete: SetNull)
   users                     User[]
   states                    State[]
+  cities                    City[]
+  eventLocations            EventLocation[]
   createdAt                 DateTime          @default(now()) @map("created_at")
   updatedAt                 DateTime          @updatedAt @map("updated_at")
 
@@ -606,10 +624,31 @@ model State {
   countryId                 Int               @map("country_id")
   country                   Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
   users                     User[]
+  cities                    City[]
+  eventLocations            EventLocation[]
   createdAt                 DateTime          @default(now()) @map("created_at")
   updatedAt                 DateTime          @updatedAt @map("updated_at")
 
   @@index([countryId])
   @@index([countryCode])
   @@map("states")
+}
+
+model City {
+  id          Int             @id @default(autoincrement())
+  name        String
+  countryId   Int             @map("country_id")
+  country     Country         @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  stateId     Int?            @map("state_id")
+  state       State?          @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  latitude    Decimal?        @db.Decimal(10, 8)
+  longitude   Decimal?        @db.Decimal(11, 8)
+  wikiDataId  String?         @map("wiki_data_id")
+  locations   EventLocation[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@index([stateId])
+  @@map("cities")
 }

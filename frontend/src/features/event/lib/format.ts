@@ -85,6 +85,22 @@ export function formatEventDateLines({ date, startTime, endTime }: EventDate): E
   return { date: display, time: range }
 }
 
+/**
+ * Tanggal event panjang (`"12 October 2026"`) — baca komponen UTC (`toDateOnly`)
+ * lalu proyeksikan noon lokal agar hari tidak bergeser di offset negatif.
+ */
+export function formatEventDateLong({ date }: EventDate): string {
+  const [year, month, day] = toDateOnly(date).split('-').map(Number)
+  if (!year || !month || !day) return DATETIME_FALLBACK
+  return formatDate(new Date(year, month - 1, day, 12), undefined, {
+    // `dateStyle: undefined` wajib — Intl melarang gabung dateStyle + field individual.
+    dateStyle: undefined,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 /** Tanggal event (tanpa jam insidental) + rentang jam "HH:mm–HH:mm" bila ada. */
 export function formatEventDate(eventDate: EventDate): string {
   const { date, time } = formatEventDateLines(eventDate)

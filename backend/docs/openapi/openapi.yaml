@@ -7,7 +7,7 @@ info:
     identifier: LicenseRef-Proprietary
   description: |
     Static OpenAPI 3.1.0 contract for the Story (`post`), Category, Event,
-    EventType, Network, Archive, Document and Image
+    EventType, Network, Archive, Document, Image and City
     endpoints of the NestJS backend.
 
     All endpoints require the `x-api-key` header (global `JwtAuthGuard`) and are
@@ -21,7 +21,10 @@ info:
     `POST /story-submissions`, `POST /story-submissions/thumbnail`,
     `POST /story-submissions/images`, `GET /story-submissions/categories`,
     `GET /event-types`, `GET /countries`, `GET /countries/{id}`, `GET /states`,
-    `GET /states/{id}`, `GET /stats/summary`. The public submission **create**
+    `GET /states/{id}`, `GET /cities`, `GET /cities/{id}`, `GET /stats/summary`.
+    `POST /cities` is **not** public: it requires the `city:create` permission and
+    is idempotent by `name` (case-insensitive) + `countryId`/`stateId`.
+    The public submission **create**
     endpoints (`POST /event-submissions`, `POST /archive-submissions`,
     `POST /story-submissions`) are rate-limited per IP to **5 requests/minute**
     (`429` on excess) — as are the public upload endpoints
@@ -88,6 +91,10 @@ tags:
     description: |
       Public geo reference data (read-only, source dr5hn/countries-states-cities-database).
       No create/update/delete; served from the seeded `State` table.
+  - name: Cities
+    description: |
+      Geo reference data (read-only list/detail, source dr5hn). `POST /cities`
+      idempotent (`city:create`) untuk find-or-create dari form event.
   - name: Stats
     description: "Ringkasan publik: event published, user aktif, jumlah negara terlibat."
 security:
@@ -2112,6 +2119,93 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /cities:
+    get:
+      tags: [Cities]
+      operationId: listCities
+      summary: List cities (paginated)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data (source dr5hn). Not gated by RBAC. Filter with
+        `filter[countryId]`, `filter[stateId]`; see the `filter` parameter for
+        the full set of allowed keys.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CitySortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/CityFilterParam'
+      responses:
+        '200':
+          description: Paginated list of cities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityListResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Cities]
+      operationId: createCity
+      summary: Create city (find-or-create, idempotent)
+      description: |
+        Permission `city:create`. Idempotent: an existing `name`
+        (case-insensitive) for the same `countryId`/`stateId` returns the
+        existing row (`201`) instead of creating a duplicate. `422` when
+        `countryId` does not exist, or `stateId` does not belong to `countryId`
+        (per-field `errors`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCityRequest'
+      responses:
+        '201':
+          description: City created — or the existing row (idempotent).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cities/{id}:
+    get:
+      tags: [Cities]
+      operationId: getCity
+      summary: Get city by id
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required) — read-only geo
+        reference data. Integer id (`ParseIntPipe`). Detail additionally resolves
+        the owning `state` and `country`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IntIdPath'
+      responses:
+        '200':
+          description: City detail (with resolved `state` and `country`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityDetailResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /stats/summary:
     get:
       tags: [Stats]
@@ -2407,6 +2501,29 @@ components:
       schema:
         type: object
         additionalProperties: true
+    CitySortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, createdAt, updatedAt]
+        default: createdAt
+    CityFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `countryId` (32-bit integer),
+        `stateId` (32-bit integer), `createdAt`, `updatedAt` (ISO 8601; date
+        operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        Unknown keys / invalid value → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
 
   responses:
     BadRequest:
@@ -2506,6 +2623,12 @@ components:
     ContentVisibility:
       type: string
       enum: [PUBLIC, PRIVATE]
+    EventEntry:
+      type: string
+      enum: [FREE, TICKET]
+    ContentSource:
+      type: string
+      enum: [PUBLIC, REGISTERED]
     CategoryType:
       type: string
       enum: [STORY, ARCHIVE]
@@ -2591,6 +2714,32 @@ components:
           format: uuid
         fullName:
           type: string
+    CountryRef:
+      type: object
+      required: [id, iso2, name]
+      properties:
+        id:
+          type: integer
+        iso2:
+          type: string
+        name:
+          type: string
+    StateRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    CityRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
     AuthorRef:
       type: object
       required: [id, fullName, avatar, countryId, country, stateId, state]
@@ -2608,22 +2757,13 @@ components:
           description: ISO-2 code (scalar FK `country_id`); `null` when unset.
         country:
           anyOf:
-            - type: object
-              required: [id, iso2, name]
-              properties:
-                id: { type: integer }
-                iso2: { type: string }
-                name: { type: string }
+            - $ref: '#/components/schemas/CountryRef'
             - type: 'null'
         stateId:
           type: [integer, 'null']
         state:
           anyOf:
-            - type: object
-              required: [id, name]
-              properties:
-                id: { type: integer }
-                name: { type: string }
+            - $ref: '#/components/schemas/StateRef'
             - type: 'null'
     NetworkRef:
       type: object
@@ -3237,7 +3377,11 @@ components:
           description: '"HH:mm" 24-hour, or null.'
     EventLocation:
       type: object
-      required: [name, address, lat, lng]
+      description: |
+        Event location. `country`/`state`/`city` are the resolved geo refs
+        (LOCATION = city + country; `state` also available when set). The
+        `countryId`/`stateId`/`cityId` scalars are `null` when unset.
+      required: [name, address, lat, lng, countryId, stateId, cityId, country, state, city]
       properties:
         name:
           type: string
@@ -3247,6 +3391,24 @@ components:
           type: [number, 'null']
         lng:
           type: [number, 'null']
+        countryId:
+          type: [integer, 'null']
+        stateId:
+          type: [integer, 'null']
+        cityId:
+          type: [integer, 'null']
+        country:
+          anyOf:
+            - $ref: '#/components/schemas/CountryRef'
+            - type: 'null'
+        state:
+          anyOf:
+            - $ref: '#/components/schemas/StateRef'
+            - type: 'null'
+        city:
+          anyOf:
+            - $ref: '#/components/schemas/CityRef'
+            - type: 'null'
     Event:
       type: object
       required:
@@ -3259,6 +3421,8 @@ components:
         - content
         - thumbnail
         - visibility
+        - entry
+        - source
         - createdBy
         - creator
         - networkId
@@ -3291,6 +3455,10 @@ components:
           type: [string, 'null']
         visibility:
           $ref: '#/components/schemas/ContentVisibility'
+        entry:
+          $ref: '#/components/schemas/EventEntry'
+        source:
+          $ref: '#/components/schemas/ContentSource'
         createdBy:
           type: [string, 'null']
           format: uuid
@@ -3384,6 +3552,15 @@ components:
           type: number
           minimum: -180
           maximum: 180
+        countryId:
+          type: integer
+          description: Optional. When `stateId` is sent, it must belong to `countryId`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId` (validated server-side → 422).
+        cityId:
+          type: integer
+          description: Optional; must belong to `stateId` (validated server-side → 422).
     CreateEventRequest:
       type: object
       additionalProperties: false
@@ -3410,6 +3587,15 @@ components:
           $ref: '#/components/schemas/ContentStatus'
         visibility:
           $ref: '#/components/schemas/ContentVisibility'
+        entry:
+          $ref: '#/components/schemas/EventEntry'
+          description: Defaults to `FREE` when omitted.
+        networkId:
+          type: string
+          format: uuid
+          description: |
+            Organising network. When sent it must reference an existing
+            `Network`; otherwise → 422 `networkId`.
         publishedAt:
           type: string
           format: date-time
@@ -3455,6 +3641,14 @@ components:
           $ref: '#/components/schemas/ContentStatus'
         visibility:
           $ref: '#/components/schemas/ContentVisibility'
+        entry:
+          $ref: '#/components/schemas/EventEntry'
+        networkId:
+          type: string
+          format: uuid
+          description: |
+            Organising network. When sent it must reference an existing
+            `Network`; otherwise → 422 `networkId`.
         publishedAt:
           type: string
           format: date-time
@@ -3909,6 +4103,7 @@ components:
         - approvedAt
         - externalLinks
         - categories
+        - authors
         - creator
         - createdAt
         - updatedAt
@@ -3943,6 +4138,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoryRef'
+        authors:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorRef'
         creator:
           anyOf:
             - $ref: '#/components/schemas/ArchiveCreatorRef'
@@ -4341,6 +4540,103 @@ components:
                 $ref: '#/components/schemas/State'
             meta:
               $ref: '#/components/schemas/PaginationMeta'
+
+    # ---------- cities ----------
+    City:
+      type: object
+      description: |
+        Seeded geo reference row (source dr5hn, read-only). List view — no
+        `state`/`country` relations. `latitude`/`longitude` are Prisma `Decimal`
+        serialized as strings.
+      required:
+        - id
+        - name
+        - countryId
+        - stateId
+        - latitude
+        - longitude
+        - wikiDataId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        countryId:
+          type: integer
+        stateId:
+          type: [integer, 'null']
+        latitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        longitude:
+          type: [string, 'null']
+          description: Prisma `Decimal` serialized as a string.
+        wikiDataId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CityWithRelations:
+      allOf:
+        - $ref: '#/components/schemas/City'
+        - type: object
+          description: Detail view — additionally resolves `state` and `country`.
+          required: [state, country]
+          properties:
+            state:
+              anyOf:
+                - $ref: '#/components/schemas/StateRef'
+                - type: 'null'
+            country:
+              anyOf:
+                - $ref: '#/components/schemas/CountryRef'
+                - type: 'null'
+    CityResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/City'
+    CityDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CityWithRelations'
+    CityListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/City'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    CreateCityRequest:
+      type: object
+      additionalProperties: false
+      required: [name, countryId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        countryId:
+          type: integer
+        stateId:
+          type: integer
     StatsEventSummary:
       type: object
       required: [published, latestPublishedAt]

@@ -23,5 +23,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY libs/prisma/schema.prisma libs/prisma/schema.prisma
+COPY --from=build /app/libs/prisma/migrations libs/prisma/migrations
 EXPOSE 3001
 CMD ["node", "dist/apps/app/apps/app/src/main.js"]

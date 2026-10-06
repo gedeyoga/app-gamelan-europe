@@ -28,6 +28,7 @@ import { PermissionsController } from './controllers/permissions.controller';
 import { RegionsController } from './controllers/regions.controller';
 import { CountriesController } from './controllers/countries.controller';
 import { StatesController } from './controllers/states.controller';
+import { CitiesController } from './controllers/cities.controller';
 import { PostsController } from './controllers/posts.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { EventsController } from './controllers/events.controller';
@@ -70,6 +71,7 @@ import { StatsController } from './controllers/stats.controller';
     RegionsController,
     CountriesController,
     StatesController,
+    CitiesController,
     PostsController,
     CategoriesController,
     EventsController,

@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
-import { CONTENT_STATUSES, VISIBILITIES } from '../types'
+import { CONTENT_STATUSES, EVENT_ENTRIES, VISIBILITIES } from '../types'
 
 export function createEventSchema(t: TFunction) {
   return z.object({
@@ -21,6 +21,7 @@ export function createEventSchema(t: TFunction) {
     thumbnail: z.string().nullable(),
     status: z.enum(CONTENT_STATUSES),
     visibility: z.enum(VISIBILITIES),
+    entry: z.enum(EVENT_ENTRIES),
     eventTypeIds: z.array(z.string()),
     authorIds: z.array(z.string().uuid()),
     // '' = tanpa penyelenggara; nilai non-kosong selalu UUID dari API.
@@ -46,6 +47,10 @@ export function createEventSchema(t: TFunction) {
       // String agar aman terhadap kolom DECIMAL backend; dikonversi ke number saat submit.
       lat: z.string(),
       lng: z.string(),
+      // ID relasi geo disimpan sebagai string di form; dikonversi ke number saat submit.
+      countryId: z.string(),
+      stateId: z.string(),
+      cityId: z.string(),
     }),
   })
 }
@@ -60,9 +65,10 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   thumbnail: null,
   status: 'DRAFT',
   visibility: 'PUBLIC',
+  entry: 'FREE',
   eventTypeIds: [],
   authorIds: [],
   networkId: '',
   dates: [],
-  location: { name: '', address: '', lat: '', lng: '' },
+  location: { name: '', address: '', lat: '', lng: '', countryId: '', stateId: '', cityId: '' },
 }

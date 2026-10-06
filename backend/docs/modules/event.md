@@ -64,6 +64,7 @@ model Event {
   content     String
   thumbnail   String?
   visibility  ContentVisibility @default(PUBLIC)
+  entry       EventEntry        @default(FREE)
   createdBy   String?           @map("created_by")
   creator     User?             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   networkId   String?
@@ -100,13 +101,21 @@ model AssignEventType {
 }
 
 model EventLocation {
-  id      String   @id @default(uuid())
-  eventId String   @map("event_id")
-  name    String
-  address String?
-  lat     Decimal? @db.Decimal(10, 7)
-  lng     Decimal? @db.Decimal(10, 7)
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  name      String
+  address   String?
+  lat       Decimal? @db.Decimal(10, 7)
+  lng       Decimal? @db.Decimal(10, 7)
+  countryId Int?     @map("country_id")
+  stateId   Int?     @map("state_id")
+  cityId    Int?     @map("city_id")
   @@map("event_locations")
+}
+
+enum EventEntry {
+  FREE
+  TICKET
 }
 ```
 
@@ -135,7 +144,15 @@ export const eventSelect = {
   },
   dates: { select: { date: true, startTime: true, endTime: true }, orderBy: { date: 'asc' } },
   eventTypes: { select: { eventType: { select: { id: true, name: true } } } },
-  locations: { select: { name: true, address: true, lat: true, lng: true } },
+  locations: {
+    select: {
+      name: true, address: true, lat: true, lng: true,
+      countryId: true, stateId: true, cityId: true,
+      country: { select: { id: true, name: true, iso2: true } },
+      state: { select: { id: true, name: true } },
+      city: { select: { id: true, name: true } },
+    },
+  },
   network: { select: { id: true, name: true } }, // network event (approve submission / di-set admin); keluar ke FE
 } satisfies Prisma.EventSelect;
 
@@ -144,7 +161,13 @@ export type EventDateEntity = { date: string; startTime: string | null; endTime:
 export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations'> & {
   dates: EventDateEntity[];              // date ISO 8601 UTC, startTime/endTime "HH:mm" | null, asc
   eventTypes: { id: string; name: string }[];
-  location: { name: string; address: string | null; lat: number | null; lng: number | null } | null;
+  location: {
+    name: string; address: string | null; lat: number | null; lng: number | null;
+    countryId: number | null; stateId: number | null; cityId: number | null;
+    country: { id: number; name: string; iso2: string } | null;
+    state: { id: number; name: string } | null;
+    city: { id: number; name: string } | null;
+  } | null;
   network: { id: string; name: string } | null;
 };
 
@@ -160,7 +183,7 @@ export type EventResponse = Omit<EventEntity, 'creator'> & {
 };
 ```
 
-`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`), `network` → `{ id, name } | null`. Join shape tidak pernah bocor ke service/controller.
+`mapEvent()` mem-flatten join shape: `dates` → `{ date, startTime, endTime }[]` (date ISO, asc), `eventTypes` → `[{ id, name }]`, `locations[0]` → `location` (Decimal → `number`, + scalar `countryId`/`stateId`/`cityId` dan relasi `country`/`state`/`city` atau `null`), `network` → `{ id, name } | null`. Join shape tidak pernah bocor ke service/controller.
 
 `EventService.toResponse()` membuang `creator.networkId` dan memetakan `creator` → `{ id, fullName, network: { id, name } | null }`. `networkId` **milik creator** tetap ada pada entity mentah (`EventEntity.creator.networkId`) untuk `assertReadable`/`assertWritable`/`scopeWhere` (row-level scoping), tetapi **tidak pernah** masuk response. Scalar `Event.networkId` (top-level, milik event) **tetap** dikirim — bukan data sensitif; FE utamanya memakai `Event.network`. `Event.network` diisi dari approve submission publik atau admin internal (§7).
 
@@ -190,13 +213,14 @@ event.network?.name            // 1. org event (approve submission publik / di-s
 | `thumbnail` | opsional, `@IsString()`, `@MaxLength(2048)` |
 | `status` | opsional, `@IsEnum(ContentStatus)` |
 | `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `network` |
+| `entry` | opsional, `@IsEnum(EventEntry)` (`FREE`/`TICKET`); default `FREE` saat create |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` |
 | `eventTypeIds` | opsional, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` |
 | `dates` | opsional, `@IsArray()`, `@ValidateNested({ each: true })` + `@Type(() => EventDateDto)`, `@ArrayMaxSize(100)`; array kosong `[]` valid → clear/replace-all relasi `event_dates` |
 | `networkId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Network` → tidak ada = **422** per-field (`networkId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.network`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
 | `location` | **wajib**, nested `EventLocationDto` (`@ValidateNested` + `@Type`) |
 
-`EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`.
+`EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`; `countryId`/`stateId`/`cityId` opsional `@Type(() => Number) @IsInt()` (chain geo — divalidasi service, lihat §9). `name` **tetap** label lokasi bebas; **tidak ada** kolom venue.
 
 `EventDateDto` (nested di `dates`): `date` wajib `@IsISO8601()`; `startTime`/`endTime` opsional `@Matches(/^([01]\d|2[0-3]):[0-5]\d$/)` → `"HH:mm"` 24h.
 
@@ -416,3 +440,44 @@ Row-level scoping (`AccessScopeService.resolve(userId, 'event')`, per-resource; 
 | `GET /events`, `GET /event-types` | `UnprocessableEntityException` | 422 | `sortBy`/`filter` tak dikenal, enum/tanggal invalid |
 | `GET/PATCH/DELETE /events/:id`, action | `ForbiddenException` | 403 | baris di luar scope (organisasi lain / non-PUBLISHED) atau permission kurang |
 | semua | `UnauthorizedException` / `ForbiddenException` | 401 / 403 | JWT invalid / permission kurang |
+
+---
+
+## 9. Event Details: Relasi Geo & `entry`
+
+Fitur "Event Details": `EventLocation` punya relasi geo seragam **Country > State > City**, dan `Event` punya enum tiket masuk.
+
+### 9.1 Model & Migration
+
+- `enum EventEntry { FREE TICKET }`; `Event.entry EventEntry @default(FREE)`.
+- `model City` (reference + inline-create): `id Int @id @default(autoincrement())`, `name`, `countryId` (FK Cascade), `stateId Int?` (FK SetNull), `latitude`/`longitude`, `wikiDataId`, `@@map("cities")`. Endpoint `POST /api/v1/cities` (permission `city:create`) inline-create idempoten dari form event. Lihat [city.md](./city.md).
+- `EventLocation` + `countryId Int?`, `stateId Int?`, `cityId Int?` (semua FK `onDelete: SetNull`, @index). Back-relations: `Country.cities`/`Country.eventLocations`, `State.cities`/`State.eventLocations`.
+- Migration: `20261006140000_add_event_details_city_entry`, `20261006150000_city_id_autoincrement` (sequence `cities_id_seq` + `setval` `MAX(id)`). Karena `createMany` id eksplisit tidak meng-advance sequence, `seed-geo.ts` meng-`setval` lagi setelah seeding cities (wajib untuk fresh deploy; lihat [city.md](./city.md) §2). **Tidak ada** kolom venue baru — VENUE hanya label UI di frontend; `EventLocation.name` tetap sebagaimana adanya.
+
+### 9.2 Validasi chain geo (422 per-field)
+
+`EventService.assertLocationGeo()` (mirror `UserService.assertStateCountryMatch`) dijalankan saat `create`/`update` bila `location` dikirim:
+
+| Field | Aturan | Pesan 422 |
+| --- | --- | --- |
+| `location.countryId` | bila ada, wajib `Country` eksis | `countryId does not exist` |
+| `location.stateId` | wajib ada `countryId`; `state.countryId === countryId` | `stateId requires countryId` / `stateId must belong to countryId` |
+| `location.cityId` | wajib ada `stateId`; `city.stateId === stateId` **dan** `city.countryId === countryId` | `cityId requires stateId` / `cityId must belong to stateId` |
+
+### 9.3 Submission publik
+
+`createPublicSubmission` mengisi `location.countryId` dari `countryId` submission (bila valid); `stateId`/`cityId` **null** (submission hanya mengirim `countryId`/`stateId`, tanpa city). Tidak ada langkah approve-lalu-recreate terpisah: submission menulis `Event` langsung.
+
+### 9.4 Response location
+
+```json
+{
+  "location": {
+    "name": "Bali", "address": "Bali, Indonesia", "lat": null, "lng": null,
+    "countryId": 101, "stateId": null, "cityId": null,
+    "country": { "id": 101, "name": "Indonesia", "iso2": "ID" },
+    "state": null, "city": null
+  }
+}
+```
+

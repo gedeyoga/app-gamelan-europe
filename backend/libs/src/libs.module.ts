@@ -14,6 +14,7 @@ import { ApiKeyModule } from './modules/api-key/api-key.module';
 import { RegionModule } from './modules/region/region.module';
 import { CountryModule } from './modules/country/country.module';
 import { StateModule } from './modules/state/state.module';
+import { CityModule } from './modules/city/city.module';
 import { StorageModule } from './integrations/storage/storage.module';
 import { CategoryModule } from './modules/category/category.module';
 import { EventModule } from './modules/event/event.module';
@@ -49,6 +50,7 @@ const redisProvider = {
     RegionModule,
     CountryModule,
     StateModule,
+    CityModule,
     StorageModule,
     CategoryModule,
     EventModule,
@@ -78,6 +80,7 @@ const redisProvider = {
     RegionModule,
     CountryModule,
     StateModule,
+    CityModule,
     StorageModule,
     CategoryModule,
     EventModule,

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { ContentSource, ContentStatus, ContentVisibility, EventEntry, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { eventSelect, EventEntity, mapEvent } from './entities/event.entity';
 
@@ -8,6 +8,9 @@ export interface EventLocationData {
   address?: string;
   lat?: number;
   lng?: number;
+  countryId?: number | null;
+  stateId?: number | null;
+  cityId?: number | null;
 }
 
 export interface EventDateData {
@@ -24,6 +27,7 @@ export interface CreateEventData {
   status?: ContentStatus;
   source?: ContentSource;
   visibility: ContentVisibility;
+  entry?: EventEntry;
   publishedAt?: Date;
   approvedAt?: Date;
   createdBy?: string;
@@ -41,6 +45,7 @@ export interface UpdateEventData {
   thumbnail?: string | null;
   status?: ContentStatus;
   visibility?: ContentVisibility;
+  entry?: EventEntry;
   publishedAt?: Date;
   approvedAt?: Date;
   networkId?: string | null;
@@ -109,7 +114,16 @@ export class EventRepository {
   ): Promise<void> {
     await tx.eventLocation.deleteMany({ where: { eventId } });
     await tx.eventLocation.create({
-      data: { eventId, name: location.name, address: location.address, lat: location.lat, lng: location.lng },
+      data: {
+        eventId,
+        name: location.name,
+        address: location.address,
+        lat: location.lat,
+        lng: location.lng,
+        countryId: location.countryId,
+        stateId: location.stateId,
+        cityId: location.cityId,
+      },
     });
   }
 
@@ -156,6 +170,7 @@ export class EventRepository {
         status: data.status,
         source: data.source,
         visibility: data.visibility,
+        entry: data.entry,
         publishedAt: data.publishedAt,
         approvedAt: data.approvedAt,
         createdBy: data.createdBy,
@@ -208,6 +223,7 @@ export class EventRepository {
         if (data.thumbnail !== undefined) update.thumbnail = data.thumbnail;
         if (data.status !== undefined) update.status = data.status;
         if (data.visibility !== undefined) update.visibility = data.visibility;
+        if (data.entry !== undefined) update.entry = data.entry;
         if (data.publishedAt !== undefined) update.publishedAt = data.publishedAt;
         if (data.approvedAt !== undefined) update.approvedAt = data.approvedAt;
         if (data.networkId !== undefined) update.network = data.networkId ? { connect: { id: data.networkId } } : { disconnect: true };

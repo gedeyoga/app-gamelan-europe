@@ -57,6 +57,7 @@ function makeEventService() {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
     ownScope() as unknown as AccessScopeService,
   );
   return { service, eventRepository };

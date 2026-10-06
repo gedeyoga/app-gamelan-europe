@@ -26,6 +26,7 @@ export const archiveSelect = {
         select: {
           id: true,
           fullName: true,
+          avatar: true,
           countryId: true,
           country: { select: { id: true, iso2: true, name: true } },
           stateId: true,

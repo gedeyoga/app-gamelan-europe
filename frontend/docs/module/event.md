@@ -55,8 +55,9 @@ src/features/event/
 │   ├── event-form.tsx             # form editor dipakai create & edit
 │   ├── event-meta-panel.tsx       # panel kanan: name → slug → thumbnail → eventTypes → dates → location
 │   ├── event-type-combobox.tsx    # multi-select tipe event + tambah inline
+│   ├── city-select.tsx            # single-select kota + tambah inline (POST /cities)
 │   ├── event-dates-field.tsx      # list tanggal (DatePicker + TimePicker shared, tambah/hapus)
-│   ├── event-location-field.tsx   # lokasi (name + address + map), form-aware
+│   ├── event-location-field.tsx   # lokasi (Venue + geo cascade Country→State→City + address + map), form-aware
 │   ├── event-table.tsx            # tabel list
 │   ├── event-card.tsx             # kartu list (kredit: getEventCreditName — organizer → authors → createdBy)
 │   ├── event-detail.tsx           # presentational detail (hero, HTML content, grid 2/3 kolom)
@@ -88,6 +89,7 @@ Envelope: sukses `{ data, message }`; list `{ data, message, meta: { page, limit
 | GET | `/event-types?limit=100` | — | opsi tipe event (`event-type:read`) |
 | GET | `/networks?page=&limit=` | — | opsi penyelenggara (`network:read`); item `{ id, name, … }` |
 | POST | `/event-types` | `{ name }` | inline create (`event-type:create`), idempotent |
+| POST | `/cities` | `{ name, countryId, stateId }` | inline create kota (`city:create`), idempotent (nama case-insensitive + country/state sama → existing); 422 bila `countryId` tidak ada atau `stateId` bukan milik `countryId` |
 | POST | `/images` | multipart `file` + `entityType='event'` | 201 `{ id, url, variants[] }`; `url` absolut |
 
 Item `Event` menyertakan `network: { id: string; name: string } | null` — berasal dari relasi **`Event.network`** backend (organisasi event; diisi saat **approve** submission publik atau di-set admin), di samping `creator: { id, fullName, network } | null` yang sudah ada.
@@ -96,7 +98,11 @@ Row `Event` berstatus **`DRAFT`** dapat berasal dari **approve submission publik
 
 Item tanggal: response `{ date: string /* ISO datetime UTC midnight */, startTime: string \| null /* "HH:mm" */, endTime: string \| null }`; payload `{ date: string /* "YYYY-MM-DD" */, startTime?: string /* "HH:mm" */, endTime?: string /* "HH:mm" */ }` (start/end di-drop bila kosong).
 
-Lokasi: `{ name, address?, lat?, lng? }`. FE menyimpan `lat`/`lng` sebagai **string** (aman terhadap kolom DECIMAL), dikonversi ke `number` saat submit; hanya dikirim bila terisi.
+Lokasi: `{ name, address?, lat?, lng?, countryId?, stateId?, cityId? }`. FE menyimpan `lat`/`lng` sebagai **string** (aman terhadap kolom DECIMAL), dikonversi ke `number` saat submit; hanya dikirim bila terisi. Field geo (`countryId`/`stateId`/`cityId`) juga disimpan sebagai string di form & dikonversi ke number saat submit (opsional, dibuang bila kosong). Response lokasi menyertakan relasi `country: { id, name, iso2 } | null`, `state: { id, name } | null`, `city: { id, name } | null` (plus `countryId`/`stateId`/`cityId`). Field `entry` ∈ `FREE | TICKET` ditambahkan pada `Event`/`CreateEventInput`.
+
+Geo cascade memakai endpoint publik `GET /cities?filter[countryId]=&filter[stateId]=&sortBy=name&sortOrder=asc` (`{ data: { id, name, countryId }[], meta }`) — lihat `features/geo/api/geo.ts:listCitiesByCountry` + `hooks/use-cities.ts` (`queryKey ['geo','cities',countryId,stateId]`, `enabled: Boolean(countryId && stateId)` — tidak menarik seluruh kota satu negara saat state belum dipilih; backend `/cities` juga mensyaratkan `stateId`).
+
+**Find-or-create City inline** (pola `event-type`): `CitySelect` (`features/event/components/city-select.tsx`) single-select + baris tambah; create via `POST /cities` (`features/geo/api/geo.ts:createCity` + `hooks/use-create-city.ts`, invalidate `['geo','cities']`). Gate permission **`city:create`** (user harus re-login / refresh `/auth/me` agar permission baru muncul). Opsi hasil create di-merge lokal (dedupe by value) supaya label langsung tampil tanpa menunggu refetch. Toast gagal non-422 → `event:errors.createCityFailed`.
 
 ## 5. List (`/events`) — Search / Sort / Pagination
 
@@ -126,15 +132,16 @@ Tidak ada dua tombol primary bersamaan (Terbitkan vs Ajukan saling eksklusif lew
 
 **Kirim ke API (action-aware)**: `onSubmit(payload, action)` diteruskan ke route. Route menyimpan perubahan field dulu via `PATCH /events/:id` (`updateEvent`/`useUpdateEvent`); untuk `action === 'approve'` field `publishedAt` **dibuang dari body PATCH** (kalau tidak, PATCH memaksa `PUBLISHED` → approve 409) lalu `POST /events/:id/approve { publishedAt }` (`useApproveEvent`). `action === 'reject'` → `POST /events/:id/reject` (`useRejectEvent`). `action === 'request'` tetap `POST /events/:id/submit` setelah PATCH. PATCH **tidak lagi** membawa approve/reject.
 
-**Urutan field settings** (create & edit): `name → slug → visibility → thumbnail → eventTypes → authors → organizer → eventDates → location`. Gallery & `categoryIds` **tidak ada** (bukan kolom event). Dialog Terbitkan (`publishedAt`) memakai `components/shared/date-time-picker.tsx` (butuh tanggal + jam); baris tanggal event memakai `components/shared/date-picker.tsx` (tanggal saja) + `time-picker.tsx`.
+**Urutan field settings** (create & edit): `name → slug → visibility → entry → thumbnail → eventTypes → authors → organizer → eventDates → location`. Gallery & `categoryIds` **tidak ada** (bukan kolom event). Dialog Terbitkan (`publishedAt`) memakai `components/shared/date-time-picker.tsx` (butuh tanggal + jam); baris tanggal event memakai `components/shared/date-picker.tsx` (tanggal saja) + `time-picker.tsx`.
 
 - `name`/`slug`: input teks; auto-slug saat create, berhenti setelah slug disentuh; 409 slug → per-field.
 - `visibility`: `RadioGroup` shadcn (`RadioGroupItem`, bukan `Select`/input native) — opsi `PUBLIC`/`PRIVATE` dari `VISIBILITIES`, label `event:visibilityOptions.*`, default `PUBLIC`; ikut payload create/update. Tiap opsi dibungkus `FormItem`+`FormControl`+`FormLabel` (label aksesibel, navigasi keyboard via RadioGroup, `disabled` diteruskan).
+- `entry`: `RadioGroup` shadcn (pola `visibility`) — opsi `FREE`/`TICKET` dari `EVENT_ENTRIES`, label `event:entryOptions.*`, default `FREE`; ikut payload create/update sebagai `entry`.
 - `thumbnail`: `ThumbnailUpload` shared (upload `POST /images`, preview, hapus, dropzone).
 - `eventTypes`: `EventTypeCombobox` multi-select + tambah inline (`POST /event-types`); gate `event-type:create`.
 - `organizer` (`networkId`): di-render tepat setelah authors bila `canReadNetworks` (`network:read`). `SearchSelect` single-select (shared, generic) — opsi `'' = Tanpa penyelenggara` + daftar network dari `GET /networks` (`useNetworks`, page 1 limit 100, `enabled: canReadNetworks`); memilih `''` mengirim `networkId: null` (clear relasi). Tombol `Plus` (bila `canCreateNetwork`) membuka `NetworkCreateDialog` (`features/network/components/`) dengan judul/deskripsi di-override (`event:form.organizerCreateTitle`/`organizerCreateDescription`); network yang baru dibuat langsung disisipkan ke opsi (dedupe by id) tanpa menunggu refetch. `networkId` **selalu** ikut payload submit (backend: `null` = clear saat edit, diabaikan saat create).
 - `eventDates`: `EventDatesField` — tiap baris header `Day N` + tombol hapus, `DatePicker` (tanggal saja `"YYYY-MM-DD"`, satu baris penuh) + `TimePicker` (jam mulai & selesai, opsional, grid 2 kolom); tambah/hapus baris menambah/menghapusnya; nilai tanggal date-only, jam `"HH:mm"` ('' bila kosong).
-- `location`: `EventLocationField` → `name` (wajib), `address` (opsional), `LocationMapPicker` (klik map / geser marker → lat/lng, plus pencarian alamat Nominatim).
+- `location`: `EventLocationField` → **Venue** (`location.name`, wajib, label `event:location.venueLabel`), cascade **Country → State → City** (`SearchSelect` shared; country dari `useCountries`, state dari `useStates(iso2)` — `iso2` diturunkan dari country terpilih, city dari `useCities({ countryId, stateId })`; ganti country reset state+city, ganti state reset city, city disabled sampai state dipilih), `address` (opsional), `LocationMapPicker` (klik map / geser marker → lat/lng, plus pencarian alamat Nominatim). Nilai form geo disimpan sebagai ID (string) — pilihan paling sedikit friksi (endpoint `/cities` & payload event butuh ID numerik).
 - Validasi RHF + zod (`createEventSchema`), pesan dari `t('validation:*')`; 422/409 dipetakan per-field via `mapApiFieldErrors`; banner hanya non-422.
 
 ## 6a. Detail (`/events/:id`)
@@ -143,7 +150,7 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 
 - **Hero**: `aspect-[21/9] object-cover` + overlay gelap; fallback tanpa thumbnail memakai gradient token (`from-primary`). Badge `eventTypes` + status (`STATUS_VARIANT`) + visibility (`VISIBILITY_VARIANT`) di atas `<h1>` (`text-4xl md:text-5xl`); baris kredit + `publishedAt`. Kredit memakai `getEventCreditName(event) ?? t('event:detail.creatorFallback')` dengan **precedence sama seperti kartu** (organizer `network` → authors → createdBy), ikon `Building2`; fallback terakhir i18n, bukan `'—'`.
 - **Body**: grid `lg:grid-cols-3` — konten HTML (2/3, `dangerouslySetInnerHTML` + `sanitizeHtml`, `CONTENT_CLASS` meniru story-detail) + aside (1/3) berisi `EventInfoCard`.
-- **`EventInfoCard`**: blok tanggal per `EventDate` (nomor hari besar + bulan/tahun + hari + jam via `getEventDateParts`), lokasi (nama + alamat), tombol "Buka di Maps" (`https://www.google.com/maps?q=<lat>,<lng>`, tab baru), salin alamat (`navigator.clipboard` + toast), peta read-only. Section hilang bila data kosong.
+- **`EventInfoCard`**: box **"Event Details"** (`event:detail.detailsTitle`) — baris `LABEL — value` (label uppercase muted, value medium): DATE + TIME per `EventDate` (`DATE` = `formatDate(date, undefined, { day:'numeric', month:'long', year:'numeric' })` → "12 October 2026"; `TIME` = `start–end` / start saja / `—`), LOCATION (= `city?.name, country?.name`, state tidak ditampilkan, kosong dibuang), VENUE (`location.name`), TYPE (`eventTypes` nama digabung `', '`), ENTRY (`entry` → `event:entryOptions.*`). Pertahankan alamat + tombol "Buka di Maps" + "Salin alamat" + peta read-only (`EventLocationMap`). Baris hilang bila nilainya kosong. Props baru: `eventTypes: EventType[]`, `entry: EventEntry`.
 - **`EventLocationMap`**: read-only Leaflet — `dragging/scrollWheelZoom/doubleClickZoom/boxZoom/keyboard/touchZoom/zoomControl` false + `Marker interactive={false}`; hanya render bila lat/lng `number` valid. Terpisah dari `LocationMapPicker` (yang berorientasi edit + pencarian Nominatim) agar detail tidak menarik logika editor.
 - **`getEventDateParts`** (`lib/format.ts`) — baca komponen UTC (`toDateOnly`) + Date lokal tengah hari agar hari tidak bergeser; label bulan/hari dari `formatDate` (locale browser).
 - Sticky `lg:sticky lg:top-8` pada card; mobile otomatis stack.
@@ -161,6 +168,7 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 | Aksi Hapus + `DELETE` | `event:delete` |
 | `GET /event-types` | `event-type:read` |
 | `POST /event-types` | `event-type:create` |
+| `POST /cities` (tambah kota inline) | `city:create` |
 | Field Penyelenggara → `GET /networks` (opsi) | `network:read` |
 | Tombol Tambah Penyelenggara → `POST /networks` (dialog) | `network:create` |
 | Tombol Terbitkan / `runSubmit('publish')` (`status` → `PUBLISHED`) | `event:publish` |
@@ -174,17 +182,19 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 - Namespace baru `event`: `src/i18n/locales/{en,id}/event.json`, didaftarkan di `src/i18n/index.ts`.
 - `dashboard:nav.event` ditambahkan di `{en,id}/dashboard.json`.
 - Validasi baru di namespace `validation`: `eventNameRequired`, `eventNameMax`, `eventSlugMax`, `eventSlugPattern`, `eventLocationRequired`, `eventLocationMax`, `eventAddressMax`.
-- `location:search*` (`searchPlaceholder`, `searching`, `searchNoResults`, `searchHint`), `location:clickHint`, `location:coordinates` — namespace baru `location` (`{en,id}/location.json`), dipakai `components/shared/location-map-picker.tsx` (dulu `event:location.*`). Key `event:location.*` yang sudah dipindahkan telah **dihapus** dari `event.json`; hanya `title`, `nameLabel`, `namePlaceholder`, `addressLabel`, `addressPlaceholder`, `mapLabel` yang tetap (masih dipakai `event-location-field.tsx`).
+- `location:search*` (`searchPlaceholder`, `searching`, `searchNoResults`, `searchHint`), `location:clickHint`, `location:coordinates` — namespace baru `location` (`{en,id}/location.json`), dipakai `components/shared/location-map-picker.tsx` (dulu `event:location.*`). Key `event:location.*` yang sudah dipindahkan telah **dihapus** dari `event.json`; `event:location.*` kini hanya `title`, `venueLabel`/`venuePlaceholder` (dulu `nameLabel`/`namePlaceholder` — kini label **Venue**), `countryLabel`/`countryPlaceholder`/`countrySearch`/`countryEmpty`, `stateLabel`/`statePlaceholder`/`stateSearch`/`stateEmpty`/`stateSelectCountry`, `cityLabel`/`cityPlaceholder`/`citySearch`/`cityEmpty`/`citySelectState`, `addressLabel`, `addressPlaceholder`, `mapLabel`.
+- `event:entryOptions.{FREE,TICKET}` + `event:form.entry` untuk kontrol ENTRY (en "Free"/"Ticket"; id "Gratis"/"Tiket").
 - `event:form.startTime`/`event:form.endTime`/`event:form.timePlaceholder` untuk label & placeholder jam pada `EventDatesField`.
+- `event:location.citySearchCreate`, `event:location.cityAdd`, `event:location.cityCreating` untuk baris tambah kota inline (`CitySelect`); `event:errors.createCityFailed` untuk toast gagal create kota non-422.
 - `event:form.organizer*` (en/id): `organizer`, `organizerPlaceholder`, `organizerSearch`, `organizerEmpty`, `organizerNone`, `organizerAdd`, `organizerCreateTitle`, `organizerCreateDescription` — label & UI field **Penyelenggara** (organizer). `network:form.createDescription` ditambahkan untuk default deskripsi `NetworkCreateDialog`.
 - `event:form.visibility` + `event:visibilityOptions.{PUBLIC,PRIVATE}` + `event:table.visibility` untuk kontrol & badge visibilitas. Label `PRIVATE` = **"Khusus Member"** (id) / **"Members Only"** (en) — bukan "Privat/Private"; enum API tetap `PRIVATE`.
-- `event:detail.*` (en/id): `back`, `notFound`, `creatorFallback`, `noContent`, `dates`, `location`, `openInMaps`, `copyAddress`, `addressCopied`, `addressCopyFailed`, `mapAlt`.
+- `event:detail.*` (en/id): `back`, `notFound`, `creatorFallback`, `noContent`, `detailsTitle`, `date`, `time`, `venue`, `type`, `entry`, `dates`, `location`, `openInMaps`, `copyAddress`, `addressCopied`, `addressCopyFailed`, `mapAlt`.
 
 ## 9. Verifikasi
 
 - `pnpm lint` → **0 error**, 8 warning pre-existing (shadcn `react-refresh`, `auth-provider`, React Compiler `RegisterForm`/`profile-card`), tanpa warning baru. (Dokumen lama menyebut 7; hitungan aktual 8.)
-- `pnpm exec tsc -b --noEmit` → **5 error TS2322 pre-existing di `src/features/billing/components/billing-form-dialog.tsx`** (file WIP untracked, di luar modul event). File `event-detail*`/`event-info-card`/`event-location-map` sendiri **0 error**.
-- `pnpm build` (`tsc -b && vite build`) → **gagal** karena 5 error billing di atas (unrelated, untracked). Perbaiki billing dulu; modul event tidak menambah error.
+- `pnpm exec tsc -b --noEmit` → **EXIT=0**, 0 error (5 error TS2322 billing sudah teratasi; file `event-detail*`/`event-info-card`/`event-location-map` sendiri 0 error).
+- `pnpm build` (`tsc -b && vite build`) → **sukses** (EXIT=0); hanya peringatan ukuran chunk Vite (unrelated).
 
 ## 10. Catatan
 
@@ -205,6 +215,7 @@ Halaman read-only full-bleed (tanpa sidebar/header). Container `app/routes/event
 - **Iterasi `Event.network`** (opsional): backend menambah field `network` (relasi opsional ke `Network`) pada `Event`. **Tanpa breaking change** — field baru nullable. Tambahkan `network: { id: string; name: string } | null` ke interface `Event` di `features/event/types.ts` (di samping `creator` existing); `EventCreator` tidak berubah.
 - **Iterasi kredit tunggal** (menggantikan dua baris creator + authors): kartu (`event-card.tsx`) & detail (`event-detail.tsx`) kini menampilkan **satu** baris kredit ikon `Building2` dengan precedence berantai **organizer (`event.network?.name`) → authors (`event.authors.map(a => a.fullName).join(', ')`) → createdBy (`event.creator?.fullName`)**; `null` bila semua kosong. Logika tunggal di `features/event/lib/format.ts:getEventCreditName(event)` (pakai `trim` + `||`, string kosong = absen); kartu fallback `'—'`, detail fallback `t('event:detail.creatorFallback')`. Ikon `User` & baris authors duplikat di kartu dihapus; key i18n tidak berubah.
 - **Event `DRAFT` dari approve submission publik** (rencana — lihat `docs/module/event-submission.md` §6): saat admin **approve** usulan publik, backend me-recreate konten submission menjadi row `Event` berstatus **`DRAFT`** (`createdBy` = admin, `networkId` dari organiser submission). Event tsb **tampil di list `/events` internal** (permission `event:read`), **diedit di `/events/:id/edit`**, lalu **di-publish langsung** lewat alur publish existing (tombol **Terbitkan**, `event:publish` → `status=PUBLISHED`) — **tanpa** `event:submit`/`REQUEST` (bypass alur ajukan-terbit). Reject submission **tidak** membuat `Event`. Editor FE existing sudah menangani `DRAFT` (Simpan + Terbitkan untuk admin) — **tidak perlu** perubahan kode; catatan ini untuk konteks alur. Status **RENCANA** di sisi `event-submission`; modul `event` sendiri sudah diimplementasikan.
+- **Iterasi ENTRY + geo relasi + box "Event Details"**: `Event.entry: EventEntry` (`FREE`/`TICKET`, konstanta `EVENT_ENTRIES`); form `RadioGroup` (default `FREE`); payload `entry`. `EventLocation` + `countryId/stateId/cityId` + relasi `country/state/city`; form cascade Country→State→City (`SearchSelect`) menyimpan **ID** (bukan nama seperti network) — sedikit friksi: tak perlu map nama→ID saat submit, `/cities` butuh ID numerik. Label `location.name` → **Venue**. `EventInfoCard` dirombak jadi box **Event Details** 6 baris (lihat §6a). `types.ts`, `lib/schema.ts`, `geo/api/geo.ts:listCitiesByCountry`, `geo/hooks/use-cities.ts`, `event-location-field.tsx`, `event-meta-panel.tsx`, `event-form.tsx`, `event-info-card.tsx`, `event-detail.tsx`, `app/routes/event-edit.tsx`, i18n `{en,id}/event.json`.
 
 ## 11. Dual View `/events` (Admin vs Non-Admin)
 

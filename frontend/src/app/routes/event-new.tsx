@@ -24,6 +24,8 @@ import { useEventTypes } from '@/features/event/hooks/use-event-types'
 import { useSubmitEvent } from '@/features/event/hooks/use-submit-event'
 import { useUploadImage } from '@/features/event/hooks/use-upload-image'
 import type { CreateEventInput, Event, EventType } from '@/features/event/types'
+import { useCreateCity } from '@/features/geo/hooks/use-create-city'
+import type { CityOption } from '@/features/geo/api/geo'
 
 export function EventNewPage() {
   const { t } = useTranslation()
@@ -42,6 +44,7 @@ export function EventNewPage() {
   const canRejectEvent = can('event:reject')
   const canReadNetworks = can('network:read')
   const canCreateNetwork = can('network:create')
+  const canCreateCity = can('city:create')
 
   // Default author = current user bila tersedia; fallback `[]` (mis. storage korup
   // sehingga `user` null walau status authenticated). `useMemo` agar identitas stabil untuk form.
@@ -60,6 +63,7 @@ export function EventNewPage() {
   const createEvent = useCreateEvent()
   const submitEvent = useSubmitEvent()
   const createEventType = useCreateEventType()
+  const createCity = useCreateCity()
   const uploadImage = useUploadImage()
 
   async function handleCreateEventType(name: string): Promise<EventType | undefined> {
@@ -68,6 +72,21 @@ export function EventNewPage() {
     } catch (err: unknown) {
       if (!isValidationError(err)) {
         toastError(getApiErrorMessage(err, t('event:errors.createEventTypeFailed')))
+      }
+      return undefined
+    }
+  }
+
+  async function handleCreateCity(input: {
+    name: string
+    countryId: number
+    stateId: number
+  }): Promise<CityOption | undefined> {
+    try {
+      return await createCity.mutateAsync(input)
+    } catch (err: unknown) {
+      if (!isValidationError(err)) {
+        toastError(getApiErrorMessage(err, t('event:errors.createCityFailed')))
       }
       return undefined
     }
@@ -154,6 +173,8 @@ export function EventNewPage() {
         isLoadingNetworks={networksQuery.isPending}
         canReadNetworks={canReadNetworks}
         canCreateNetwork={canCreateNetwork}
+        canCreateCity={canCreateCity}
+        onCreateCity={handleCreateCity}
         onUploadImage={uploadImage.mutateAsync}
         onUploadError={handleUploadError}
       />

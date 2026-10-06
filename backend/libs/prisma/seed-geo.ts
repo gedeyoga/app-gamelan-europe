@@ -6,12 +6,16 @@ const prisma = new PrismaClient();
 // ponytail: seeder ini butuh jaringan ke raw.githubusercontent.com. Untuk offline/CI,
 // vendorkan `regions.json` + `countries.json` + `states.json` ke repo lalu baca dari disk
 // (ganti fetchJson → fs.readFile). Sumber: https://github.com/dr5hn/countries-states-cities-database
+// Catatan: upstream telah menghapus `json/cities.json`; city kini hanya tersedia nested di
+// `json/countries+states+cities.json` (~47 MB). Traversal: country → states → cities.
 const REGIONS_URL =
   'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/regions.json';
 const COUNTRIES_URL =
   'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/countries.json';
 const STATES_URL =
   'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/states.json';
+const COUNTRIES_STATES_CITIES_URL =
+  'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/countries+states+cities.json';
 
 type RawRegion = { name?: unknown; translations?: unknown; wikiDataId?: unknown };
 
@@ -60,6 +64,21 @@ type RawState = {
   wikiDataId?: unknown;
 };
 
+// City nested di dalam state (combined JSON). Field: id, name, latitude, longitude.
+type RawCity = {
+  id?: unknown;
+  name?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  wikiDataId?: unknown;
+  wiki_data_id?: unknown;
+};
+
+type RawCountryWithCities = {
+  iso2?: unknown;
+  states?: Array<{ id?: unknown; cities?: RawCity[] }>;
+};
+
 function str(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
@@ -99,14 +118,20 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 async function main(): Promise<void> {
-  const [rawRegions, rawCountries, rawStates] = await Promise.all([
+  const [rawRegions, rawCountries, rawStates, rawCountriesWithCities] = await Promise.all([
     fetchJson<RawRegion[]>(REGIONS_URL),
     fetchJson<RawCountry[]>(COUNTRIES_URL),
     fetchJson<RawState[]>(STATES_URL),
+    fetchJson<RawCountryWithCities[]>(COUNTRIES_STATES_CITIES_URL),
   ]);
 
-  if (!Array.isArray(rawRegions) || !Array.isArray(rawCountries) || !Array.isArray(rawStates)) {
-    throw new Error('Format JSON regions/countries/states tidak sesuai (bukan array).');
+  if (
+    !Array.isArray(rawRegions) ||
+    !Array.isArray(rawCountries) ||
+    !Array.isArray(rawStates) ||
+    !Array.isArray(rawCountriesWithCities)
+  ) {
+    throw new Error('Format JSON regions/countries/states/cities tidak sesuai (bukan array).');
   }
 
   const countryIdByIso2 = new Map<string, number>();
@@ -212,17 +237,86 @@ async function main(): Promise<void> {
     });
   }
 
+  // Guard: format upstream berubah → stateRows kosong. Tanpa ini `notIn([])` menghapus SEMUA state.
+  const CHUNK = 5000;
+  if (stateRows.size > 0) {
+    const stateList = [...stateRows.values()];
+    // ponytail: state kini BUKAN reference murni — city inline user mereferensikannya, dan
+    // FK cities.state_id ON DELETE SET NULL akan mencabut state dari city user bila state
+    // dihapus. createMany(skipDuplicates) mempertahankan baris lama (FK aman) + menyisipkan
+    // id baru. State usang (id di luar dataset) tetap dibersihkan. Batas: skipDuplicates
+    // TIDAK me-refresh nilai kolom state yang sudah ada; upgrade ke raw SQL
+    // `INSERT ... ON CONFLICT (id) DO UPDATE` bila butuh refresh penuh.
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.state.deleteMany({ where: { id: { notIn: [...stateRows.keys()] } } });
+        for (let i = 0; i < stateList.length; i += CHUNK) {
+          await tx.state.createMany({ data: stateList.slice(i, i + CHUNK), skipDuplicates: true });
+        }
+      },
+      { timeout: 60000 },
+    );
+  }
+  console.log(`state: ${stateRows.size} seeded, ${skippedStates} skipped (country absent/invalid)`);
+
+  // --- Cities (replace per-id dataset; traversed dari nested states di combined JSON) ---
+  const seededStateIds = new Set(stateRows.keys());
+  const cityRows = new Map<number, Prisma.CityCreateManyInput>();
+  let skippedCities = 0;
+
+  for (const rawCountry of rawCountriesWithCities) {
+    const iso2 = str(rawCountry.iso2);
+    const countryId = iso2 ? countryIdByIso2.get(iso2.toUpperCase()) : undefined;
+    const states = Array.isArray(rawCountry.states) ? rawCountry.states : [];
+    for (const rawState of states) {
+      // state_id nested = State.id (nullable). Bila state di-skip seeder → null agar FK aman.
+      const rawStateId = toIntValue(rawState.id);
+      const stateId = rawStateId !== null && rawStateId > 0 && seededStateIds.has(rawStateId) ? rawStateId : null;
+      const cities = Array.isArray(rawState.cities) ? rawState.cities : [];
+      for (const raw of cities) {
+        const id = toIntValue(raw.id);
+        const name = str(raw.name);
+        if (id === null || !name || !countryId) {
+          skippedCities += 1;
+          continue;
+        }
+        // Dedup by id — createMany gagal seluruhnya bila ada PK duplikat.
+        cityRows.set(id, {
+          id,
+          name,
+          countryId,
+          stateId,
+          latitude: toDecimal(raw.latitude),
+          longitude: toDecimal(raw.longitude),
+          wikiDataId: str(raw.wikiDataId ?? raw.wiki_data_id),
+        });
+      }
+    }
+  }
+
+  const cities = [...cityRows.values()];
+  const datasetCityIds = [...cityRows.keys()];
+  // Delete hanya id dataset (bukan SELURUH tabel): city hasil inline-create user (id di luar
+  // dataset) tidak boleh hilang — FK event_locations.city_id ON DELETE SET NULL akan mencabut
+  // kota dari event. Chunked: Postgres menolak `IN` dengan >65535 bind parameter.
+  const DELETE_CHUNK = 10000;
   await prisma.$transaction(
     async (tx) => {
-      // ponytail: states = reference data murni (tanpa child, tanpa alur bisnis). Replace penuh
-      // deleteMany + createMany jauh lebih murah dari ~5k upsert; naikkan ke upsert bila butuh
-      // partial update / preserve createdAt.
-      await tx.state.deleteMany();
-      await tx.state.createMany({ data: [...stateRows.values()] });
+      // ponytail: cities = reference data (batch). Replace per-id, bukan truncate, agar city
+      // inline user aman. Naikkan ke upsert bila butuh partial update / preserve createdAt.
+      for (let i = 0; i < datasetCityIds.length; i += DELETE_CHUNK) {
+        await tx.city.deleteMany({ where: { id: { in: datasetCityIds.slice(i, i + DELETE_CHUNK) } } });
+      }
+      for (let i = 0; i < cities.length; i += CHUNK) {
+        await tx.city.createMany({ data: cities.slice(i, i + CHUNK) });
+      }
+      // createMany menulis id eksplisit → sequence TIDAK ter-advance (fresh deploy: migrasi
+      // setval=1 → inline create berikutnya tabrakan PK). Advance ke MAX(id) di sini.
+      await tx.$executeRaw`SELECT setval(pg_get_serial_sequence('cities','id'), (SELECT COALESCE(MAX(id),0) FROM cities))`;
     },
-    { timeout: 120000 },
+    { timeout: 150000 },
   );
-  console.log(`state: ${stateRows.size} seeded, ${skippedStates} skipped (country absent/invalid)`);
+  console.log(`city: ${cityRows.size} seeded, ${skippedCities} skipped (country absent/invalid)`);
 
   console.log('Seed geo selesai (idempoten, additive).');
 }

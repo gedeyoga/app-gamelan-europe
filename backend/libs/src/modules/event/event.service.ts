@@ -1,10 +1,11 @@
 import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { ContentSource, ContentStatus, ContentVisibility, EventEntry, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { escapeHtml } from '@app/libs/common/utils/html.util';
 import { CountryRepository } from '@app/libs/modules/country/country.repository';
 import { StateRepository } from '@app/libs/modules/state/state.repository';
+import { CityRepository } from '@app/libs/modules/city/city.repository';
 import { EventTypeRepository } from '@app/libs/modules/event-type/event-type.repository';
 import { ImageService } from '@app/libs/modules/image/image.service';
 import { NetworkRepository } from '@app/libs/modules/network/network.repository';
@@ -70,6 +71,7 @@ export class EventService {
     private readonly userService: UserService,
     private readonly countryRepository: CountryRepository,
     private readonly stateRepository: StateRepository,
+    private readonly cityRepository: CityRepository,
     private readonly eventTypeRepository: EventTypeRepository,
     private readonly imageService: ImageService,
     private readonly accessScope: AccessScopeService,
@@ -99,6 +101,41 @@ export class EventService {
     for (let i = 0; i < authorIds.length; i++) {
       if (!found.has(authorIds[i])) {
         throw this.validationError(`authorIds.${i}`, 'authorId must reference an existing user');
+      }
+    }
+  }
+
+  // Validasi chain geo lokasi (trust boundary): country → state → city.
+  // cityId wajib stateId + countryId; stateId wajib countryId; tiap level harus match induknya → 422 per-field.
+  private async assertLocationGeo(location: {
+    countryId?: number | null;
+    stateId?: number | null;
+    cityId?: number | null;
+  }): Promise<void> {
+    const { countryId, stateId, cityId } = location;
+    if (countryId != null) {
+      const country = await this.countryRepository.findByIdOrNull(countryId);
+      if (!country) throw this.validationError('location.countryId', 'countryId does not exist');
+    }
+    if (stateId != null) {
+      if (countryId == null) {
+        throw this.validationError('location.stateId', 'stateId requires countryId');
+      }
+      const state = await this.stateRepository.findByIdOrNull(stateId);
+      if (!state || state.countryId !== countryId) {
+        throw this.validationError('location.stateId', 'stateId must belong to countryId');
+      }
+    }
+    if (cityId != null) {
+      if (stateId == null) {
+        throw this.validationError('location.cityId', 'cityId requires stateId');
+      }
+      const city = await this.cityRepository.findByIdOrNull(cityId);
+      if (!city || city.stateId !== stateId) {
+        throw this.validationError('location.cityId', 'cityId must belong to stateId');
+      }
+      if (city.countryId !== countryId) {
+        throw this.validationError('location.cityId', 'cityId must belong to countryId');
       }
     }
   }
@@ -289,6 +326,7 @@ export class EventService {
       status: autoPublish ? ContentStatus.PUBLISHED : status,
       source: ContentSource.REGISTERED,
       visibility: dto.visibility ?? ContentVisibility.PUBLIC,
+      entry: dto.entry ?? EventEntry.FREE,
       createdBy,
       networkId: dto.networkId ?? undefined,
       publishedAt: autoPublish
@@ -316,6 +354,7 @@ export class EventService {
 
     await this.assertNetwork(scoped.networkId);
     await this.assertAuthors(scoped.authorIds);
+    await this.assertLocationGeo(scoped.location);
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (scoped.slug) {
@@ -406,6 +445,9 @@ export class EventService {
       location: {
         name: state?.name ?? country.name,
         address: state?.name ? `${state.name}, ${country.name}` : country.name,
+        countryId: country.id,
+        stateId: state?.id ?? null,
+        cityId: null,
       },
       authorIds: [user.id],
     };
@@ -438,13 +480,17 @@ export class EventService {
     }
     if (dto.dates !== undefined)
       data.dates = dto.dates.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime }));
-    if (dto.location !== undefined) data.location = dto.location;
+    if (dto.location !== undefined) {
+      await this.assertLocationGeo(dto.location);
+      data.location = dto.location;
+    }
     if (dto.networkId !== undefined) {
       await this.assertNetwork(dto.networkId);
       data.networkId = dto.networkId;
     }
     // Visibility boleh diubah scope `all` maupun `network` (assertWritable sudah membatasi).
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
+    if (dto.entry !== undefined) data.entry = dto.entry;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
     if (scope.kind === 'all') {

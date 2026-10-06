@@ -28,6 +28,8 @@ import { useSubmitEvent } from '@/features/event/hooks/use-submit-event'
 import { useUpdateEvent } from '@/features/event/hooks/use-update-event'
 import { useUploadImage } from '@/features/event/hooks/use-upload-image'
 import type { CreateEventInput, Event, EventFormAction, EventType } from '@/features/event/types'
+import { useCreateCity } from '@/features/geo/hooks/use-create-city'
+import type { CityOption } from '@/features/geo/api/geo'
 
 function toFormValues(event: Event): EventFormValues {
   return {
@@ -37,6 +39,7 @@ function toFormValues(event: Event): EventFormValues {
     thumbnail: event.thumbnail ?? null,
     status: event.status,
     visibility: event.visibility,
+    entry: event.entry,
     eventTypeIds: event.eventTypes.map((eventType) => eventType.id),
     authorIds: event.authors.map((author) => author.id),
     networkId: event.network?.id ?? '',
@@ -50,6 +53,9 @@ function toFormValues(event: Event): EventFormValues {
       address: event.location?.address ?? '',
       lat: event.location?.lat != null ? String(event.location.lat) : '',
       lng: event.location?.lng != null ? String(event.location.lng) : '',
+      countryId: event.location?.countryId != null ? String(event.location.countryId) : '',
+      stateId: event.location?.stateId != null ? String(event.location.stateId) : '',
+      cityId: event.location?.cityId != null ? String(event.location.cityId) : '',
     },
   }
 }
@@ -71,6 +77,7 @@ export function EventEditPage() {
   const canRejectEvent = can('event:reject')
   const canReadNetworks = can('network:read')
   const canCreateNetwork = can('network:create')
+  const canCreateCity = can('city:create')
 
   const eventQuery = useEvent(id)
   const eventTypesQuery = useEventTypes(canReadEventTypes)
@@ -81,6 +88,7 @@ export function EventEditPage() {
   const approveEvent = useApproveEvent()
   const rejectEvent = useRejectEvent()
   const createEventType = useCreateEventType()
+  const createCity = useCreateCity()
   const uploadImage = useUploadImage()
 
   async function handleCreateEventType(name: string): Promise<EventType | undefined> {
@@ -89,6 +97,21 @@ export function EventEditPage() {
     } catch (err: unknown) {
       if (!isValidationError(err)) {
         toastError(getApiErrorMessage(err, t('event:errors.createEventTypeFailed')))
+      }
+      return undefined
+    }
+  }
+
+  async function handleCreateCity(input: {
+    name: string
+    countryId: number
+    stateId: number
+  }): Promise<CityOption | undefined> {
+    try {
+      return await createCity.mutateAsync(input)
+    } catch (err: unknown) {
+      if (!isValidationError(err)) {
+        toastError(getApiErrorMessage(err, t('event:errors.createCityFailed')))
       }
       return undefined
     }
@@ -229,6 +252,8 @@ export function EventEditPage() {
           isLoadingNetworks={networksQuery.isPending}
           canReadNetworks={canReadNetworks}
           canCreateNetwork={canCreateNetwork}
+          canCreateCity={canCreateCity}
+          onCreateCity={handleCreateCity}
           onUploadImage={uploadImage.mutateAsync}
           onUploadError={handleUploadError}
         />

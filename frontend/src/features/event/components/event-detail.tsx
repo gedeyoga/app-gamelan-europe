@@ -121,6 +121,8 @@ export function EventDetail({ event, className }: EventDetailProps) {
           <EventInfoCard
             dates={event.dates}
             location={event.location}
+            eventTypes={event.eventTypes}
+            entry={event.entry}
             className="lg:sticky lg:top-8"
           />
         </aside>

@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
+  IsInt,
   IsISO8601,
   IsLatitude,
   IsLongitude,
@@ -16,7 +17,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { ContentStatus, ContentVisibility } from '@prisma/client';
+import { ContentStatus, ContentVisibility, EventEntry } from '@prisma/client';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -58,6 +59,21 @@ export class EventLocationDto {
   @IsNumber()
   @IsLongitude()
   lng?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  countryId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stateId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
 }
 
 export class CreateEventDto {
@@ -90,6 +106,10 @@ export class CreateEventDto {
   @IsOptional()
   @IsEnum(ContentVisibility)
   visibility?: ContentVisibility;
+
+  @IsOptional()
+  @IsEnum(EventEntry)
+  entry?: EventEntry;
 
   // Tanggal publish manual (tombol "Terbitkan" di FE). Bila dikirim → status dipaksa PUBLISHED.
   @IsOptional()

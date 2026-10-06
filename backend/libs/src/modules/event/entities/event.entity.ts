@@ -13,6 +13,7 @@ export const eventSelect = {
   content: true,
   thumbnail: true,
   visibility: true,
+  entry: true,
   createdBy: true,
   networkId: true,
   creator: {
@@ -44,7 +45,20 @@ export const eventSelect = {
       },
     },
   },
-  locations: { select: { name: true, address: true, lat: true, lng: true } },
+  locations: {
+    select: {
+      name: true,
+      address: true,
+      lat: true,
+      lng: true,
+      countryId: true,
+      stateId: true,
+      cityId: true,
+      country: { select: { id: true, name: true, iso2: true } },
+      state: { select: { id: true, name: true } },
+      city: { select: { id: true, name: true } },
+    },
+  },
   network: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
@@ -61,6 +75,12 @@ export type EventLocationEntity = {
   address: string | null;
   lat: number | null;
   lng: number | null;
+  countryId: number | null;
+  stateId: number | null;
+  cityId: number | null;
+  country: { id: number; name: string; iso2: string } | null;
+  state: { id: number; name: string } | null;
+  city: { id: number; name: string } | null;
 };
 
 export type EventDateEntity = {
@@ -107,6 +127,12 @@ export function mapEvent(row: EventRow): EventEntity {
           address: location.address,
           lat: location.lat === null ? null : Number(location.lat),
           lng: location.lng === null ? null : Number(location.lng),
+          countryId: location.countryId,
+          stateId: location.stateId,
+          cityId: location.cityId,
+          country: location.country,
+          state: location.state,
+          city: location.city,
         }
       : null,
   };

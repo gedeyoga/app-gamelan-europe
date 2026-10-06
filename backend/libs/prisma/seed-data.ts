@@ -44,6 +44,7 @@ export const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
   { code: 'event-type:create', description: 'Membuat tipe event baru' },
   { code: 'event-type:read', description: 'Melihat daftar/detail tipe event' },
+  { code: 'city:create', description: 'Membuat kota baru' },
   { code: 'network:create', description: 'Membuat network baru' },
   { code: 'network:read', description: 'Melihat daftar/detail network' },
   { code: 'network:update', description: 'Mengubah network' },

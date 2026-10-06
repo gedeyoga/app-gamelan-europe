@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
 import { useAuth } from '@/features/auth/auth-provider'
+import type { CityOption } from '@/features/geo/api/geo'
 import { NetworkCreateDialog } from '@/features/network/components/network-create-dialog'
 import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
 import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
@@ -26,7 +27,7 @@ import { EventDatesField } from './event-dates-field'
 import { EventLocationField } from './event-location-field'
 import { EventTypeCombobox } from './event-type-combobox'
 import type { EventFormValues } from '../lib/schema'
-import { VISIBILITIES } from '../types'
+import { EVENT_ENTRIES, VISIBILITIES } from '../types'
 import type { EventType } from '../types'
 
 export interface EventMetaPanelProps {
@@ -56,6 +57,13 @@ export interface EventMetaPanelProps {
   isLoadingNetworks: boolean
   canReadNetworks: boolean
   canCreateNetwork: boolean
+  /** Gate `city:create` — baris tambah kota inline di `EventLocationField`. */
+  canCreateCity: boolean
+  onCreateCity: (input: {
+    name: string
+    countryId: number
+    stateId: number
+  }) => Promise<CityOption | undefined>
   disabled?: boolean
   className?: string
 }
@@ -85,6 +93,8 @@ export function EventMetaPanel({
   isLoadingNetworks,
   canReadNetworks,
   canCreateNetwork,
+  canCreateCity,
+  onCreateCity,
   disabled = false,
   className,
 }: EventMetaPanelProps) {
@@ -258,6 +268,37 @@ export function EventMetaPanel({
         )}
       />
 
+      <FormField
+        control={form.control}
+        name="entry"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('event:form.entry')}</FormLabel>
+            <FormControl>
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={disabled}
+                aria-label={t('event:form.entry')}
+                className="flex flex-wrap gap-4"
+              >
+                {EVENT_ENTRIES.map((value) => (
+                  <FormItem key={value} className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value={value} />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      {t(`event:entryOptions.${value}`)}
+                    </FormLabel>
+                  </FormItem>
+                ))}
+              </RadioGroup>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       {canManageAuthors && (
         <FormField
           control={form.control}
@@ -343,7 +384,12 @@ export function EventMetaPanel({
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">{t('event:location.title')}</h3>
-        <EventLocationField form={form} disabled={disabled} />
+        <EventLocationField
+          form={form}
+          disabled={disabled}
+          canCreateCity={canCreateCity}
+          onCreateCity={onCreateCity}
+        />
       </div>
 
       {canManageAuthors && (

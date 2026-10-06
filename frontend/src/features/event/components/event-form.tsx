@@ -33,6 +33,7 @@ import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
 
 import { EventMetaPanel } from './event-meta-panel'
+import type { CityOption } from '@/features/geo/api/geo'
 import { createEventSchema, type EventFormValues } from '../lib/schema'
 import { slugify } from '../lib/slug'
 import type {
@@ -78,6 +79,13 @@ export interface EventFormProps {
   isLoadingNetworks: boolean
   canReadNetworks: boolean
   canCreateNetwork: boolean
+  /** Gate `city:create` — baris tambah kota inline di `EventLocationField`. */
+  canCreateCity: boolean
+  onCreateCity: (input: {
+    name: string
+    countryId: number
+    stateId: number
+  }) => Promise<CityOption | undefined>
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
 }
@@ -90,6 +98,12 @@ function buildLocation(values: EventFormValues['location']): EventLocationInput 
   const lng = Number(values.lng)
   if (values.lat.trim() !== '' && Number.isFinite(lat)) location.lat = lat
   if (values.lng.trim() !== '' && Number.isFinite(lng)) location.lng = lng
+  const countryId = Number(values.countryId)
+  const stateId = Number(values.stateId)
+  const cityId = Number(values.cityId)
+  if (values.countryId.trim() !== '' && Number.isFinite(countryId)) location.countryId = countryId
+  if (values.stateId.trim() !== '' && Number.isFinite(stateId)) location.stateId = stateId
+  if (values.cityId.trim() !== '' && Number.isFinite(cityId)) location.cityId = cityId
   return location
 }
 
@@ -118,6 +132,8 @@ export function EventForm({
   isLoadingNetworks,
   canReadNetworks,
   canCreateNetwork,
+  canCreateCity,
+  onCreateCity,
   onUploadImage,
   onUploadError,
 }: EventFormProps) {
@@ -223,6 +239,7 @@ export function EventForm({
       name,
       status: STATUS_BY_ACTION[action] ?? values.status,
       visibility: values.visibility,
+      entry: values.entry,
       eventTypeIds: values.eventTypeIds,
       authorIds: values.authorIds,
       // Selalu dikirim: `null` = clear saat edit, diabaikan backend saat create.
@@ -451,6 +468,8 @@ export function EventForm({
                     isLoadingNetworks={isLoadingNetworks}
                     canReadNetworks={canReadNetworks}
                     canCreateNetwork={canCreateNetwork}
+                    canCreateCity={canCreateCity}
+                    onCreateCity={onCreateCity}
                     disabled={isPending}
                   />
                 </div>
