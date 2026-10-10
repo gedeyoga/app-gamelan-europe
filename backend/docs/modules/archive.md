@@ -17,7 +17,7 @@ Archive dimiliki oleh max satu creator (`Archive.createdBy → User.id`, nullabl
 - **Workflow approval bertingkat** (mirror event): status `DRAFT | REQUEST | APPROVED | PUBLISHED` dengan endpoint `submit/approve/reject/publish/unpublish` ([§5](#5-aturan-status)).
 - Punya daftar **link eksternal** (`externalLinks string[]`) dan **dokumen PDF** yang diupload lewat **endpoint terpisah** `POST /documents` (modul + tabel `Document` baru), direferensikan sebagai scalar `documentIds string[]` (berurut) menunjuk baris `Document`.
 - `thumbnail` = **URL absolut S3** (`String?`) saja; diupload lewat `POST /images` yang **sudah ada tanpa perubahan** ([§9](#9-link-eksternal--dokumen-pdf-upload-s3)).
-- `type` (`MEMBER`/`PUBLIC`): `PUBLIC` = metadata publik; `MEMBER` = **member-only** → bila pemanggil tanpa akses member (`AccessScope.canViewPrivate === false`), `externalLinks` (list & detail) dan `documents` (detail) di-null-kan. `PUBLIC` maupun pemanggil berhak (`canViewPrivate=true`) tidak terpengaruh. Scoping baris tetap lewat `AccessScopeService` ([§6](#6-scoping-baca--tulis)).
+- `type` (`MEMBER`/`PUBLIC`): `PUBLIC` = metadata publik; `MEMBER` = **member-only** → bila pemanggil tanpa akses member (`canViewPrivate === false` **dan** `isMember === false`), `externalLinks` (list & detail) dan `documents` (detail) di-null-kan. `PUBLIC` maupun pemanggil berhak (`canViewPrivate || isMember`) tidak terpengaruh. Scoping baris tetap lewat `AccessScopeService` ([§6](#6-scoping-baca--tulis)).
 - Kategori memakai tabel `Category` **shared** dengan story lewat diskriminator `Category.type = 'ARCHIVE'`.
 
 ```
@@ -457,9 +457,9 @@ Resource `archive` **sudah** ditambahkan ke `AccessScopeService` (`ContentResour
 
 **Archive TIDAK punya kolom `visibility`.** Predikat "terbit publik" archive = `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }` (dipakai sama untuk scope `own`, `published`, dan `scopeWhere`). Tidak ada referensi `visibility` di service archive.
 
-**Redaksi member-only.** `scope.canViewPrivate` di-thread ke `hydrate`/`toListItem`. Bila `type=MEMBER` **dan** `canViewPrivate=false`, `externalLinks` (list & detail) dan `documents` (detail) di-set `null` lewat helper `redactMemberOnly` (pure, diekspor dari `archive.entity.ts`). `PUBLIC` dan pemanggil berhak (`canViewPrivate=true`) tidak berubah; `description` tetap terlihat. Bukan access-control loosening — scope baris tetap.
+**Redaksi member-only.** Akses member = `canViewPrivate || isMember` (membership billing aktif: `Billing.status=PAID` **dan** `expiryDate>now`, via `BillingService.hasActiveMembership`). Nilai itu di-thread ke `hydrate`/`toListItem`. Bila `type=MEMBER` **dan** `canViewPrivate=false` **dan** `isMember=false`, `externalLinks` (list & detail) dan `documents` (detail) di-set `null` lewat helper `redactMemberOnly` (pure, diekspor dari `archive.entity.ts`). `PUBLIC` dan pemanggil berhak (`canViewPrivate || isMember`) tidak berubah; `description` tetap terlihat. Bukan access-control loosening — scope baris tetap.
 
-`canViewPrivate` pada `AccessScope` dihitung **GLOBAL** lintas seluruh content resource (`story`/`event`/`archive`): punya permission tulis/moderator apa pun pada salah satu resource — termasuk `archive:*` — membuat user dapat membaca konten `story`/`event` yang `PRIVATE`; ini **intentional** dan **bukan** per-resource (lihat [rbac.md §10](./rbac.md#10-row-level-scoping), [story.md H1](./story.md)).
+`canViewPrivate` pada `AccessScope` dihitung **GLOBAL** lintas seluruh content resource (`story`/`event`/`archive`): punya permission tulis/moderator apa pun pada salah satu resource — termasuk `archive:*` — membuat user dapat membaca konten `story`/`event` yang `PRIVATE`; ini **intentional** dan **bukan** per-resource (lihat [rbac.md §10](./rbac.md#10-row-level-scoping), [story.md H1](./story.md)). `isMember` (membership aktif) juga memberi akses baca `MEMBER`/`PRIVATE` meski tanpa permission tulis konten apa pun — lihat [rbac.md §10](./rbac.md#10-row-level-scoping).
 
 `scopeWhere(scope)` di `ArchiveService`:
 
@@ -669,7 +669,7 @@ Permission code baru (lowercase `resource:action`), [rbac.md §4](./rbac.md#4-ko
 | archive | unpublish | `archive:unpublish` |
 
 - **Workflow status via endpoint action** ([§5](#5-aturan-status)): `archive:submit` (DRAFT→REQUEST), `archive:approve` (REQUEST→PUBLISHED), `archive:reject` (REQUEST→DRAFT), `archive:publish` (APPROVED→PUBLISHED), `archive:unpublish` (PUBLISHED→DRAFT). `PATCH` (`archive:update`) tetap untuk update konten; scope `all` masih boleh set status/publishedAt langsung.
-- **`archive:read`**: baris yang terlihat dibatasi row-level scope ([§6](#6-scoping-baca--tulis)) — `all` → semua; reporter (`create/update/submit`) → miliknya/organisasinya + konten terbit; read-only → hanya konten terbit. `type` (`MEMBER`/`PUBLIC`) **bukan** gerbang row-level; `MEMBER` hanya menyembunyikan payload (`externalLinks`/`documents` → `null`) bila `canViewPrivate=false` ([§1](#1-deskripsi--lokasi)).
+- **`archive:read`**: baris yang terlihat dibatasi row-level scope ([§6](#6-scoping-baca--tulis)) — `all` → semua; reporter (`create/update/submit`) → miliknya/organisasinya + konten terbit; read-only → hanya konten terbit. `type` (`MEMBER`/`PUBLIC`) **bukan** gerbang row-level; `MEMBER` hanya menyembunyikan payload (`externalLinks`/`documents` → `null`) bila `canViewPrivate=false` **dan** `isMember=false` ([§1](#1-deskripsi--lokasi)).
 
 ### Tabel endpoint
 

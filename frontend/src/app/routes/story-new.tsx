@@ -19,8 +19,9 @@ import type { StoryFormValues } from '@/features/story/lib/schema'
 import { useCategories } from '@/features/story/hooks/use-categories'
 import { useCreateCategory } from '@/features/story/hooks/use-create-category'
 import { useCreateStory } from '@/features/story/hooks/use-create-story'
+import { useSubmitStory } from '@/features/story/hooks/use-submit-story'
 import { useUploadImage } from '@/features/story/hooks/use-upload-image'
-import type { CreateStoryInput, StoryCategory } from '@/features/story/types'
+import type { CreateStoryInput, Story, StoryCategory } from '@/features/story/types'
 
 export function StoryNewPage() {
   const { t } = useTranslation()
@@ -31,9 +32,11 @@ export function StoryNewPage() {
   const canCreate = can('story:create')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canDeleteCategory = can('category:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishStory = can('story:publish')
+  const canSubmitStory = can('story:submit')
   const canApproveStory = can('story:approve')
   const canRejectStory = can('story:reject')
 
@@ -56,6 +59,7 @@ export function StoryNewPage() {
   const categoriesQuery = useCategories(canReadCategories)
   const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const createStory = useCreateStory()
+  const submitStory = useSubmitStory()
   const createCategory = useCreateCategory()
   const uploadImage = useUploadImage()
 
@@ -75,18 +79,32 @@ export function StoryNewPage() {
     toastError(getApiErrorMessage(err, t('story:errors.uploadFailed')))
   }
 
-  function handleSubmit(payload: CreateStoryInput) {
-    createStory.mutate(payload, {
-      onSuccess: () => {
-        toastSuccess(t('story:toast.created'))
-        navigate('/stories')
-      },
-      onError: (err: unknown) => {
-        // 422/409 mengalir ke form via submissionError → setError per-field; tetap di halaman.
-        if (isValidationError(err) || isConflictError(err)) return
+  async function handleSubmit(payload: CreateStoryInput) {
+    // Backend mengabaikan `status` create bagi non-admin → buat draft dulu, lalu panggil endpoint submit.
+    const isRequest = payload.status === 'REQUEST'
+    let created: Story
+    try {
+      created = await createStory.mutateAsync(
+        isRequest ? { ...payload, status: 'DRAFT' } : payload,
+      )
+    } catch (err: unknown) {
+      // 422/409 create mengalir ke form via submissionError → per-field; tetap di halaman.
+      if (isValidationError(err) || isConflictError(err)) return
+      toastError(getApiErrorMessage(err, t('story:toast.createFailed')))
+      return
+    }
+    if (isRequest) {
+      try {
+        await submitStory.mutateAsync(created.id)
+      } catch (err: unknown) {
+        // Submit gagal: story sudah terbuat sebagai draft — jangan biarkan submit ulang membuat duplikat.
         toastError(getApiErrorMessage(err, t('story:toast.createFailed')))
-      },
-    })
+        navigate(`/stories/${created.id}/edit`)
+        return
+      }
+    }
+    toastSuccess(t('story:toast.created'))
+    navigate('/stories')
   }
 
   const authorsOptions = (usersQuery.data?.items ?? []).map((user) => ({
@@ -113,7 +131,7 @@ export function StoryNewPage() {
       <StoryForm
         mode="create"
         initialValues={initialValues}
-        isPending={createStory.isPending}
+        isPending={createStory.isPending || submitStory.isPending}
         submissionError={createStory.error}
         onSubmit={handleSubmit}
         onCancel={() => navigate('/stories')}
@@ -121,7 +139,9 @@ export function StoryNewPage() {
         isLoadingCategories={categoriesQuery.isPending}
         canReadCategories={canReadCategories}
         canCreateCategory={canCreateCategory}
+        canDeleteCategory={canDeleteCategory}
         canPublishStory={canPublishStory}
+        canSubmitStory={canSubmitStory}
         canApproveStory={canApproveStory}
         canRejectStory={canRejectStory}
         onCreateCategory={handleCreateCategory}

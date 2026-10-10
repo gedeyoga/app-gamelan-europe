@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ContentStatus, ContentVisibility } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
+import { BillingService } from '@app/libs/modules/billing/billing.service';
 
 // Sumber tunggal penentuan scope konten. SEMUA berbasis `permission.code` + `networkId`
 // — TIDAK ada cek `role.code`/nama role (role boleh custom) dan TIDAK ada permission khusus admin.
@@ -48,42 +49,51 @@ export function ownReadWhere(userId: string, canViewPrivate: boolean): Record<st
 // Scope akses konten per user (row-level scoping). Dipakai `scopeWhere`/`assertReadable`
 // di event & post service.
 // `canViewPrivate` independen dari `.kind` (dihitung dari permission tulis/status konten).
+// `isMember` independen dari `.kind` (membership billing aktif: PAID + belum kedaluwarsa).
+// Baca PRIVATE/MEMBER diizinkan bila `canViewPrivate || isMember`.
 export type AccessScope =
-  | { kind: 'all'; canViewPrivate: boolean }
-  | { kind: 'network'; networkId: string; userId: string; canViewPrivate: boolean }
-  | { kind: 'own'; userId: string; canViewPrivate: boolean }
-  | { kind: 'published'; canViewPrivate: boolean }
-  | { kind: 'none'; canViewPrivate: boolean };
+  | { kind: 'all'; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'network'; networkId: string; userId: string; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'own'; userId: string; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'published'; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'none'; canViewPrivate: boolean; isMember: boolean };
 
 @Injectable()
 export class AccessScopeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly billingService: BillingService,
+  ) {}
 
   // `resource` = domain konten yang sedang diakses: permission dihitung per-resource
   // (mis. `story:create` tidak memberi scope `network` untuk event).
   async resolve(userId: string, resource: ContentResource): Promise<AccessScope> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        networkId: true,
-        role: { select: { permissions: { select: { permission: { select: { code: true } } } } } },
-      },
-    });
+    const [user, isMember] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          networkId: true,
+          role: { select: { permissions: { select: { permission: { select: { code: true } } } } } },
+        },
+      }),
+      this.billingService.hasActiveMembership(userId),
+    ]);
 
     const codes = user?.role?.permissions.map((link) => link.permission.code) ?? [];
     const canViewPrivate = canViewPrivateFromCodes(codes);
     const isWriter = hasActions(codes, resource, CONTENT_WRITE_ACTIONS);
 
     if (hasActions(codes, resource, CONTENT_MODERATOR_ACTIONS)) {
-      return { kind: 'all', canViewPrivate };
+      return { kind: 'all', canViewPrivate, isMember };
     }
     // Pengelola konten milik network-nya (butuh networkId + permission tulis resource ini).
     if (user?.networkId && isWriter) {
-      return { kind: 'network', networkId: user.networkId, userId, canViewPrivate };
+      return { kind: 'network', networkId: user.networkId, userId, canViewPrivate, isMember };
     }
     // Pengelola konten tanpa organisasi → scope konten miliknya (`createdBy = userId`).
-    if (isWriter) return { kind: 'own', userId, canViewPrivate };
-    // Least privilege: selain itu hanya konten PUBLISHED (PRIVATE hanya bila canViewPrivate).
-    return { kind: 'published', canViewPrivate };
+    if (isWriter) return { kind: 'own', userId, canViewPrivate, isMember };
+    // Least privilege: selain itu hanya konten PUBLISHED (PRIVATE/MEMBER hanya bila
+    // `canViewPrivate` atau membership aktif).
+    return { kind: 'published', canViewPrivate, isMember };
   }
 }

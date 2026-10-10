@@ -1,7 +1,8 @@
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
+import { MemberBadge } from '@/components/shared/member-gate'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -11,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useMembership } from '@/features/auth/hooks/use-membership'
 
 export interface SidebarUserInfo {
   fullName: string
@@ -35,6 +37,7 @@ function getInitials(fullName: string): string {
 export function SidebarUser({ user, onLogout }: SidebarUserProps) {
   const { t } = useTranslation('dashboard')
   const navigate = useNavigate()
+  const isMember = useMembership()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -53,10 +56,19 @@ export function SidebarUser({ user, onLogout }: SidebarUserProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="min-w-56 rounded-lg">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium text-foreground">{user.fullName}</span>
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="truncate">{user.fullName}</span>
+            {isMember && <MemberBadge />}
+          </span>
           <span className="truncate text-xs">{user.email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {!isMember && (
+          <DropdownMenuItem onSelect={() => navigate('/my-billings')}>
+            <Sparkles />
+            {t('member.becomeMember')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => navigate('/profile')}>
           <Settings />
           {t('userMenu.settings')}

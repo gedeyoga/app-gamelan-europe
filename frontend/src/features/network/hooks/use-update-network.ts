@@ -9,7 +9,7 @@ export function useUpdateNetwork() {
     mutationFn: ({ id, payload }: { id: string; payload: UpdateNetworkInput }) =>
       updateNetwork(id, payload),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: ['networks'] })
+      qc.invalidateQueries({ queryKey: ['network'] })
       qc.invalidateQueries({ queryKey: ['network', { id }] })
     },
   })

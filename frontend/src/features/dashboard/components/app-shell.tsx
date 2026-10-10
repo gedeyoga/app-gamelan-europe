@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { LanguageSwitcher } from '@/components/shared/language-switcher'
+import { MemberBadge } from '@/components/shared/member-gate'
+import { Button } from '@/components/ui/button'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,6 +21,8 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
+
+import { useMembership } from '@/features/auth/hooks/use-membership'
 
 import { AppSidebar, type NavItem } from './app-sidebar'
 import type { SidebarUserInfo } from './sidebar-user'
@@ -48,6 +52,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const { t: tEvent } = useTranslation('event')
   const { t: tNetwork } = useTranslation('network')
   const { theme, toggleTheme } = useTheme()
+  const isMember = useMembership()
   const { pathname: rawPathname } = useLocation()
   // Normalisasi trailing slash (kecuali root `/`) agar `/stories/new/` tetap match.
   const pathname = rawPathname.length > 1 ? rawPathname.replace(/\/+$/, '') : rawPathname
@@ -66,7 +71,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
   const dashboardNavItems: NavItem[] = useMemo(
     () => [
       { title: t('nav.dashboard'), url: '/', icon: Home },
-      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'admin:access' },
+      { title: t('nav.story'), url: '/stories', icon: Newspaper, permission: 'story:read' },
       { title: t('nav.archives'), url: '/archives', icon: Archive, permission: 'archive:read' },
       { title: t('nav.event'), url: '/events', icon: CalendarDays, permission: 'event:read' },
       { title: t('nav.myBilling'), url: '/my-billings', icon: Receipt },
@@ -96,6 +101,12 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
         url: '/subscriptions',
         icon: CreditCard,
         permission: 'subscription:read',
+      },
+      {
+        title: t('nav.subscriptionRequests'),
+        url: '/subscription-requests',
+        icon: CreditCard,
+        permission: 'subscription-request:read',
       },
       { title: t('nav.billing'), url: '/billings', icon: Receipt, permission: 'billing:read' },
     ],
@@ -221,6 +232,13 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
+              {isMember ? (
+                <MemberBadge />
+              ) : (
+                <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+                  <NavLink to="/my-billings">{t('member.becomeMember')}</NavLink>
+                </Button>
+              )}
               <LanguageSwitcher />
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>

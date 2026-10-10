@@ -57,7 +57,7 @@ Auth memakai **dual token**: access token (stateless, JWT) + refresh token (stat
 ### Access Token (JWT)
 
 - Algoritma **HS256**, short-lived (`JWT_EXPIRES_IN`, mis. `15m`).
-- Payload: `{ sub: userId, email, jti }` — sign pakai `JWT_SECRET`.
+- Payload: `{ sub: userId, email, jti }` — sign pakai `JWT_SECRET`. **`isMember` tidak di-bake** ke JWT (dihitung fresh per request di `JwtStrategy.validate`).
 - `jti` unik (uuid) **per token** — dipakai untuk blacklist saat logout (seksi 6).
 - Stateless; verifikasi cukup membaca header + secret.
 
@@ -178,7 +178,8 @@ sequenceDiagram
     C->>API: GET /api/v1/auth/me (Authorization: Bearer <accessToken>)
     API->>API: JwtAuthGuard verifikasi JWT + blacklist Redis
     API->>DB: SELECT user + role + permissions (fresh dari DB)
-    API-->>C: 200 { data: { user, role, permissions }, message }
+    API->>DB: SELECT billing aktif (PAID & expiryDate > now) → isMember
+    API-->>C: 200 { data: { user, role, permissions, isMember }, message }
 ```
 
 ---
@@ -253,10 +254,10 @@ Semua path memakai prefix **`/api/v1`** (RULES bab 12). Sukses `{ data, message 
 | Method | Path | Akses | Response | Error |
 | --- | --- | --- | --- | --- |
 | POST | `/api/v1/auth/register` | PUBLIC | 201 data user (tanpa password_hash) | 409 duplikat, 422 |
-| POST | `/api/v1/auth/login` | PUBLIC | 200 `{ data: { accessToken, refreshToken, user } }` | 401 credential salah, 422 |
+| POST | `/api/v1/auth/login` | PUBLIC | 200 `{ data: { accessToken, refreshToken, user (termasuk isMember) } }` | 401 credential salah, 422 |
 | POST | `/api/v1/auth/refresh` | PUBLIC (body `refreshToken`) | 200 `{ data: { accessToken, refreshToken } }` | 401 invalid/expired/reuse, 422 |
 | POST | `/api/v1/auth/logout` | LOGIN (Bearer) + body `{ refreshToken }` | 200 `{ data: null, message }` | 401 |
-| GET | `/api/v1/auth/me` | LOGIN | 200 data user+role+permissions | 401 |
+| GET | `/api/v1/auth/me` | LOGIN | 200 data user+role+permissions+isMember | 401 |
 
 ### Detail per endpoint
 
@@ -275,7 +276,7 @@ Semua path memakai prefix **`/api/v1`** (RULES bab 12). Sukses `{ data, message 
 | Item | Nilai |
 | --- | --- |
 | Request body | `{ email, password }` (LoginDto) |
-| Response 200 | `{ data: { accessToken, refreshToken, user }, message: 'success' }` |
+| Response 200 | `{ data: { accessToken, refreshToken, user }, message: 'success' }` — `user.isMember` boolean (membership aktif) |
 | Error 401 | email tak ada / password salah → selalu **401 generic** `'Invalid credentials'` (hindari user enumeration) |
 | Error 422 | validasi DTO |
 | Catatan | `user.status === 'BLOCKED'` / `INACTIVE` → tolak login (401) |
@@ -310,7 +311,8 @@ Semua path memakai prefix **`/api/v1`** (RULES bab 12). Sukses `{ data, message 
     "fullName": "John Doe",
     "status": "ACTIVE",
     "role": { "id": "r_xxx", "name": "admin" },
-    "permissions": ["user:read", "role:read", "permission:read"]
+    "permissions": ["user:read", "role:read", "permission:read"],
+    "isMember": true
   },
   "message": "success"
 }
@@ -318,10 +320,11 @@ Semua path memakai prefix **`/api/v1`** (RULES bab 12). Sukses `{ data, message 
 
 | Item | Nilai |
 | --- | --- |
-| Response 200 | `{ data: { id, email, fullName, status, role, permissions }, message }` |
+| Response 200 | `{ data: { id, email, fullName, status, role, permissions, isMember }, message }` |
 | Error 401 | JWT invalid/expired/blacklisted |
 
 - `permissions` = array **`permission.code`** milik user, di-resolve **fresh dari DB** (user → `role_id` → `role_permissions` → `permission.code`), via **service yang sama** dipakai `PermissionsGuard`: `PermissionService.getPermissionCodesByUserId(userId)` (rbac.md §6).
+- `isMember` = `true` bila user punya `Billing` `status = PAID` **dan** `expiryDate > now` (mirror status `ACTIVE` di `/billings/members`); dihitung **fresh dari DB** via `BillingService.hasActiveMembership(userId)`. Nilai sama juga tersedia pada `request.user.isMember` (diisi `JwtStrategy.validate`) — **tidak** di-bake ke payload JWT (access token tetap `{ sub, email, jti }`).
 - Role null → `"role": null`, `"permissions": []`.
 - **Tanpa `password_hash`** — mengikuti pola `userSelect` (user.md §3).
 
@@ -333,7 +336,7 @@ Semua path memakai prefix **`/api/v1`** (RULES bab 12). Sukses `{ data, message 
 
 | Komponen | Peran |
 | --- | --- |
-| `JwtStrategy` | Passport `JwtStrategy`; baca header `Authorization: Bearer <token>`, verifikasi `JWT_SECRET`, ekstrak `{ sub, email, jti }`. |
+| `JwtStrategy` | Passport `JwtStrategy`; baca header `Authorization: Bearer <token>`, verifikasi `JWT_SECRET`, ekstrak `{ sub, email, jti }`. Mengisi `request.user.isMember` (fresh dari DB via `BillingService.hasActiveMembership`). |
 | `JwtAuthGuard` | **Global** (LEVEL `LOGIN`). Verifikasi JWT + cek blacklist Redis `jwt:blacklist:<jti>`. Gagal → **401**. Dipakai semua endpoint kecuali yang ber-`@Public()`. |
 | `RefreshTokenGuard` | Verifikasi refresh token (hash → lookup DB, cek revoked/expired, deteksi reuse). Gagal → **401**. |
 | `PermissionsGuard` | Otorisasi permission; rujuk [rbac.md §6](./rbac.md#6-authorization). Kurang permission → **403**. |

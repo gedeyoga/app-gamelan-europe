@@ -1,0 +1,135 @@
+{
+  "hero": {
+    "badge": "Gabung Network",
+    "title": "Daftarkan organisasi Anda",
+    "subtitle": "Ceritakan tentang organisasi gamelan Anda. Tim kami akan meninjau pendaftaran dan menghubungi Anda."
+  },
+  "section": {
+    "organisation": "Detail Organisasi",
+    "submitter": "Data Pengirim"
+  },
+  "form": {
+    "stateSelectCountry": "Pilih negara terlebih dahulu",
+    "organisationType": {
+      "label": "Jenis organisasi",
+      "placeholder": "Pilih jenis organisasi",
+      "options": {
+        "GAMELAN_GROUP": "Grup gamelan",
+        "ASSOCIATION": "Asosiasi",
+        "INSTITUTION": "Institusi"
+      }
+    },
+    "name": {
+      "label": "Nama organisasi",
+      "placeholder": "mis. Gamelan Ensemble Amsterdam"
+    },
+    "ledBy": {
+      "label": "Dipimpin oleh",
+      "placeholder": "Direktur artistik / pemimpin"
+    },
+    "country": {
+      "label": "Negara",
+      "placeholder": "Pilih negara"
+    },
+    "state": {
+      "label": "Negara Bagian / Wilayah",
+      "placeholder": "Pilih negara bagian / wilayah"
+    },
+    "address": {
+      "label": "Alamat",
+      "placeholder": "Jalan, kota, kode pos"
+    },
+    "mapsUrl": {
+      "label": "Link Google Maps",
+      "placeholder": "https://maps.google.com/..."
+    },
+    "website": {
+      "label": "Website",
+      "placeholder": "https://contoh.com"
+    },
+    "contact": {
+      "label": "Email kontak",
+      "placeholder": "kontak@contoh.com"
+    },
+    "socialMedia": {
+      "label": "Sosial media",
+      "add": "Tambah sosial media",
+      "remove": "Hapus sosial media",
+      "index": "Sosial media {{number}}",
+      "platform": "Platform",
+      "platformPlaceholder": "mis. Instagram",
+      "platformAria": "Platform sosial media {{number}}",
+      "url": "URL",
+      "urlPlaceholder": "https://instagram.com/...",
+      "urlAria": "URL sosial media {{number}}",
+      "empty": "Belum ada sosial media"
+    },
+    "activityType": {
+      "label": "Jenis aktivitas",
+      "placeholder": "Pilih jenis aktivitas",
+      "otherLabel": "Jelaskan jenis aktivitas Anda",
+      "otherPlaceholder": "mis. Kolektif teater wayang",
+      "options": {
+        "gamelanEnsemble": "Gamelan Ensemble",
+        "danceGroup": "Grup Tari",
+        "theatreDrama": "Teater / Grup Drama",
+        "musicGroup": "Grup Musik",
+        "educationWorkshop": "Edukasi / Workshop",
+        "researchAcademic": "Riset / Akademik",
+        "culturalInstitution": "Institusi Budaya",
+        "other": "Lainnya"
+      }
+    },
+    "content": {
+      "label": "Tentang organisasi",
+      "placeholder": "Jelaskan organisasi Anda, aktivitasnya, dan cara bekerja dengan gamelan."
+    },
+    "submitter": {
+      "fullName": {
+        "label": "Nama lengkap",
+        "placeholder": "Nama lengkap Anda"
+      },
+      "email": {
+        "label": "Email",
+        "placeholder": "anda@contoh.com"
+      },
+      "country": {
+        "label": "Negara",
+        "placeholder": "Pilih negara"
+      },
+      "state": {
+        "label": "Negara Bagian / Wilayah",
+        "placeholder": "Pilih negara bagian / wilayah"
+      }
+    }
+  },
+  "actions": {
+    "submit": "Kirim",
+    "submitting": "Mengirim..."
+  },
+  "errors": {
+    "rateLimited": "Terlalu banyak pengiriman. Silakan coba lagi dalam satu menit.",
+    "generic": "Terjadi kesalahan saat mengirim. Silakan coba lagi."
+  },
+  "success": {
+    "title": "Terima kasih!",
+    "message": "Pendaftaran Anda telah diterima. Tim kami akan meninjau dan menghubungi Anda.",
+    "toast": "Pendaftaran diterima. Terima kasih!"
+  },
+  "search": {
+    "placeholder": "Pilih...",
+    "searchPlaceholder": "Cari...",
+    "emptyLabel": "Tidak ada hasil."
+  },
+  "statusOptions": {
+    "REQUEST": "Permintaan",
+    "APPROVED": "Disetujui",
+    "REJECTED": "Ditolak"
+  },
+  "toast": {
+    "approved": "Usulan berhasil disetujui",
+    "rejected": "Usulan berhasil ditolak",
+    "approveFailed": "Gagal menyetujui usulan",
+    "rejectFailed": "Gagal menolak usulan"
+  }
+}

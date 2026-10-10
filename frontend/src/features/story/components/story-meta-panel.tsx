@@ -15,11 +15,12 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 
-import { CategoryCombobox } from '@/components/shared/category-combobox'
+import { CategoryCombobox, type CategoryOption } from '@/components/shared/category-combobox'
 import { UserCombobox, type UserOption } from '@/components/shared/user-combobox'
 import { useAuth } from '@/features/auth/auth-provider'
 import { AuthorCreateDialog } from '@/features/user/components/author-create-dialog'
 import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dialog'
+import { CategoryDeleteDialog } from './category-delete-dialog'
 import { GalleryUpload } from './gallery-upload'
 import { FlyerMediaPanel } from './flyer-media-panel'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
@@ -53,6 +54,8 @@ export interface StoryMetaPanelProps {
   isLoadingCategories: boolean
   canReadCategories: boolean
   canCreateCategory: boolean
+  /** Gate `category:delete` — aksi hapus kategori di dropdown. */
+  canDeleteCategory: boolean
   onCreateCategory: (name: string) => Promise<StoryCategory | undefined>
   authors: UserOption[]
   isLoadingUsers: boolean
@@ -89,6 +92,7 @@ export function StoryMetaPanel({
   isLoadingCategories,
   canReadCategories,
   canCreateCategory,
+  canDeleteCategory,
   onCreateCategory,
   authors,
   isLoadingUsers,
@@ -101,6 +105,7 @@ export function StoryMetaPanel({
   const { user: sessionUser } = useAuth()
   const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
   const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
+  const [deletingCategory, setDeletingCategory] = useState<CategoryOption | null>(null)
   const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
 
   // Gabung author baru (belum tentu muncul di `authors`) + dedupe terhadap prop.
@@ -120,6 +125,14 @@ export function StoryMetaPanel({
     form.setValue(
       'authorIds',
       (form.getValues('authorIds') ?? []).filter((id) => id !== authorId),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
+
+  function handleCategoryDeleted(categoryId: string) {
+    form.setValue(
+      'categoryIds',
+      (form.getValues('categoryIds') ?? []).filter((id) => id !== categoryId),
       { shouldDirty: true, shouldValidate: true },
     )
   }
@@ -228,6 +241,10 @@ export function StoryMetaPanel({
               disabled={!canReadCategories}
               canCreate={canCreateCategory}
               onCreate={onCreateCategory}
+              canDeleteOption={(option) =>
+                canDeleteCategory && !field.value.includes(option.id)
+              }
+              onDeleteOption={setDeletingCategory}
             />
             <FormMessage />
           </FormItem>
@@ -324,6 +341,17 @@ export function StoryMetaPanel({
             />
           )}
         </>
+      )}
+
+      {canDeleteCategory && (
+        <CategoryDeleteDialog
+          open={Boolean(deletingCategory)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingCategory(null)
+          }}
+          category={deletingCategory}
+          onDeleted={handleCategoryDeleted}
+        />
       )}
     </div>
   )

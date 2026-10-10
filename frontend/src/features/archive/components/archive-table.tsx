@@ -2,6 +2,7 @@ import { MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { MemberBadge, MemberLockBadge } from '@/components/shared/member-gate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +21,8 @@ import {
 } from '@/components/ui/table'
 import { SortableHeader } from '@/components/shared/sortable-header'
 import type { SortOrder } from '@/components/shared/sortable-header'
+import { useMembership } from '@/features/auth/hooks/use-membership'
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { formatDateTime } from '@/lib/datetime'
 
 import { STATUS_VARIANT, TYPE_VARIANT } from './status-variant'
@@ -59,6 +62,9 @@ export function ArchiveTable({
   canCreate = true,
 }: ArchiveTableProps) {
   const { t } = useTranslation()
+  const isMember = useMembership()
+  const { canViewPrivate } = useAuthPermissions()
+  const unlocked = isMember || canViewPrivate
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
   const columnCount = showActions ? 8 : 7
@@ -186,9 +192,17 @@ export function ArchiveTable({
                   {archive.authors.map((author) => author.fullName).join(', ') || '—'}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={TYPE_VARIANT[archive.type]}>
-                    {t(`archive:typeOptions.${archive.type}`, { defaultValue: archive.type })}
-                  </Badge>
+                  {archive.type === 'MEMBER' ? (
+                    unlocked ? (
+                      <MemberBadge />
+                    ) : (
+                      <MemberLockBadge />
+                    )
+                  ) : (
+                    <Badge variant={TYPE_VARIANT[archive.type]}>
+                      {t(`archive:typeOptions.${archive.type}`, { defaultValue: archive.type })}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[archive.status]}>

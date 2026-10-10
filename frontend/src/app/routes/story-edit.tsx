@@ -21,6 +21,7 @@ import { useCategories } from '@/features/story/hooks/use-categories'
 import { useCreateCategory } from '@/features/story/hooks/use-create-category'
 import { useRejectStory } from '@/features/story/hooks/use-reject-story'
 import { useStory } from '@/features/story/hooks/use-story'
+import { useSubmitStory } from '@/features/story/hooks/use-submit-story'
 import { useUpdateStory } from '@/features/story/hooks/use-update-story'
 import { useUploadImage } from '@/features/story/hooks/use-upload-image'
 import type { CreateStoryInput, Story, StoryCategory, StoryFormAction } from '@/features/story/types'
@@ -48,9 +49,11 @@ export function StoryEditPage() {
   const canUpdate = can('story:update')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canDeleteCategory = can('category:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishStory = can('story:publish')
+  const canSubmitStory = can('story:submit')
   const canApproveStory = can('story:approve')
   const canRejectStory = can('story:reject')
 
@@ -58,6 +61,7 @@ export function StoryEditPage() {
   const categoriesQuery = useCategories(canReadCategories)
   const usersQuery = useUsers({ page: 1, limit: 100, enabled: canManageAuthors })
   const updateStory = useUpdateStory()
+  const submitStory = useSubmitStory()
   const approveStory = useApproveStory()
   const rejectStory = useRejectStory()
   const createCategory = useCreateCategory()
@@ -91,9 +95,10 @@ export function StoryEditPage() {
       delete body.publishedAt
       delete body.status
     }
-    // Simpan perubahan field dulu.
+    // Simpan perubahan field dulu. Backend mengabaikan `status` PATCH bagi non-admin.
+    let updated: Story
     try {
-      await updateStory.mutateAsync({ id, payload: body })
+      updated = await updateStory.mutateAsync({ id, payload: body })
     } catch (err: unknown) {
       // 422/409 mengalir ke form via submissionError → setError per-field; tetap di halaman.
       if (isValidationError(err) || isConflictError(err)) return
@@ -108,6 +113,9 @@ export function StoryEditPage() {
         await rejectStory.mutateAsync(id)
         toastSuccess(t('story:toast.rejected'))
       } else {
+        if (action === 'request' && updated.status === 'DRAFT') {
+          await submitStory.mutateAsync(id)
+        }
         toastSuccess(t('story:toast.updated'))
       }
     } catch (err: unknown) {
@@ -177,7 +185,10 @@ export function StoryEditPage() {
           initialGallery={storyQuery.data.gallery ?? []}
           initialFlyer={storyQuery.data.flyer ?? []}
           isPending={
-            updateStory.isPending || approveStory.isPending || rejectStory.isPending
+            updateStory.isPending ||
+            submitStory.isPending ||
+            approveStory.isPending ||
+            rejectStory.isPending
           }
           submissionError={updateStory.error}
           onSubmit={handleSubmit}
@@ -186,7 +197,9 @@ export function StoryEditPage() {
           isLoadingCategories={categoriesQuery.isPending}
           canReadCategories={canReadCategories}
           canCreateCategory={canCreateCategory}
+          canDeleteCategory={canDeleteCategory}
           canPublishStory={canPublishStory}
+          canSubmitStory={canSubmitStory}
           canApproveStory={canApproveStory}
           canRejectStory={canRejectStory}
           onCreateCategory={handleCreateCategory}

@@ -128,6 +128,11 @@
     "title": "Hapus Archive",
     "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
   },
+  "deleteCategory": {
+    "title": "Hapus Kategori",
+    "description": "Hapus kategori \"{{name}}\"? Arsip yang memakainya akan kehilangan kategori ini. Tindakan ini tidak dapat dibatalkan.",
+    "optionLabel": "Hapus kategori {{name}}"
+  },
   "errors": {
     "loadData": "Gagal memuat data archive. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data archive.",
@@ -147,6 +152,8 @@
     "approved": "Archive berhasil disetujui",
     "rejected": "Archive berhasil ditolak",
     "approveFailed": "Gagal menyetujui archive",
-    "rejectFailed": "Gagal menolak archive"
+    "rejectFailed": "Gagal menolak archive",
+    "categoryDeleted": "Kategori berhasil dihapus",
+    "categoryDeleteFailed": "Gagal menghapus kategori"
   }
 }

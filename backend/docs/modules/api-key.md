@@ -155,6 +155,8 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`, list `{ data, messa
 
 Endpoint pengelolaan ini dapat diakses via JWT **atau** API key yang punya `apikey:*`.
 
+> Seeder permission: `pnpm prisma:seed:api-key` (semua permission minus `admin:access`) dan `pnpm prisma:seed:api-key:archive` (hanya `archive:*`, untuk integrasi data archive). Keduanya idempoten, replace-all permission tiap API key existing.
+
 ---
 
 ## 8. Error

@@ -26,6 +26,7 @@ import { AuthorDeleteDialog } from '@/features/user/components/author-delete-dia
 import { EventDatesField } from './event-dates-field'
 import { EventLocationField } from './event-location-field'
 import { EventTypeCombobox } from './event-type-combobox'
+import { EventTypeDeleteDialog } from './event-type-delete-dialog'
 import type { EventFormValues } from '../lib/schema'
 import { EVENT_ENTRIES, VISIBILITIES } from '../types'
 import type { EventType } from '../types'
@@ -46,6 +47,8 @@ export interface EventMetaPanelProps {
   isLoadingEventTypes: boolean
   canReadEventTypes: boolean
   canCreateEventType: boolean
+  /** Gate `event-type:delete` — aksi hapus tipe event di combobox. */
+  canDeleteEventType: boolean
   onCreateEventType: (name: string) => Promise<EventType | undefined>
   authors: UserOption[]
   isLoadingUsers: boolean
@@ -84,6 +87,7 @@ export function EventMetaPanel({
   isLoadingEventTypes,
   canReadEventTypes,
   canCreateEventType,
+  canDeleteEventType,
   onCreateEventType,
   authors,
   isLoadingUsers,
@@ -102,6 +106,7 @@ export function EventMetaPanel({
   const { user: sessionUser } = useAuth()
   const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
   const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
+  const [deletingEventType, setDeletingEventType] = useState<EventType | null>(null)
   const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false)
   const [createdNetworks, setCreatedNetworks] = useState<{ id: string; name: string }[]>([])
@@ -134,6 +139,14 @@ export function EventMetaPanel({
     form.setValue(
       'authorIds',
       (form.getValues('authorIds') ?? []).filter((id) => id !== authorId),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
+
+  function handleEventTypeDeleted(eventTypeId: string) {
+    form.setValue(
+      'eventTypeIds',
+      (form.getValues('eventTypeIds') ?? []).filter((id) => id !== eventTypeId),
       { shouldDirty: true, shouldValidate: true },
     )
   }
@@ -262,6 +275,10 @@ export function EventMetaPanel({
               disabled={!canReadEventTypes}
               canCreate={canCreateEventType}
               onCreate={onCreateEventType}
+              canDeleteOption={(option) =>
+                canDeleteEventType && !field.value.includes(option.id)
+              }
+              onDeleteOption={setDeletingEventType}
             />
             <FormMessage />
           </FormItem>
@@ -410,6 +427,17 @@ export function EventMetaPanel({
             />
           )}
         </>
+      )}
+
+      {canDeleteEventType && (
+        <EventTypeDeleteDialog
+          open={Boolean(deletingEventType)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingEventType(null)
+          }}
+          eventType={deletingEventType}
+          onDeleted={handleEventTypeDeleted}
+        />
       )}
 
       {canCreateNetwork && (

@@ -5,7 +5,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import {
   ApiKeyModule,
   ArchiveModule,
-  ArchiveSubmissionModule,
   AuthModule,
   CategoryModule,
   DocumentModule,
@@ -40,8 +39,10 @@ import { ImagesController } from './controllers/images.controller';
 import { ArchivesController } from './controllers/archives.controller';
 import { DocumentsController } from './controllers/documents.controller';
 import { NetworksController } from './controllers/networks.controller';
+import { NetworkSubmissionsController } from './controllers/network-submissions.controller';
 import { SubscriptionsController } from './controllers/subscriptions.controller';
 import { BillingsController } from './controllers/billings.controller';
+import { SubscriptionRequestsController } from './controllers/subscription-requests.controller';
 import { ApiKeysController } from './controllers/api-keys.controller';
 import { StatsController } from './controllers/stats.controller';
 
@@ -56,7 +57,6 @@ import { StatsController } from './controllers/stats.controller';
     CategoryModule,
     EventModule,
     EventTypeModule,
-    ArchiveSubmissionModule,
     ImageModule,
     StorageModule,
     ArchiveModule,
@@ -83,8 +83,10 @@ import { StatsController } from './controllers/stats.controller';
     ArchivesController,
     DocumentsController,
     NetworksController,
+    NetworkSubmissionsController,
     SubscriptionsController,
     BillingsController,
+    SubscriptionRequestsController,
     ApiKeysController,
     StatsController,
   ],

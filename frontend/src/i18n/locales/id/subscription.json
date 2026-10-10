@@ -10,21 +10,37 @@
     "loadData": "Gagal memuat data subscription. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data subscription."
   },
-  "table": {
+  "fields": {
     "name": "Nama",
     "slug": "Slug",
     "subscriptionType": "Tipe",
+    "status": "Status",
     "currency": "Mata Uang",
-    "created": "Dibuat",
+    "price": "Harga",
+    "durationInDays": "Durasi",
+    "subscriberCount": "Pelanggan",
+    "createdAt": "Dibuat",
+    "updatedAt": "Diperbarui"
+  },
+  "card": {
+    "durationValue": "{{count}} hari",
+    "subscriberValue": "{{count}} pelanggan",
     "empty": "Belum ada subscription",
     "notFound": "Tidak ditemukan untuk \"{{term}}\".",
     "reset": "Reset pencarian",
     "edit": "Edit",
     "delete": "Hapus"
   },
+  "sort": {
+    "ariaLabel": "Urutkan subscription"
+  },
   "subscriptionTypeOptions": {
     "MONTHLY": "Bulanan",
     "YEARLY": "Tahunan"
+  },
+  "statusOptions": {
+    "ACTIVE": "Aktif",
+    "INACTIVE": "Nonaktif"
   },
   "form": {
     "createTitle": "Tambah Subscription",
@@ -32,9 +48,15 @@
     "createDescription": "Buat paket langganan baru.",
     "editDescription": "Perbarui data paket langganan.",
     "name": "Nama",
-    "slug": "Slug",
+    "namePlaceholder": "Mis. Paket Bulanan",
     "subscriptionType": "Tipe",
-    "currency": "Mata Uang"
+    "status": "Status",
+    "currency": "Mata Uang",
+    "price": "Harga",
+    "pricePlaceholder": "0",
+    "durationAmountPlaceholder": "Mis. 3",
+    "durationAmountMonths": "Jumlah Bulan",
+    "durationAmountYears": "Jumlah Tahun"
   },
   "delete": {
     "title": "Hapus Subscription",

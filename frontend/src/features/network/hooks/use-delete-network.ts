@@ -6,6 +6,6 @@ export function useDeleteNetwork() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: deleteNetwork,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['networks'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['network'] }),
   })
 }

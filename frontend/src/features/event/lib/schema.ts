@@ -3,6 +3,15 @@ import { z } from 'zod'
 
 import { CONTENT_STATUSES, EVENT_ENTRIES, VISIBILITIES } from '../types'
 
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function createEventSchema(t: TFunction) {
   return z.object({
     name: z
@@ -44,9 +53,14 @@ export function createEventSchema(t: TFunction) {
         .string()
         .trim()
         .max(500, t('validation:eventAddressMax', { count: 500 })),
-      // String agar aman terhadap kolom DECIMAL backend; dikonversi ke number saat submit.
-      lat: z.string(),
-      lng: z.string(),
+      // Tautan Google Maps; backend menurunkan lat/lng/embedUrl dari sini.
+      mapsUrl: z
+        .string()
+        .trim()
+        .max(2048, t('validation:eventMapsUrlMax', { count: 2048 }))
+        .refine((v) => v === '' || isValidHttpUrl(v), {
+          message: t('validation:eventMapsUrlInvalid'),
+        }),
       // ID relasi geo disimpan sebagai string di form; dikonversi ke number saat submit.
       countryId: z.string(),
       stateId: z.string(),
@@ -70,5 +84,5 @@ export const EMPTY_EVENT_VALUES: EventFormValues = {
   authorIds: [],
   networkId: '',
   dates: [],
-  location: { name: '', address: '', lat: '', lng: '', countryId: '', stateId: '', cityId: '' },
+  location: { name: '', address: '', mapsUrl: '', countryId: '', stateId: '', cityId: '' },
 }

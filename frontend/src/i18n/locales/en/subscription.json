@@ -10,21 +10,37 @@
     "loadData": "Failed to load subscription data. Please try again.",
     "forbidden": "You don't have access to view subscription data."
   },
-  "table": {
+  "fields": {
     "name": "Name",
     "slug": "Slug",
     "subscriptionType": "Type",
+    "status": "Status",
     "currency": "Currency",
-    "created": "Created",
+    "price": "Price",
+    "durationInDays": "Duration",
+    "subscriberCount": "Subscribers",
+    "createdAt": "Created",
+    "updatedAt": "Updated"
+  },
+  "card": {
+    "durationValue": "{{count}} days",
+    "subscriberValue": "{{count}} subscribers",
     "empty": "No subscriptions yet",
     "notFound": "No results for \"{{term}}\".",
     "reset": "Reset search",
     "edit": "Edit",
     "delete": "Delete"
   },
+  "sort": {
+    "ariaLabel": "Sort subscriptions"
+  },
   "subscriptionTypeOptions": {
     "MONTHLY": "Monthly",
     "YEARLY": "Yearly"
+  },
+  "statusOptions": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
   },
   "form": {
     "createTitle": "Add Subscription",
@@ -32,9 +48,15 @@
     "createDescription": "Create a new subscription plan.",
     "editDescription": "Update subscription plan data.",
     "name": "Name",
-    "slug": "Slug",
+    "namePlaceholder": "e.g. Monthly Plan",
     "subscriptionType": "Type",
-    "currency": "Currency"
+    "status": "Status",
+    "currency": "Currency",
+    "price": "Price",
+    "pricePlaceholder": "0",
+    "durationAmountPlaceholder": "e.g. 3",
+    "durationAmountMonths": "Number of Months",
+    "durationAmountYears": "Number of Years"
   },
   "delete": {
     "title": "Delete Subscription",

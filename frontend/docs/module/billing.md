@@ -1,12 +1,16 @@
 # Module: Billing — Brief
 
-Dokumen ini mencatat desain/implementasi halaman **Billing Management** pada frontend React — CRUD lengkap billing (list paginated, create, update, delete, field array `lines`). Mengikuti konvensi `frontend/AGENTS.md` dan format brief `docs/module/user.md`.
+Dokumen ini mencatat desain/implementasi halaman **Billing Management** pada frontend React — **manajemen langganan member** (list paginated + aksi Upgrade/New/Cancel + dialog riwayat). Mengikuti konvensi `frontend/AGENTS.md` dan format brief `docs/module/user.md`.
+
+> Catatan: CRUD billing lama (form `lines`, create/update/delete) **dihapus**. Halaman `/billings` kini fokus urusan langganan member. Halaman self-service `/my-billings` tidak berubah.
 
 ## 1. Tujuan & Ruang Lingkup
 
-- Menyediakan **CRUD billing**: daftar (pagination), tambah, edit, hapus. Form mencakup relasi user/network/subscription, status, tanggal bayar/batal, dan baris (`lines`).
-- Konsumsi API `/api/v1/billings` (kontrak BE dibuat paralel), JWT Bearer + permission `billing:*`.
-- Data opsi form diambil dari feature lain di **container** (route), bukan di komponen fitur (menjaga larangan import lintas fitur): `useUsers`/`useNetworks`/`useSubscriptions` (`{page:1,limit:100}`), **lazy** — `enabled: formOpen && can('<resource>:read')`, jadi user tanpa permission terkait tidak memicu 403 saat mount. Bila permission tak ada, select terkait di-disable + placeholder "—" (tidak fetch).
+- Menyediakan **manajemen langganan member**: daftar member beserta status langganan (`ACTIVE`/`INACTIVE`/`NONE`), dengan aksi kondisional:
+  - `ACTIVE` → **Upgrade**, **Cancel**, **History**.
+  - `INACTIVE`/`NONE` → **New subscription**, **History**.
+- Konsumsi API `/api/v1/billings/members`, `/billings/subscribe`, `/billings/:id/cancel`, `/billings?filter[userId]` (JWT Bearer + permission `billing:*`).
+- Opsi paket untuk dialog diambil dari feature Subscription di **container** (route), bukan di komponen fitur: `useSubscriptions({page:1,limit:100})`, **lazy** — `enabled: subscribeTarget !== null && can('subscription:read')`.
 
 ## 2. Routing
 
@@ -14,71 +18,103 @@ Dokumen ini mencatat desain/implementasi halaman **Billing Management** pada fro
 - Container page: `src/app/routes/billings.tsx` (`BillingsPage`).
 
 ```
-/billings  → halaman CRUD Billing Management
+/billings  → halaman manajemen langganan member
 ```
 
 ## 3. Struktur File
 
 ```
-src/app/routes/billings.tsx               # container + fetch opsi user/network/subscription
+src/app/routes/billings.tsx                # container: state list/dialog + fetch opsi paket + hook riwayat
 
 src/features/billing/
-├── types.ts                              # Billing, BillingLine, Create/UpdateBillingInput, konstanta
-├── api/billings.ts                       # listBillings, create/update/delete
+├── types.ts                               # Billing, MemberSubscription, MemberSubscriptionStatus, SubscribeInput, opsi, konstanta
+├── api/
+│   ├── members.ts                         # getMembers (GET /billings/members)
+│   ├── subscribe.ts                       # subscribeBilling (POST /billings/subscribe)
+│   ├── upload-payment-proof.ts            # uploadPaymentProof (POST /billings/payment-proof, multipart)
+│   ├── cancel-billing.ts                  # cancelBilling (POST /billings/:id/cancel)
+│   ├── user-billings.ts                   # listUserBillings (GET /billings?filter[userId])
+│   └── my-billings.ts                     # listMyBillings (halaman self-service, tidak berubah)
 ├── hooks/
-│   ├── use-billings.ts                   # query ['billings', {...}]
-│   ├── use-create-billing.ts
-│   ├── use-update-billing.ts
-│   └── use-delete-billing.ts
+│   ├── use-billing-members.ts             # query ['billing-members', {...}]
+│   ├── use-subscribe-billing.ts           # mutation + invalidate
+│   ├── use-upload-payment-proof.ts        # mutation unggah bukti (tanpa invalidate)
+│   ├── use-cancel-billing.ts              # mutation + invalidate
+│   ├── use-user-billings.ts               # query ['user-billings', {...}] (enabled saat userId ada)
+│   └── use-my-billings.ts                 # halaman self-service, tidak berubah
 └── components/
-    ├── billing-table.tsx                 # code, user, subscription, status, total, createdAt
-    ├── billing-form-dialog.tsx           # RHF + zod + useFieldArray lines + DateTimePicker
-    └── delete-billing-dialog.tsx
+    ├── billing-member-table.tsx           # avatar, user, paket, expiry, status, aksi kondisional
+    ├── subscribe-billing-dialog.tsx       # RHF + zod, grid kartu paket + unggah bukti (New/Upgrade)
+    ├── cancel-billing-dialog.tsx          # AlertDialog konfirmasi cancel
+    ├── billing-history-dialog.tsx         # tabel riwayat + kolom bukti + pagination
+    └── my-billing-table.tsx               # halaman self-service, tidak berubah
 ```
 
 ## 4. Kontrak API
 
 | Endpoint | Body | Keterangan |
 | --- | --- | --- |
-| `POST /billings` | `{ userId, networkId?, subscriptionId, code, status?, subscriptionType, currency, total, discount?, tax?, paidAt?, canceledAt?, lines[] }` | `lines[]` = `{ description, type, qty?, amount, currency }`. |
-| `GET /billings?page=&limit=` | — | list paginated. |
-| `GET /billings?search=&sortBy=&sortOrder=` | — | search OR like `code,currency`; <2 char diabaikan. |
-| `PATCH /billings/:id` | field opsional | `lines` = **replace seluruh baris**. Field opsional (`networkId`, `discount`, `tax`, `paidAt`, `canceledAt`) dikirim `null` eksplisit saat kosong → backend **clear/disconnect**; `undefined` (di-omit) = biarkan. |
-| `DELETE /billings/:id` | — | hapus. |
+| `GET /billings/members?page=&limit=&search=&sortBy=&sortOrder=` | — | list member + status langganan; envelope `{ data: MemberSubscription[], meta, message }`. |
+| `POST /billings/subscribe` | `{ userId, subscriptionId, paymentProofUrl?, paymentProofName? }` | Buat langganan baru **atau** upgrade; billing aktif lama dibatalkan otomatis backend. Bukti opsional (dikirim hanya bila ada). |
+| `POST /billings/payment-proof` | multipart field `file` | Unggah bukti pembayaran; terima `image/jpeg\|png\|webp` atau `application/pdf`, maks 10 MB. Response `{ url, filename, mimeType, size }`. |
+| `POST /billings/:id/cancel` | — | Batalkan billing aktif (`:id` = `billingId`). |
+| `GET /billings?filter[userId]=<id>&page=&limit=` | — | Riwayat billing milik user (endpoint list billing existing). |
 
-BillingEntity: `{ id, userId, user, networkId|null, network|null, subscriptionId, subscription, code, status, subscriptionType, currency, total, discount|null, tax|null, paidAt|null, canceledAt|null, lines[], createdAt, updatedAt }`; `lines` item `{ id, description, type:'ITEM'|'DISCOUNT'|'TAX', qty, amount, currency }`.
+```ts
+MemberSubscription {
+  userId: string
+  user: { id: string; fullName: string; email: string; avatar: string | null }
+  billingId: string | null
+  startDate: string | null
+  expiryDate: string | null
+  subscription: { id: string; name: string; slug: string } | null
+  status: 'ACTIVE' | 'INACTIVE' | 'NONE'
+}
+```
+
+`Billing` (untuk riwayat) kini memuat `startDate: string | null`, `expiryDate: string | null`, `paymentProofUrl: string | null`, dan `paymentProofName: string | null`.
 
 ### Searchable / Sortable
 
-- **Searchable**: `code`, `currency`. Placeholder: "Cari kode atau mata uang...".
-- **Sortable** (semua kolom tampil): `code`, `user.fullName`, `subscription.name`, `status`, `total`, `createdAt` (+ `subscriptionType`, `currency`, `paidAt`, `canceledAt`, `updatedAt`). Backend memetakan sort relasi via `BILLING_SORT_MAP`.
-- Contoh query: `GET /api/v1/billings?page=1&limit=10&search=INV&sortBy=user.fullName&sortOrder=asc`.
+- **Searchable** (backend): `user.fullName`, `user.email`. Placeholder: "Cari nama atau email...". Kirim hanya bila trim ≥2 char (`appendListParams`).
+- **Sortable** (kolom tabel member, whitelist backend): `user.fullName`, `subscription.name`, `startDate`, `expiryDate`, `status`. Kolom avatar & aksi tidak sortable. Backend juga menerima `fullName`, `email`, `createdAt` (kolom lain).
+- Contoh query: `GET /api/v1/billings/members?page=1&limit=10&search=andi&sortBy=expiryDate&sortOrder=asc`.
 
-## 5. Form & Tanggal
+## 5. Kolom & Aksi Tabel
 
-- Field: `code*`, `user` (Select), `network` (Select opsional, sentinel `none` → `networkId: null`), `subscription*` (Select), `status` (Select), `subscriptionType` (Select), `currency*`, `total*`, `discount`, `tax`, `paidAt`, `canceledAt`, `lines` (field array RHF: description, type Select, qty, amount, currency; tombol tambah/hapus baris).
-- Angka (`total`, `discount`, `tax`, `qty`, `amount`) disimpan sebagai string di form lalu dikonversi (`Number`) saat submit. `discount`/`tax` kosong → `null` (clear); `qty` kosong → di-omit (bukan `NaN`).
-- Field opsional kosong dikirim `null` eksplisit: `networkId`, `discount`, `tax`, `paidAt`, `canceledAt`. Select user/network/subscription di-disable + placeholder "—" bila sesi tak punya permission baca terkait.
-- `paidAt`/`canceledAt` memakai `components/shared/date-time-picker.tsx`; dikirim ISO UTC (`value` sudah ISO dari picker). Dilarang `<input type="date">`.
-- 422 → `mapApiFieldErrors` → `form.setError` (mendukung path bersarang `lines.N.field`), tanpa toast, dialog tetap terbuka.
-- Toast call-site: `billing:toast.created/updated/deleted` + `*Failed`.
+| Kolom | Sortable | Isi |
+| --- | --- | --- |
+| Foto profil | tidak | shadcn `Avatar`/`AvatarImage`/`AvatarFallback` (fallback inisial nama). |
+| User | `user.fullName` | nama (font-medium) + email (muted). |
+| Paket | `subscription.name` | nama paket atau `—` bila `null`. |
+| Expiry date | `expiryDate` | `formatDate` dari `@/lib/datetime`; `—` bila null. |
+| Status | `status` | Badge restrained: `ACTIVE`=`default`, `INACTIVE`=`secondary`, `NONE`=`outline`. |
+| Aksi | — | tombol kondisional (lihat bawah). |
 
-## 6. Permissions
+- Aksi + gate permission: **Upgrade**/**New subscription** (`billing:create`), **Cancel** (`billing:update`), **History** (`billing:read`).
+- Tabel `overflow-x-auto` (mobile bisa scroll horizontal). `tabular-nums` untuk tanggal.
+- Empty state bedakan "Belum ada member" vs `Tidak ditemukan untuk "<search>"` + tombol Reset.
+
+## 6. Dialog
+
+- **Subscribe/Upgrade dialog** (`subscribe-billing-dialog.tsx`): RHF + zod (field `subscriptionId`, wajib dipilih). Paket ditampilkan sebagai **grid kartu** (`role="radiogroup"` + `role="radio"`/`aria-checked`, tombol native — Enter/Space; kartu terpilih `ring-2 ring-primary`) berisi nama, tipe (badge), durasi, dan harga+currency (`tabular-nums`). Plus **unggah bukti pembayaran opsional**: drag-drop + tombol pilih file (`useFileDrop`), terima `image/jpeg\|png\|webp`/`application/pdf`, maks 10 MB; validasi tipe & ukuran di client sebelum unggah; unggah langsung saat file dipilih (`useUploadPaymentProof`), preview gambar (`<img>`) atau ikon `FileText` + nama + `formatFileSize`, tombol hapus. Tombol Simpan disabled saat unggah berjalan. Sukses/gagal non-422 → toast call-site; 422 → `mapApiFieldErrors` per-field, dialog tetap terbuka, tanpa toast.
+- **Cancel dialog** (`cancel-billing-dialog.tsx`): `AlertDialog` konfirmasi; tombol confirm `destructive`.
+- **History dialog** (`billing-history-dialog.tsx`): daftar billing user via `useUserBillings`; kolom code, paket, status, **bukti pembayaran** (link "Lihat bukti" ke `paymentProofUrl` di tab baru + nama file, `—` bila kosong), total+currency, paidAt, canceledAt, expiryDate, created; pagination `DataTablePagination`. Data + state pagination di container (komponen presentational).
+
+## 7. Permissions
 
 | Route / Aksi | Kode |
 | --- | --- |
 | Route `/billings` | `billing:read` |
-| Tombol Tambah | `billing:create` |
-| Edit | `billing:update` |
-| Hapus | `billing:delete` |
+| Upgrade / New subscription | `billing:create` |
+| Cancel | `billing:update` |
+| History | `billing:read` |
+| Opsi paket (`useSubscriptions` lazy) | `subscription:read` |
 | Menu sidebar "Billing Management" | `billing:read` |
 
-## 7. Status & Catatan
+## 8. Status & Catatan
 
-- **Selesai**: CRUD + pagination + search + sort server-side + skeleton + forbidden state + permission gating (termasuk lazy fetch opsi form) + field array lines.
-- **Kontrak terkonfirmasi/terimplementasi (BE)**:
-  - Endpoint `/subscriptions` & `/billings` tersedia.
-  - Enum `status`/`subscriptionType`/`type` line; `total` number; `qty` optional; 422 error per-field (termasuk path bersarang `lines.N.field`).
-  - Semantik `null`: BE map `null` → clear (`discount`/`tax`/`paidAt`/`canceledAt`) & disconnect (`networkId`); `undefined` → biarkan.
-  - Sort relasi `user.fullName`/`subscription.name` didukung via `BILLING_SORT_MAP`.
-- Format tampilan `total` memakai `Number.toLocaleString` + kode `currency` (tanpa helper shared — belum ada).
+- **Selesai**: list member + search/sort server-side + skeleton + forbidden state + permission gating per aksi + dialog subscribe/upgrade (RHF+zod) + dialog cancel + dialog riwayat berpaginasi.
+- **Dihapus**: `billing-table.tsx`, `billing-form-dialog.tsx`, `delete-billing-dialog.tsx`, `api/billings.ts`, `use-billings.ts`, `use-create-billing.ts`, `use-update-billing.ts`, `use-delete-billing.ts`, beserta type/konstanta CRUD lama (`CreateBillingInput`, `UpdateBillingInput`, `BILLING_*`).
+- **Dikecualikan**: `my-billings.tsx`, `my-billing-table.tsx`, `use-my-billings.ts`, `api/my-billings.ts`, serta key `billing:statusOptions.*` (dipakai tabel self-service).
+- Kontrak endpoint member/subscribe/cancel dianggap final (BE dibuat paralel).

@@ -4,7 +4,7 @@ import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/au
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
-import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
+import { ListPostsQueryDto } from './dto/list-posts-query.dto';
 import { CategoryRepository } from '@app/libs/modules/category/category.repository';
 import { CountryRepository } from '@app/libs/modules/country/country.repository';
 import { StateRepository } from '@app/libs/modules/state/state.repository';
@@ -80,24 +80,30 @@ export class PostService {
       case 'network':
         return { creator: { networkId: scope.networkId } };
       case 'own':
-        return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.PostWhereInput;
+        return ownReadWhere(scope.userId, scope.canViewPrivate || scope.isMember) as Prisma.PostWhereInput;
       case 'published': {
         // Terbit berdasarkan `publishedAt`: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future tersembunyi).
         const base: Prisma.PostWhereInput = {
           status: ContentStatus.PUBLISHED,
           publishedAt: { not: null, lte: new Date() },
         };
-        return scope.canViewPrivate ? base : { ...base, visibility: ContentVisibility.PUBLIC };
+        return scope.canViewPrivate || scope.isMember ? base : { ...base, visibility: ContentVisibility.PUBLIC };
       }
       case 'none':
         return { id: { in: [] } };
     }
   }
 
+  // Relasi: hanya post dengan minimal satu link kategori `categoryId` (`categories.some`).
+  private categoryWhere(categoryId?: string): Prisma.PostWhereInput | undefined {
+    if (!categoryId) return undefined;
+    return { categories: { some: { categoryId } } };
+  }
+
   // Baca: org hanya konten network-nya; published hanya status PUBLISHED; none tolak.
   private assertReadable(post: PostEntity, scope: AccessScope): void {
     if (scope.kind === 'none') throw new ForbiddenException('Forbidden resource');
-    if (post.visibility === ContentVisibility.PRIVATE && !scope.canViewPrivate) {
+    if (post.visibility === ContentVisibility.PRIVATE && !(scope.canViewPrivate || scope.isMember)) {
       throw new ForbiddenException('Forbidden resource');
     }
     if (scope.kind === 'network' && post.creator?.networkId !== scope.networkId) {
@@ -209,7 +215,7 @@ export class PostService {
     return slug;
   }
 
-  async list(query: ListQueryDto, userId: string): Promise<{ items: PostResponse[]; total: number }> {
+  async list(query: ListPostsQueryDto, userId: string): Promise<{ items: PostResponse[]; total: number }> {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
     assertAllowedSort(query.sortBy, POST_SORT_FIELDS);
@@ -220,10 +226,15 @@ export class PostService {
       dateFields: POST_DATE_FIELDS,
     });
     const searchWhere = buildSearch<Prisma.PostWhereInput>(query.search, POST_SEARCHABLE_FIELDS);
-    const sw = this.scopeWhere(scope);
-    const scopedFilter = sw ? { AND: [sw, filterWhere] } : (filterWhere as unknown as Record<string, unknown>);
+    // Susun AND: scope + filter + categoryId, lalu AND dengan search (combineWhere). Bagian kosong dibuang.
+    const clauses = [
+      this.scopeWhere(scope),
+      filterWhere,
+      this.categoryWhere(query.categoryId),
+    ].filter((w): w is Prisma.PostWhereInput => !!w && Object.keys(w).length > 0);
+    const combined = clauses.length === 1 ? clauses[0] : { AND: clauses };
     const where = combineWhere<Prisma.PostWhereInput>(
-      scopedFilter as unknown as Record<string, unknown>,
+      combined as unknown as Record<string, unknown>,
       searchWhere as unknown as Record<string, unknown> | undefined,
     );
     const { items, total } = await this.postRepository.findMany({

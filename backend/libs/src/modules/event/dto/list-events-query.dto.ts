@@ -1,12 +1,7 @@
-import { IsEnum, IsIn, IsOptional, IsString, Matches } from 'class-validator';
-import { ContentStatus } from '@prisma/client';
+import { IsIn, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 
 export class ListEventsQueryDto extends ListQueryDto {
-  @IsOptional()
-  @IsEnum(ContentStatus)
-  filterStatus?: ContentStatus;
-
   // Bulan kalender UTC "YYYY-MM". Bila ada, hanya event dengan >=1 EventDate.date di bulan tsb.
   @IsOptional()
   @IsString()
@@ -26,4 +21,9 @@ export class ListEventsQueryDto extends ListQueryDto {
   @IsString()
   @IsIn(['true', 'false'], { message: 'upcoming must be "true" or "false"' })
   upcoming?: string;
+
+  // Relasi: hanya event yang punya link tipe ini (`eventTypes.some`).
+  @IsOptional()
+  @IsUUID()
+  eventTypeId?: string;
 }

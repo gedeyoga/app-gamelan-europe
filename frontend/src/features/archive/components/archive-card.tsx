@@ -2,10 +2,13 @@ import { ImageOff, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
+import { MemberBadge, MemberLockBadge } from '@/components/shared/member-gate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
+import { useMembership } from '@/features/auth/hooks/use-membership'
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { formatDateTime } from '@/lib/datetime'
 
 import { STATUS_VARIANT, TYPE_VARIANT } from './status-variant'
@@ -39,6 +42,9 @@ export function ArchiveCard({
   canCreate = true,
 }: ArchiveCardProps) {
   const { t } = useTranslation()
+  const isMember = useMembership()
+  const { canViewPrivate } = useAuthPermissions()
+  const unlocked = isMember || canViewPrivate
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
 
@@ -93,9 +99,17 @@ export function ArchiveCard({
                 )}
               </Link>
               <div className="absolute left-2 top-2 z-10 flex flex-wrap items-center gap-1">
-                <Badge className="shadow-sm" variant={TYPE_VARIANT[archive.type]}>
-                  {t(`archive:typeOptions.${archive.type}`, { defaultValue: archive.type })}
-                </Badge>
+                {archive.type === 'MEMBER' ? (
+                  unlocked ? (
+                    <MemberBadge className="shadow-sm" />
+                  ) : (
+                    <MemberLockBadge className="shadow-sm" />
+                  )
+                ) : (
+                  <Badge className="shadow-sm" variant={TYPE_VARIANT[archive.type]}>
+                    {t(`archive:typeOptions.${archive.type}`, { defaultValue: archive.type })}
+                  </Badge>
+                )}
                 <Badge className="shadow-sm" variant={STATUS_VARIANT[archive.status]}>
                   {t(`archive:statusOptions.${archive.status}`, { defaultValue: archive.status })}
                 </Badge>

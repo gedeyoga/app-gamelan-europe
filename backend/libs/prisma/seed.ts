@@ -23,10 +23,10 @@ function toCode(name: string): string {
 // ---------------------------------------------------------------------------
 
 // Permission set bersama `member` & `author` (keduanya identik).
-const MEMBER_PERMISSION_CODES = ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'city:create', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
+const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'city:create', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
 
 // Role default (idempoten, additive). `admin` = semua permission;
-// `member` & `author` = mengelola event sendiri sampai REQUEST (bukan read-only), permission set sama.
+// `member` & `author` = mengelola event & story sendiri sampai REQUEST (bukan read-only), permission set sama.
 const DEFAULT_ROLES: DefaultRole[] = [
   {
     name: 'admin',
@@ -35,12 +35,12 @@ const DEFAULT_ROLES: DefaultRole[] = [
   },
   {
     name: 'member',
-    description: 'Anggota jaringan — mengelola event (sampai REQUEST), tanpa story write',
+    description: 'Anggota jaringan — mengelola event & story sendiri (sampai REQUEST)',
     permissions: MEMBER_PERMISSION_CODES,
   },
   {
     name: 'author',
-    description: 'Author — mengelola event (sampai REQUEST), tanpa story write',
+    description: 'Author — mengelola event & story sendiri (sampai REQUEST)',
     permissions: MEMBER_PERMISSION_CODES,
   },
 ];
@@ -49,6 +49,25 @@ const DEFAULT_ROLES: DefaultRole[] = [
 // dibersihkan targeted saat seeding; user yang masih memakainya → `roleId` NULL
 // (relasi `User.role` `onDelete: SetNull`).
 const LEGACY_ROLE_NAMES = ['organization'];
+
+// Permission legacy fitur submission yang sudah dihapus (mis. digantikan `network:approve`/`network:reject`).
+// Baris DB-nya dibersihkan targeted by code saat seeding; relasi `role_permissions`
+// (dan `api_key_permissions`) ikut terhapus (FK `onDelete: Cascade`).
+const LEGACY_PERMISSION_CODES = [
+  'archive-submission:read',
+  'archive-submission:approve',
+  'archive-submission:reject',
+  'event-submission:read',
+  'event-submission:approve',
+  'event-submission:reject',
+  'story-submission:read',
+  'story-submission:approve',
+  'story-submission:reject',
+  'network-submission:read',
+  'network-submission:update',
+  'network-submission:approve',
+  'network-submission:reject',
+];
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim();
 const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME?.trim();
@@ -134,6 +153,18 @@ async function main(): Promise<void> {
   });
   if (removedLegacyRoles.count > 0) {
     console.log(`role legacy: ${removedLegacyRoles.count} role(s) removed (${LEGACY_ROLE_NAMES.join(', ')})`);
+  }
+
+  // Hapus permission legacy submission (fitur sudah dihapus). Targeted by code — bukan
+  // deleteMany global. Relasi `role_permissions`/`api_key_permissions` ikut terhapus
+  // (FK `onDelete: Cascade`, lihat schema.prisma).
+  const removedLegacyPermissions = await prisma.permission.deleteMany({
+    where: { code: { in: LEGACY_PERMISSION_CODES } },
+  });
+  if (removedLegacyPermissions.count > 0) {
+    console.log(
+      `permission legacy: ${removedLegacyPermissions.count} permission(s) removed (${LEGACY_PERMISSION_CODES.join(', ')})`,
+    );
   }
 
   const adminRoleId = roleIdByName.get('admin');

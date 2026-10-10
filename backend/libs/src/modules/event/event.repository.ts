@@ -8,6 +8,8 @@ export interface EventLocationData {
   address?: string;
   lat?: number;
   lng?: number;
+  mapsUrl?: string | null;
+  embedUrl?: string | null;
   countryId?: number | null;
   stateId?: number | null;
   cityId?: number | null;
@@ -28,6 +30,7 @@ export interface CreateEventData {
   source?: ContentSource;
   visibility: ContentVisibility;
   entry?: EventEntry;
+  websiteUrl?: string | null;
   publishedAt?: Date;
   approvedAt?: Date;
   createdBy?: string;
@@ -120,6 +123,8 @@ export class EventRepository {
         address: location.address,
         lat: location.lat,
         lng: location.lng,
+        mapsUrl: location.mapsUrl,
+        embedUrl: location.embedUrl,
         countryId: location.countryId,
         stateId: location.stateId,
         cityId: location.cityId,
@@ -171,6 +176,7 @@ export class EventRepository {
         source: data.source,
         visibility: data.visibility,
         entry: data.entry,
+        websiteUrl: data.websiteUrl,
         publishedAt: data.publishedAt,
         approvedAt: data.approvedAt,
         createdBy: data.createdBy,

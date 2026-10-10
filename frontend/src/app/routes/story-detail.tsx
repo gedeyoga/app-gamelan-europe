@@ -4,6 +4,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MemberGate } from '@/components/shared/member-gate'
+import { useMembership } from '@/features/auth/hooks/use-membership'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { StoryDetail } from '@/features/story/components/story-detail'
@@ -14,7 +16,10 @@ export function StoryDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams<{ id: string }>()
-  const { can } = useAuthPermissions()
+  const { can, canViewPrivate } = useAuthPermissions()
+  const isMember = useMembership()
+  // 403 = "khusus member" HANYA bila user benar-benar terkunci; 403 lain tetap generik.
+  const isMemberLocked = !isMember && !canViewPrivate
 
   const canRead = can('story:read')
   const storyQuery = useStory(id, canRead)
@@ -79,10 +84,14 @@ export function StoryDetailPage() {
         </div>
       ) : storyQuery.isError ? (
         isForbiddenError(storyQuery.error) ? (
-          <div className="mx-auto mt-20 flex w-full max-w-3xl flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
-            <ShieldAlert className="size-6 text-destructive" />
-            <p className="text-sm font-medium">{t('story:errors.forbidden')}</p>
-          </div>
+          isMemberLocked ? (
+            <MemberGate unlocked={false} className="mx-auto mt-20 w-full max-w-3xl" />
+          ) : (
+            <div className="mx-auto mt-20 flex w-full max-w-3xl flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+              <ShieldAlert className="size-6 text-destructive" />
+              <p className="text-sm font-medium">{t('story:errors.forbidden')}</p>
+            </div>
+          )
         ) : (
           <div className="mx-auto mt-20 w-full max-w-3xl rounded-lg border border-destructive/30 p-4 text-sm text-destructive">
             {t('story:errors.loadDetail')}

@@ -36,10 +36,10 @@ export class SubscriptionsController {
     return this.subscriptionService.findMine(user.id);
   }
 
-  // Katalog paket (non-deleted) untuk semua user login; reuse list() yang sudah memfilter deletedAt.
+  // Katalog paket (non-deleted, status ACTIVE) untuk semua user login.
   @Get('available')
   async available(@Query() query: ListSubscriptionsQueryDto) {
-    const { items, total } = await this.subscriptionService.list(query);
+    const { items, total } = await this.subscriptionService.listAvailable(query);
     return {
       data: items,
       meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },

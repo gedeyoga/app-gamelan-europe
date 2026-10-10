@@ -159,6 +159,8 @@ Format: **lowercase** `resource:action`.
 | network | read | `network:read` |
 | network | update | `network:update` |
 | network | delete | `network:delete` |
+| network | approve | `network:approve` (REQUEST→PUBLISHED) |
+| network | reject | `network:reject` (REQUEST→DRAFT) |
 | apikey | create | `apikey:create` |
 | apikey | read | `apikey:read` |
 | apikey | update | `apikey:update` |
@@ -349,13 +351,13 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 
 | Konstanta | Isi |
 | --- | --- |
-| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 65 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 2 (`create,read`), `network:*` 4, `subscription:*` 4, `billing:*` 4, `apikey:*` 4, `archive:*` 9, `archive-submission:*` 3 (`read,approve,reject`), `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
-| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `member` (`story:read`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `category:read`, `archive:read`, `archive:create`, `archive:update`, `archive:submit` — tanpa story write), `author` (permission set **sama persis** dengan `member`, berbagi konstanta `MEMBER_PERMISSION_CODES`). Struktur array siap tambah role baru. |
+| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 69 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 3 (`create,read,delete`), `city:*` 1 (`create`), `network:*` 6 (`create,read,update,delete,approve,reject`), `subscription:*` 4, `billing:*` 4, `subscription-request:*` 3 (`read,approve,reject`), `apikey:*` 4, `archive:*` 9, `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
+| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `member` (`story:read`, `story:create`, `story:update`, `story:submit`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `city:create`, `category:read`, `archive:read`, `archive:create`, `archive:update`, `archive:submit`), `author` (permission set **sama persis** dengan `member`, berbagi konstanta `MEMBER_PERMISSION_CODES`). Struktur array siap tambah role baru. |
 | User admin | Dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` → role `admin`, status `ACTIVE`. |
 
 ### Matriks role → permission
 
-65 permission dibagi ke 3 role. `admin` = seluruh 65 code; `member` = 11 code; `author` = 11 code (sama dengan `member`).
+69 permission dibagi ke 3 role. `admin` = seluruh 69 code; `member` = 15 code; `author` = 15 code (sama dengan `member`).
 
 | Resource | Code | admin | member | author |
 | --- | --- | :---: | :---: | :---: |
@@ -365,11 +367,11 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | user | `user:delete` | ✅ | — | — |
 | role | `role:create/read/update/delete` (4) | ✅ | — | — |
 | permission | `permission:create/read/update/delete` (4) | ✅ | — | — |
-| story | `story:create` | ✅ | — | — |
+| story | `story:create` | ✅ | ✅ | ✅ |
 | story | `story:read` | ✅ | ✅ | ✅ |
-| story | `story:update` | ✅ | — | — |
+| story | `story:update` | ✅ | ✅ | ✅ |
 | story | `story:delete` | ✅ | — | — |
-| story | `story:submit` | ✅ | — | — |
+| story | `story:submit` | ✅ | ✅ | ✅ |
 | story | `story:approve` | ✅ | — | — |
 | story | `story:reject` | ✅ | — | — |
 | story | `story:publish` | ✅ | — | — |
@@ -385,13 +387,16 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | event | `event:unpublish` | ✅ | — | — |
 | event-type | `event-type:create` | ✅ | — | — |
 | event-type | `event-type:read` | ✅ | ✅ | ✅ |
+| event-type | `event-type:delete` | ✅ | — | — |
 | category | `category:create` | ✅ | — | — |
 | category | `category:read` | ✅ | ✅ | ✅ |
+| city | `city:create` | ✅ | ✅ | ✅ |
 | category | `category:update` | ✅ | — | — |
 | category | `category:delete` | ✅ | — | — |
-| network | `network:create/read/update/delete` (4) | ✅ | — | — |
+| network | `network:create/read/update/delete/approve/reject` (6) | ✅ | — | — |
 | subscription | `subscription:create/read/update/delete` (4) | ✅ | — | — |
 | billing | `billing:create/read/update/delete` (4) | ✅ | — | — |
+| subscription-request | `subscription-request:read/approve/reject` (3) | ✅ | — | — |
 | apikey | `apikey:create/read/update/delete` (4) | ✅ | — | — |
 | archive | `archive:create` | ✅ | ✅ | ✅ |
 | archive | `archive:read` | ✅ | ✅ | ✅ |
@@ -402,31 +407,28 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | archive | `archive:reject` | ✅ | — | — |
 | archive | `archive:publish` | ✅ | — | — |
 | archive | `archive:unpublish` | ✅ | — | — |
-| archive-submission | `archive-submission:read` | ✅ | — | — |
-| archive-submission | `archive-submission:approve` | ✅ | — | — |
-| archive-submission | `archive-submission:reject` | ✅ | — | — |
 | admin | `admin:access` | ✅ | — | — |
 
-> `member` & `author` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`). Keduanya **tidak** punya story write. `author` identik dengan `member`. Row-level scoping (konten milik network/creator) dijelaskan di [§10](#10-row-level-scoping).
+> `member` & `author` **tidak** boleh approve/reject/publish/unpublish — transisi maksimal sampai `REQUEST` (`submit`), untuk event **maupun story** miliknya sendiri. `author` identik dengan `member`. Row-level scoping (konten milik network/creator) dijelaskan di [§10](#10-row-level-scoping).
 
 
 ```typescript
 // libs/prisma/seed.ts (ringkas) — deklaratif + upsert dalam satu $transaction
 const DEFAULT_PERMISSIONS = [
   { code: 'user:create', description: 'Membuat user baru' },
-  // ... 65 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 2 + network 4 + subscription 4 + billing 4 + apikey 4 + archive 9 + archive-submission 3 + admin:access 1
+  // ... 69 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 3 + city 1 + network 6 + subscription 4 + billing 4 + subscription-request 3 + apikey 4 + archive 9 + admin:access 1
 ];
 
 // Permission set bersama `member` & `author` (identik).
-const MEMBER_PERMISSION_CODES = ['story:read', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read',
+const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read',
   'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
 
 const DEFAULT_ROLES = [
   { name: 'admin', description: 'Admin dengan akses penuh RBAC',
     permissions: DEFAULT_PERMISSIONS.map((p) => p.code) },
-  { name: 'member', description: 'Anggota network — mengelola event (sampai REQUEST), tanpa story write',
+  { name: 'member', description: 'Anggota network — mengelola event & story sendiri (sampai REQUEST)',
     permissions: MEMBER_PERMISSION_CODES },
-  { name: 'author', description: 'Author — mengelola event (sampai REQUEST), tanpa story write',
+  { name: 'author', description: 'Author — mengelola event & story sendiri (sampai REQUEST)',
     permissions: MEMBER_PERMISSION_CODES },
 ];
 
@@ -484,6 +486,7 @@ Catatan:
 - **Idempoten**: seed 2x tidak `P2002`; `description` ikut ter-update via `upsert`.
 - **Additive**: permission baru yang ditambah ke `DEFAULT_PERMISSIONS` + `permissions` role otomatis ter-link ke role terkait tanpa menghapus relasi lama.
 - **Role legacy**: `LEGACY_ROLE_NAMES` (`organization`) di-`deleteMany` targeted by name tiap seed → role lama hilang, relasi `role_permissions` ikut cascade, dan user yang masih memakainya → `roleId` NULL (`onDelete: SetNull`). Relasi role lain tidak tersentuh.
+- **Permission legacy**: `LEGACY_PERMISSION_CODES` (9 code `archive/event/story-submission:*` + 4 code `network-submission:*` fitur usulan lama) di-`deleteMany` targeted by `code` tiap seed → permission basi hilang, relasi `role_permissions`/`api_key_permissions` ikut cascade; usulan network kini lewat `network:approve`/`network:reject`.
 - **`admin:access`**: hanya `admin` (dari `DEFAULT_PERMISSIONS.map`). Gerbang `user.service` list/create/update/delete/assignRole; bukan permission konten.
 - **Reset password**: tiap re-seed me-re-hash `ADMIN_PASSWORD` (argon2id) dan meng-update `passwordHash` user admin. Secret hanya dari env, tidak di-commit dan tidak di-log.
 
@@ -601,6 +604,8 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | GET | `/api/v1/networks/:id` | Detail network | PERMISSION: `network:read` |
 | PATCH | `/api/v1/networks/:id` | Update network | PERMISSION: `network:update` |
 | DELETE | `/api/v1/networks/:id` | Hapus network | PERMISSION: `network:delete` |
+| POST | `/api/v1/networks/:id/approve` | Setujui usulan network (REQUEST→PUBLISHED) | PERMISSION: `network:approve` |
+| POST | `/api/v1/networks/:id/reject` | Tolak usulan network (REQUEST→DRAFT) | PERMISSION: `network:reject` |
 
 ### Geographic Reference (sinkron dengan [country.md](./country.md), [region.md](./region.md) & [state.md](./state.md))
 
@@ -673,21 +678,22 @@ export const CONTENT_MODERATOR_ACTIONS = ['approve', 'publish', 'reject', 'unpub
 export const CONTENT_WRITE_ACTIONS = ['create', 'update', 'submit'] as const;
 
 export type AccessScope =
-  | { kind: 'all'; canViewPrivate: boolean }                   // status-manager konten (resource ini)
-  | { kind: 'network'; networkId: string; userId: string; canViewPrivate: boolean }
-  | { kind: 'own'; userId: string; canViewPrivate: boolean }   // penulis konten tanpa organisasi
-  | { kind: 'published'; canViewPrivate: boolean }
-  | { kind: 'none'; canViewPrivate: boolean };
+  | { kind: 'all'; canViewPrivate: boolean; isMember: boolean }                   // status-manager konten (resource ini)
+  | { kind: 'network'; networkId: string; userId: string; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'own'; userId: string; canViewPrivate: boolean; isMember: boolean }   // penulis konten tanpa organisasi
+  | { kind: 'published'; canViewPrivate: boolean; isMember: boolean }
+  | { kind: 'none'; canViewPrivate: boolean; isMember: boolean };
 
 async resolve(userId: string, resource: ContentResource): Promise<AccessScope> {
   const codes = /* role.permissions[].code milik user */;
   const canViewPrivate = canViewPrivateFromCodes(codes); // hanya tulis/status-manager (H1)
+  const isMember = await this.billingService.hasActiveMembership(userId); // billing PAID + belum kedaluwarsa
   const isWriter = hasActions(codes, resource, CONTENT_WRITE_ACTIONS); // M2: per-resource
-  if (hasActions(codes, resource, CONTENT_MODERATOR_ACTIONS)) return { kind: 'all', canViewPrivate };
+  if (hasActions(codes, resource, CONTENT_MODERATOR_ACTIONS)) return { kind: 'all', canViewPrivate, isMember };
   if (user?.networkId && isWriter)
-    return { kind: 'network', networkId: user.networkId, userId, canViewPrivate };
-  if (isWriter) return { kind: 'own', userId, canViewPrivate };
-  return { kind: 'published', canViewPrivate };
+    return { kind: 'network', networkId: user.networkId, userId, canViewPrivate, isMember };
+  if (isWriter) return { kind: 'own', userId, canViewPrivate, isMember };
+  return { kind: 'published', canViewPrivate, isMember };
 }
 ```
 
@@ -696,10 +702,14 @@ async resolve(userId: string, resource: ContentResource): Promise<AccessScope> {
 | `all` | salah satu `<resource>:approve\|publish\|reject\|unpublish` untuk resource terkait | Tanpa pembatasan baris. |
 | `network` | punya `networkId` **dan** permission tulis resource terkait (`<resource>` × `create`/`update`/`submit`) | Hanya konten yang `creator.networkId === networkId`. Dipicu hanya oleh role custom (lihat catatan di bawah). |
 | `own` | permission tulis resource terkait **tanpa** `networkId` | Baca: konten miliknya **atau** konten terbit (M5). Tulis: hanya konten miliknya. |
-| `published` | selain di atas | Baca hanya konten **yang sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now`; tidak punya hak tulis. Scheduled publish (publishedAt di masa depan) belum terlihat. |
+| `published` | selain di atas | Baca hanya konten **yang sudah terbit**: `status = PUBLISHED` **dan** `publishedAt != null` **dan** `publishedAt <= now`; tanpa `canViewPrivate`/`isMember` baris `PRIVATE` disembunyikan (`visibility = PUBLIC`). Tidak punya hak tulis. Scheduled publish (publishedAt di masa depan) belum terlihat. |
 | `none` | — | Tidak boleh apa-apa (dipertahankan untuk kompatibilitas; saat ini tak terpicu). |
 
-`canViewPrivate` (boolean, **independen** dari `kind`) = punya permission **tulis** (`create`/`update`/`submit`) atau **status** (`approve`/`publish`/`reject`/`unpublish`) pada `story`/`event` — **bukan** sekadar `*:read` (H1). `admin`/`member`/`author` punya tulis konten → tetap `true`; role custom read-only → `false` (tidak boleh baca PRIVATE).
+`canViewPrivate` (boolean, **independen** dari `kind`) = punya permission **tulis** (`create`/`update`/`submit`) atau **status** (`approve`/`publish`/`reject`/`unpublish`) pada `story`/`event`/`archive` — **bukan** sekadar `*:read` (H1). `admin`/`member`/`author` punya tulis konten → tetap `true`; role custom read-only → `false`.
+
+`isMember` (boolean, **independen** dari `kind`) = **membership aktif** = `Billing.status = PAID` **dan** `Billing.expiryDate > now` (dihitung `BillingService.hasActiveMembership(userId)`, fresh per request).
+
+**Visibilitas member-only** = `canViewPrivate || isMember`. Baca konten `Post`/`Event` `visibility = PRIVATE` dan `Archive.type = MEMBER` diizinkan bila salah satu `true`; keduanya `false` → baris disembunyikan (list) / **403** (findOne) / payload diredaksi (archive `externalLinks`/`documents`). `canViewPrivate`/`isMember` **hanya** memperluas **baca** — `isWriter` dan write guard tetap permission/ownership, tidak berubah.
 
 > Scope **ortogonal** dengan permission: guard RBAC tetap jalan lebih dulu. Scoping hanya mempersempit baris yang boleh diakses setelah permission lolos. Role `published` (member) memang tak punya permission tulis, scoping hanya jaring pengaman tambahan.
 >
@@ -714,7 +724,7 @@ Scope digabung (AND) ke filter list:
 | `all` | Tanpa tambahan. |
 | `network` | `{ creator: { networkId } }` (post/event) / `{ networkId }` (user) di-`AND` dengan filter. |
 | `own` | `OR: [{ createdBy: userId }, <published-visible>]` (M5) di-`AND` dengan filter. |
-| `published` | `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }` di-`AND` dengan filter; **non-reader** (`!canViewPrivate`) ditambah `{ visibility: PUBLIC }`. Scheduled publish (masa depan) tak ikut. |
+| `published` | `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }` di-`AND` dengan filter; **non-reader** (`!(canViewPrivate \|\| isMember)`) ditambah `{ visibility: PUBLIC }`. Scheduled publish (masa depan) tak ikut. |
 | `none` | **List kosong** `{ items: [], total: 0 }` (bukan 403). |
 
 Parenthesis: scope hanya berlaku untuk `Post`/`Event` (di-`AND` ke `filterWhere`). `User` **tidak** memakai `AccessScope` lagi — `user.service` murni digerbang permission `admin:access`; `Role`/`Permission` memakai `@Permissions('role:*'/'permission:*')` (tanpa `AccessScope`).
@@ -726,7 +736,7 @@ Parenthesis: scope hanya berlaku untuk `Post`/`Event` (di-`AND` ke `filterWhere`
 | `all` | Bebas. |
 | `network` | `creator.networkId !== scope.networkId` → **403** `ForbiddenException('Forbidden resource')`. |
 | `own` | `createdBy !== scope.userId` **dan** baris bukan konten terbit → **403** (M5). |
-| `published` | `status !== PUBLISHED` **atau** `publishedAt == null` **atau** `publishedAt > now` → **403**. |
+| `published` | `status !== PUBLISHED` **atau** `publishedAt == null` **atau** `publishedAt > now` → **403**; baris `visibility = PRIVATE` dan tanpa `canViewPrivate`/`isMember` → **403**. |
 | `none` | **403**. |
 
 Kontras: `list` menyembunyikan baris (hasil kosong), `findOne` menolak eksplisit dengan **403**.

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { eventTypeSelect, EventTypeEntity } from './entities/event-type.entity';
@@ -33,5 +33,11 @@ export class EventTypeRepository {
     });
     if (existing) return existing;
     return this.prisma.eventType.create({ data, select: eventTypeSelect });
+  }
+
+  async remove(id: string): Promise<EventTypeEntity> {
+    const existing = await this.prisma.eventType.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Event type not found');
+    return this.prisma.eventType.delete({ where: { id }, select: eventTypeSelect });
   }
 }

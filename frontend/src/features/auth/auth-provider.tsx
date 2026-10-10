@@ -31,6 +31,8 @@ interface AuthContextValue {
   user: SessionUser | null
   status: AuthStatus
   isAuthenticated: boolean
+  /** Mirror `user?.isMember` (single sumber: `SessionUser.isMember`). */
+  isMember: boolean
   login: (auth: AuthResponse) => void
   logout: () => void
   /**
@@ -91,6 +93,7 @@ function readStoredUser(): SessionUser | null {
       status: parsed.status,
       role: parsed.role ?? null,
       permissions: parsed.permissions,
+      isMember: typeof parsed.isMember === 'boolean' ? parsed.isMember : false,
       avatar: typeof parsed.avatar === 'string' ? parsed.avatar : null,
     }
   } catch {
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status: auth.user.status ?? 'ACTIVE',
       role: null,
       permissions: [],
+      isMember: auth.user.isMember ?? false,
     }
     localStorage.setItem(TOKEN_KEY, auth.accessToken)
     localStorage.setItem(REFRESH_TOKEN_KEY, auth.refreshToken)
@@ -301,6 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       status,
       isAuthenticated: status === 'authenticated',
+      isMember: user?.isMember ?? false,
       login,
       logout,
       hydrateSession,

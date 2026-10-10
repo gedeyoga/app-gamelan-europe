@@ -1,0 +1,135 @@
+{
+  "hero": {
+    "badge": "Join the Network",
+    "title": "Register your organisation",
+    "subtitle": "Tell us about your gamelan organisation. Our team will review your submission and get back to you."
+  },
+  "section": {
+    "organisation": "Organisation Details",
+    "submitter": "Submitted By"
+  },
+  "form": {
+    "stateSelectCountry": "Select a country first",
+    "organisationType": {
+      "label": "Organisation type",
+      "placeholder": "Select organisation type",
+      "options": {
+        "GAMELAN_GROUP": "Gamelan group",
+        "ASSOCIATION": "Association",
+        "INSTITUTION": "Institution"
+      }
+    },
+    "name": {
+      "label": "Organisation name",
+      "placeholder": "e.g. Gamelan Ensemble Amsterdam"
+    },
+    "ledBy": {
+      "label": "Led by",
+      "placeholder": "Artistic director / leader"
+    },
+    "country": {
+      "label": "Country",
+      "placeholder": "Select country"
+    },
+    "state": {
+      "label": "State / Region",
+      "placeholder": "Select state / region"
+    },
+    "address": {
+      "label": "Address",
+      "placeholder": "Street, city, postal code"
+    },
+    "mapsUrl": {
+      "label": "Google Maps link",
+      "placeholder": "https://maps.google.com/..."
+    },
+    "website": {
+      "label": "Website",
+      "placeholder": "https://example.com"
+    },
+    "contact": {
+      "label": "Contact email",
+      "placeholder": "contact@example.com"
+    },
+    "socialMedia": {
+      "label": "Social media",
+      "add": "Add social media",
+      "remove": "Remove social media",
+      "index": "Social media {{number}}",
+      "platform": "Platform",
+      "platformPlaceholder": "e.g. Instagram",
+      "platformAria": "Social media {{number}} platform",
+      "url": "URL",
+      "urlPlaceholder": "https://instagram.com/...",
+      "urlAria": "Social media {{number}} URL",
+      "empty": "No social media added yet"
+    },
+    "activityType": {
+      "label": "Activity type",
+      "placeholder": "Select activity type",
+      "otherLabel": "Describe your activity type",
+      "otherPlaceholder": "e.g. Puppet theatre collective",
+      "options": {
+        "gamelanEnsemble": "Gamelan Ensemble",
+        "danceGroup": "Dance Group",
+        "theatreDrama": "Theatre / Drama Group",
+        "musicGroup": "Music Group",
+        "educationWorkshop": "Education / Workshop",
+        "researchAcademic": "Research / Academic",
+        "culturalInstitution": "Cultural Institution",
+        "other": "Other"
+      }
+    },
+    "content": {
+      "label": "About the organisation",
+      "placeholder": "Describe your organisation, its activities, and how it works with gamelan."
+    },
+    "submitter": {
+      "fullName": {
+        "label": "Full name",
+        "placeholder": "Your full name"
+      },
+      "email": {
+        "label": "Email",
+        "placeholder": "you@example.com"
+      },
+      "country": {
+        "label": "Country",
+        "placeholder": "Select country"
+      },
+      "state": {
+        "label": "State / Region",
+        "placeholder": "Select state / region"
+      }
+    }
+  },
+  "actions": {
+    "submit": "Submit",
+    "submitting": "Submitting..."
+  },
+  "errors": {
+    "rateLimited": "Too many submissions. Please try again in a minute.",
+    "generic": "Something went wrong while submitting. Please try again."
+  },
+  "success": {
+    "title": "Thank you!",
+    "message": "Your submission has been received. Our team will review it and get back to you.",
+    "toast": "Submission received. Thank you!"
+  },
+  "search": {
+    "placeholder": "Select...",
+    "searchPlaceholder": "Search...",
+    "emptyLabel": "No results found."
+  },
+  "statusOptions": {
+    "REQUEST": "Request",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected"
+  },
+  "toast": {
+    "approved": "Submission approved successfully",
+    "rejected": "Submission rejected successfully",
+    "approveFailed": "Failed to approve submission",
+    "rejectFailed": "Failed to reject submission"
+  }
+}

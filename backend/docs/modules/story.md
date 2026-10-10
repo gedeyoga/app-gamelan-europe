@@ -516,14 +516,14 @@ export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}
 
 ```typescript
 // libs/src/modules/post/dto/list-posts-query.dto.ts
-import { IsEnum, IsOptional } from 'class-validator';
-import { ContentStatus } from '@prisma/client';
+import { IsOptional, IsUUID } from 'class-validator';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 
 export class ListPostsQueryDto extends ListQueryDto {
+  // Relasi: hanya post yang punya link kategori ini (`categories.some`).
   @IsOptional()
-  @IsEnum(ContentStatus)
-  filterStatus?: ContentStatus; // hanya bila ingin whitelist status via field khusus
+  @IsUUID()
+  categoryId?: string;
 }
 ```
 
@@ -686,7 +686,7 @@ Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terda
 - `submit`/`reject`/`unpublish`: **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
 - Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
 - **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish`/`approve` memakai `existing.publishedAt ?? now`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama) kecuali `publishedAt` eksplisit dikirim di body.
-- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`network`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik story-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role bawaan `member` & `author` (seed baru) **tidak punya** story write sama sekali. **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
+- ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (moderator; mis. permission `story:publish`/`story:approve`) yang masih bisa memaksa `status = PUBLISHED`/`APPROVED` lewat `status`/`publishedAt` di body `PATCH`/`POST`. Untuk scope lain (`network`/`own`/`published`), `create` memaksa `status = DRAFT` + membuang `publishedAt`, dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik/org boleh mengirim `status: DRAFT` untuk menarik story-nya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§6 Scoping Baca & Tulis](#scoping-baca--tulis)). Role bawaan `member` & `author` (seed) **punya** story write terbatas pada konten miliknya sendiri (sampai `REQUEST`). **Follow-up:** hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action (migrasi FE = task terpisah).
 
 ### Scoping Baca & Tulis
 
@@ -703,7 +703,7 @@ Row-level scoping (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)
 
 - Scope ditentukan dari **permission per-resource** (`role.permissions[].code`) + `networkId` — **bukan** nama/`role.code` (lihat [rbac.md §10](../modules/rbac.md#10-row-level-scoping)). `all` = salah satu `story:approve/publish/reject/unpublish`; `network` = `networkId` + `story:create/update/submit`; `own` = tulis story tanpa `networkId`. **`event:*` tidak memberi scope story** (M2).
 - `canViewPrivate` = punya permission **tulis** (`story:create/update/submit`) atau **status** (`story:approve/publish/reject/unpublish`) pada story/event — **bukan** sekadar `*:read` (H1). `admin`/`member`/`author` punya tulis konten → tetap boleh baca PRIVATE.
-- **Seed**: role `member` & `author` **tidak** punya story write (`story:create/update/delete/submit`); hanya `story:read`. Keduanya mengelola **event** (`event:create/update/submit`). Lihat [rbac.md §7](../modules/rbac.md#7-seed-default).
+- **Seed**: role `member` & `author` **punya** story write (`story:create/update/submit`) untuk konten miliknya sendiri (sampai `REQUEST`); `story:delete` tetap admin-only. Keduanya juga mengelola **event** (`event:create/update/submit`). Lihat [rbac.md §7](../modules/rbac.md#7-seed-default).
 - **List** (`GET /posts`): scope di-`AND` ke filter — `network` → `{ creator: { networkId } }`, `own` → `OR: [{ createdBy: userId }, <published-visible>]` (M5), `published` → `{ status: PUBLISHED, publishedAt: { not: null, lte: now } }`; bila `!canViewPrivate` **AND** `visibility: PUBLIC`; `none` → `{ items: [], total: 0 }`.
 - **Detail** (`GET /posts/:id`): row `visibility === PRIVATE` dan user `!canViewPrivate` → **403**; `network` beda org → **403**; `own` bukan creator **dan** baris belum terbit → **403** (M5); `published` dengan `status != PUBLISHED`, `publishedAt` null, atau `publishedAt` di masa depan → **403**; `none` → **403**.
 - **Tulis**: `network`/`own` bukan pemilik konten → **403** (`ForbiddenException('Forbidden resource')`); `none`/`published` → **403**. **Pengecualian:** `PostService.remove(id, userId, { skipScopeCheck: true })` — dipakai purge cascade hapus user (`DELETE /users/:id?cascadeContent=true`; sudah otorisasi `user:delete` + `admin:access`) — melewati `assertWritable` **hanya** agar purge tidak berhenti separuh jalan. Tanpa opsi, perilaku `remove` identik seperti di atas.
@@ -809,6 +809,16 @@ Semua list paginated via `ListQueryDto` shared (`page, limit, sortBy, sortOrder,
 - `filter` value kosong (`filter[status]=`) diabaikan; enum invalid → 422; tanggal non-ISO → 422.
 - `sortBy` di luar whitelist → 422 (`assertAllowedSort`).
 
+**Filter relasi kategori (`categoryId`)** — opsional, UUID (query param top-level, bukan `filter[...]`). Bila ada, hanya post yang punya **minimal satu** link ke kategori tsb:
+
+```typescript
+// PostService.categoryWhere — selalu di-AND dengan scopeWhere (scope tidak diganti)
+{ categories: { some: { categoryId } } }
+```
+
+- Di-AND dengan `scopeWhere`, `filter`, dan `search` yang ada — **tidak** mengubah admin scoping.
+- Bukan UUID valid → **422** (`@IsUUID()`). Absen → perilaku list lama.
+
 ### `GET /api/v1/categories`
 
 | Item | Nilai |
@@ -826,6 +836,7 @@ Semua list paginated via `ListQueryDto` shared (`page, limit, sortBy, sortOrder,
 - `GET /api/v1/posts?page=1&limit=20&sortBy=publishedAt&sortOrder=desc&filter[status]=PUBLISHED`
 - `GET /api/v1/posts?search=gamelan&sortBy=name&sortOrder=asc`
 - `GET /api/v1/posts?filter[createdAt][gte]=2026-09-01T00:00:00Z`
+- `GET /api/v1/posts?categoryId=550e8400-e29b-41d4-a716-446655440000&sortBy=publishedAt&sortOrder=desc` (story pada satu kategori)
 - `GET /api/v1/categories?filter[type]=STORY&limit=100`
 - `GET /api/v1/categories?search=musik&sortBy=name&sortOrder=asc`
 

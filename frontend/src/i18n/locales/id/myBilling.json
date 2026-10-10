@@ -1,21 +1,50 @@
 {
   "title": "Billing Saya",
-  "subtitle": "Langganan dan riwayat billing Anda",
+  "subtitle": "Keanggotaan, pembayaran, dan riwayat billing Anda",
   "currentSubscription": {
-    "title": "Langganan Aktif",
-    "plan": "Paket",
-    "type": "Tipe",
-    "currency": "Mata Uang"
+    "title": "Status Keanggotaan"
   },
-  "noSubscription": {
-    "title": "Tidak ada langganan aktif",
-    "description": "Anda belum memiliki paket aktif. Paket yang tersedia ditampilkan di bawah."
+  "statusPanel": {
+    "plan": "Paket",
+    "price": "Harga",
+    "validity": "Masa berlaku",
+    "startLabel": "Mulai",
+    "expiryLabel": "Berakhir",
+    "expiringSoon": "Segera berakhir",
+    "expired": "Kedaluwarsa",
+    "daysLeft": "hari tersisa",
+    "progressLabel": "Progres masa langganan",
+    "expiringSoonNote": "Paket Anda akan segera berakhir. Hubungi kami untuk memperpanjang.",
+    "expiredNote": "Paket Anda telah berakhir. Hubungi kami untuk mengaktifkan kembali.",
+    "noValidity": "Tanggal masa berlaku belum tersedia."
+  },
+  "stats": {
+    "title": "Ringkasan pembayaran",
+    "totalPaid": "Total dibayar",
+    "paidCount": "{{count}} dibayar",
+    "lastPayment": "Pembayaran terakhir",
+    "paymentCount": "Jumlah pembayaran",
+    "pending": "Menunggu pembayaran",
+    "noPayments": "Belum ada pembayaran",
+    "otherCurrencyTotal": "+ {{amount}}",
+    "truncated": "Berdasarkan {{count}} transaksi terakhir"
+  },
+  "pendingCallout": {
+    "message": "Invoice {{code}} sebesar {{amount}} menunggu pembayaran.",
+    "proofAttached": "Bukti pembayaran terlampir",
+    "noProof": "Belum ada bukti pembayaran"
+  },
+  "membership": {
+    "active": "Member aktif",
+    "activeDescription": "Keanggotaan Anda aktif. Riwayat billing ditampilkan di bawah."
   },
   "availablePlans": {
     "title": "Paket Tersedia",
     "empty": "Belum ada paket tersedia saat ini.",
     "type": "Tipe",
-    "currency": "Mata Uang"
+    "price": "Harga",
+    "duration": "Durasi",
+    "durationValue": "{{count}} hari"
   },
   "billings": {
     "title": "Riwayat Billing",
@@ -25,10 +54,14 @@
   },
   "table": {
     "code": "Kode",
-    "subscription": "Subscription",
+    "subscription": "Paket",
+    "period": "Periode",
     "status": "Status",
     "total": "Total",
-    "created": "Dibuat"
+    "paid": "Dibayar",
+    "proof": "Bukti",
+    "discount": "Potongan",
+    "tax": "Pajak"
   },
   "search": {
     "placeholder": "Cari kode atau mata uang...",

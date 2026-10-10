@@ -48,6 +48,26 @@ export interface DashboardPendingStoryItem {
   source: 'PUBLIC' | 'REGISTERED'
 }
 
+/** Usulan organisasi Network (submission publik) menunggu review admin. */
+export interface DashboardPendingNetworkSubmissionItem {
+  id: string
+  name: string
+  organisationType: string | null
+  country: string | null
+  state: string | null
+  contact: string | null
+}
+
+/** Request langganan menunggu review admin. */
+export interface DashboardPendingSubscriptionRequestItem {
+  id: string
+  fullName: string
+  email: string
+  planName: string
+  requestType: 'NEW' | 'RENEWAL'
+  createdAt: string
+}
+
 export interface DashboardStoryItem {
   id: string
   name: string

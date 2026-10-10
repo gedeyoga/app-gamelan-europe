@@ -21,3 +21,7 @@ export function createCategory(payload: CreateCategoryInput): Promise<StoryCateg
     body: JSON.stringify(payload),
   })
 }
+
+export function deleteCategory(id: string): Promise<StoryCategory> {
+  return request<StoryCategory>(`/categories/${id}`, { method: 'DELETE' })
+}

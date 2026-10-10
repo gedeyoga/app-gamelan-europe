@@ -1,12 +1,15 @@
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
-// Angka opsional disimpan sebagai string di form; divalidasi rentang saat submit.
-function emptyOrInRange(min: number, max: number) {
-  return (value: string) => {
-    if (value.trim() === '') return true
-    const parsed = Number(value)
-    return Number.isFinite(parsed) && parsed >= min && parsed <= max
+import type { NetworkOrganisationType } from '../types'
+import { ACTIVITY_TYPE_OTHER, ORGANISATION_TYPES } from './constants'
+
+function isValidHttpUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
   }
 }
 
@@ -17,10 +20,22 @@ export function createNetworkSchema(t: TFunction) {
       .trim()
       .min(1, t('validation:nameRequired'))
       .max(200, t('validation:nameMax', { count: 200 })),
+    organisationType: z
+      .string()
+      .refine(
+        (value) => value === '' || ORGANISATION_TYPES.includes(value as NetworkOrganisationType),
+        t('validation:organisationTypeInvalid'),
+      ),
+    ledBy: z.string().trim().max(200, t('validation:ledByMax', { count: 200 })),
     state: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
     country: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
     address: z.string().trim().max(500, t('validation:addressMax', { count: 500 })),
     website: z.string().trim().max(500, t('validation:websiteMax', { count: 500 })),
+    mapsUrl: z
+      .string()
+      .trim()
+      .max(2048, t('validation:mapsUrlMax', { count: 2048 }))
+      .refine((value) => value === '' || isValidHttpUrl(value), t('validation:mapsUrlInvalid')),
     contact: z.string().trim().max(200, t('validation:contactMax', { count: 200 })),
     socialMedia: z
       .array(
@@ -55,9 +70,20 @@ export function createNetworkSchema(t: TFunction) {
           }
         })
       }),
-    lat: z.string().trim().refine(emptyOrInRange(-90, 90), t('validation:latInvalid')),
-    lng: z.string().trim().refine(emptyOrInRange(-180, 180), t('validation:lngInvalid')),
+    activityType: z.string().trim().max(100, t('validation:activityTypeMax', { count: 100 })),
+    activityTypeOther: z
+      .string()
+      .trim()
+      .max(100, t('validation:activityTypeMax', { count: 100 })),
     content: z.string().max(100000, t('validation:contentMax', { count: 100000 })),
+  }).superRefine((values, ctx) => {
+    if (values.activityType === ACTIVITY_TYPE_OTHER && values.activityTypeOther.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['activityTypeOther'],
+        message: t('validation:activityTypeOtherRequired'),
+      })
+    }
   })
 }
 
@@ -65,13 +91,16 @@ export type NetworkFormValues = z.infer<ReturnType<typeof createNetworkSchema>>
 
 export const EMPTY_NETWORK_VALUES: NetworkFormValues = {
   name: '',
+  organisationType: '',
+  ledBy: '',
   state: '',
   country: '',
   address: '',
   website: '',
+  mapsUrl: '',
   contact: '',
   socialMedia: [],
-  lat: '',
-  lng: '',
+  activityType: '',
+  activityTypeOther: '',
   content: '',
 }

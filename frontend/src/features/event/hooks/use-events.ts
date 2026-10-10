@@ -16,6 +16,8 @@ export interface UseEventsParams {
   mine?: boolean
   /** `true` → hanya event dengan tanggal ≥ sekarang (diteruskan ke `GET /events`). */
   upcoming?: boolean
+  /** Filter tipe event (UUID) — diteruskan ke `GET /events`. */
+  eventTypeId?: string
   /** Filter generik `filter[<key>]=<value>` (diteruskan ke `GET /events`). */
   filter?: Record<string, string>
   /** `false` → query tidak dijalankan (mis. gate admin di dashboard). */
@@ -31,6 +33,7 @@ export function useEvents({
   eventMonth,
   mine,
   upcoming,
+  eventTypeId,
   filter,
   enabled,
 }: UseEventsParams) {
@@ -46,11 +49,23 @@ export function useEvents({
         eventMonth,
         mine,
         upcoming,
+        eventTypeId,
         filter,
       },
     ],
     queryFn: () =>
-      listEvents({ page, limit, search, sortBy, sortOrder, eventMonth, mine, upcoming, filter }),
+      listEvents({
+        page,
+        limit,
+        search,
+        sortBy,
+        sortOrder,
+        eventMonth,
+        mine,
+        upcoming,
+        eventTypeId,
+        filter,
+      }),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
     enabled,

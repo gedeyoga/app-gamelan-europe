@@ -4,6 +4,7 @@ import {
   ListNetworksQueryDto,
   NetworkService,
   Permissions,
+  PublishContentDto,
   UpdateNetworkDto,
 } from '@app/libs';
 
@@ -44,5 +45,19 @@ export class NetworksController {
   @Permissions('network:delete')
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.networkService.remove(id);
+  }
+
+  @Post(':id/approve')
+  @Permissions('network:approve')
+  @HttpCode(200)
+  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PublishContentDto) {
+    return this.networkService.approve(id, { publishedAt: dto?.publishedAt });
+  }
+
+  @Post(':id/reject')
+  @Permissions('network:reject')
+  @HttpCode(200)
+  reject(@Param('id', ParseUUIDPipe) id: string) {
+    return this.networkService.reject(id);
   }
 }

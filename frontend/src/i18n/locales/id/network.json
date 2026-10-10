@@ -30,11 +30,26 @@
     "createDescription": "Buat network baru.",
     "editTitle": "Edit Network",
     "name": "Nama",
+    "organisationType": {
+      "label": "Jenis organisasi",
+      "placeholder": "Pilih jenis organisasi",
+      "options": {
+        "GAMELAN_GROUP": "Grup gamelan",
+        "ASSOCIATION": "Asosiasi",
+        "INSTITUTION": "Institusi"
+      }
+    },
+    "ledBy": {
+      "label": "Dipimpin oleh",
+      "placeholder": "Direktur artistik / pemimpin"
+    },
     "state": "Negara Bagian",
     "country": "Negara",
     "address": "Alamat",
     "website": "Website",
     "websitePlaceholder": "https://contoh.com",
+    "mapsUrl": "Link Google Maps",
+    "mapsUrlPlaceholder": "https://maps.app.goo.gl/",
     "contact": "Kontak",
     "contactPlaceholder": "Email atau nomor telepon",
     "socialMedia": {
@@ -48,7 +63,22 @@
       "urlPlaceholder": "https://instagram.com/...",
       "empty": "Belum ada sosial media"
     },
-    "mapLabel": "Pilih lokasi di peta",
+    "activityType": {
+      "label": "Jenis aktivitas",
+      "placeholder": "Pilih jenis aktivitas",
+      "otherLabel": "Jelaskan jenis aktivitas Anda",
+      "otherPlaceholder": "mis. Kolektif teater wayang",
+      "options": {
+        "gamelanEnsemble": "Gamelan Ensemble",
+        "danceGroup": "Grup Tari",
+        "theatreDrama": "Teater / Grup Drama",
+        "musicGroup": "Grup Musik",
+        "educationWorkshop": "Edukasi / Workshop",
+        "researchAcademic": "Riset / Akademik",
+        "culturalInstitution": "Institusi Budaya",
+        "other": "Lainnya"
+      }
+    },
     "settingsTitle": "Pengaturan",
     "hideSettings": "Sembunyikan pengaturan",
     "showSettings": "Tampilkan pengaturan",
@@ -70,6 +100,10 @@
     "deleted": "Network berhasil dihapus",
     "createFailed": "Gagal membuat network",
     "updateFailed": "Gagal memperbarui network",
-    "deleteFailed": "Gagal menghapus network"
+    "deleteFailed": "Gagal menghapus network",
+    "approved": "Permintaan network berhasil disetujui",
+    "approveFailed": "Gagal menyetujui permintaan network",
+    "rejected": "Permintaan network berhasil ditolak",
+    "rejectFailed": "Gagal menolak permintaan network"
   }
 }

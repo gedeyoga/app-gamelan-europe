@@ -1,21 +1,50 @@
 {
   "title": "My Billing",
-  "subtitle": "Your subscription and billing records",
+  "subtitle": "Your membership, payments, and billing records",
   "currentSubscription": {
-    "title": "Current Subscription",
-    "plan": "Plan",
-    "type": "Type",
-    "currency": "Currency"
+    "title": "Membership Status"
   },
-  "noSubscription": {
-    "title": "No active subscription",
-    "description": "You don't have an active plan yet. Available plans are listed below."
+  "statusPanel": {
+    "plan": "Plan",
+    "price": "Price",
+    "validity": "Validity period",
+    "startLabel": "Start",
+    "expiryLabel": "Expiry",
+    "expiringSoon": "Expiring soon",
+    "expired": "Expired",
+    "daysLeft": "days left",
+    "progressLabel": "Subscription period progress",
+    "expiringSoonNote": "Your plan is expiring soon. Contact us to renew your membership.",
+    "expiredNote": "Your plan has expired. Contact us to reactivate your membership.",
+    "noValidity": "Validity dates are not available yet."
+  },
+  "stats": {
+    "title": "Payment summary",
+    "totalPaid": "Total paid",
+    "paidCount": "{{count}} paid",
+    "lastPayment": "Last payment",
+    "paymentCount": "Payments",
+    "pending": "Awaiting payment",
+    "noPayments": "No payments yet",
+    "otherCurrencyTotal": "+ {{amount}}",
+    "truncated": "Based on the last {{count}} transactions"
+  },
+  "pendingCallout": {
+    "message": "Invoice {{code}} for {{amount}} is awaiting payment.",
+    "proofAttached": "Payment proof attached",
+    "noProof": "No payment proof attached yet"
+  },
+  "membership": {
+    "active": "Active member",
+    "activeDescription": "Your membership is active. Your billing records are listed below."
   },
   "availablePlans": {
     "title": "Available Plans",
     "empty": "No plans available at the moment.",
     "type": "Type",
-    "currency": "Currency"
+    "price": "Price",
+    "duration": "Duration",
+    "durationValue": "{{count}} days"
   },
   "billings": {
     "title": "Billing History",
@@ -25,10 +54,14 @@
   },
   "table": {
     "code": "Code",
-    "subscription": "Subscription",
+    "subscription": "Plan",
+    "period": "Period",
     "status": "Status",
     "total": "Total",
-    "created": "Created"
+    "paid": "Paid",
+    "proof": "Proof",
+    "discount": "Discount",
+    "tax": "Tax"
   },
   "search": {
     "placeholder": "Search code or currency...",

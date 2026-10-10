@@ -25,7 +25,7 @@ export class SubscriptionRepository {
   // Self-service: paket aktif = Subscription dari Billing non-CANCELED terbaru milik user.
   async findMineByUser(userId: string): Promise<SubscriptionEntity | null> {
     const billing = await this.prisma.billing.findFirst({
-      where: { userId, status: { not: 'CANCELED' }, subscription: { deletedAt: null } },
+      where: { userId, status: { not: 'CANCELED' }, subscription: { deletedAt: null, status: 'ACTIVE' } },
       orderBy: [{ createdAt: 'desc' }, { paidAt: 'desc' }],
       select: { subscription: { select: subscriptionSelect } },
     });
@@ -42,7 +42,21 @@ export class SubscriptionRepository {
       this.prisma.subscription.findMany({ ...params, select: subscriptionSelect }),
       this.prisma.subscription.count({ where: params.where }),
     ]);
-    return { items: items.map(mapSubscription), total };
+    return { items: items.map((row) => mapSubscription(row)), total };
+  }
+
+  // Jumlah user UNIK dengan Billing status PAID per subscription. Batched: 1 query untuk N id.
+  async countSubscribers(ids: string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.billing.groupBy({
+      by: ['subscriptionId', 'userId'],
+      where: { subscriptionId: { in: ids }, status: 'PAID' },
+    });
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      counts.set(row.subscriptionId, (counts.get(row.subscriptionId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   async create(data: Prisma.SubscriptionCreateInput): Promise<SubscriptionEntity> {

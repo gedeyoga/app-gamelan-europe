@@ -10,7 +10,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { LocationMapPicker } from '@/components/shared/location-map-picker'
 import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
 import { cn } from '@/lib/utils'
 
@@ -35,7 +34,7 @@ export interface EventLocationFieldProps {
   }) => Promise<CityOption | undefined>
 }
 
-// Lokasi event: Venue (name) + geo cascade Country → State → City + address + map.
+// Lokasi event: Venue (name) + geo cascade Country → State → City + address + Google Maps link (resolved server-side).
 // Nilai form menyimpan `countryId`/`stateId`/`cityId` sebagai string (ID FK) — pilihan
 // paling sedikit friksi: endpoint /cities butuh countryId/stateId numerik dan payload
 // event menerima ID numerik langsung; nama country/state/city diambil dari relasi response.
@@ -47,9 +46,6 @@ export function EventLocationField({
   onCreateCity,
 }: EventLocationFieldProps) {
   const { t } = useTranslation()
-  const lat = form.watch('location.lat')
-  const lng = form.watch('location.lng')
-  const address = form.watch('location.address')
   const countryIdValue = form.watch('location.countryId')
   const stateIdValue = form.watch('location.stateId')
 
@@ -79,16 +75,6 @@ export function EventLocationField({
     [cities],
   )
 
-  function handlePick(nextLat: string, nextLng: string) {
-    form.setValue('location.lat', nextLat, { shouldDirty: true })
-    form.setValue('location.lng', nextLng, { shouldDirty: true })
-  }
-
-  function handleAddressChange(nextAddress: string) {
-    form.setValue('location.address', nextAddress, { shouldDirty: true })
-  }
-
-  // Ganti country → reset state + city (ID tidak berlaku lintas negara).
   function handleCountryChange(next: string, onChange: (value: string) => void) {
     if (next === form.getValues('location.countryId')) return
     onChange(next)
@@ -229,14 +215,22 @@ export function EventLocationField({
       />
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">{t('event:location.mapLabel')}</label>
-        <LocationMapPicker
-          lat={lat}
-          lng={lng}
-          address={address}
-          onChange={handlePick}
-          onAddressChange={handleAddressChange}
-          disabled={disabled}
+        <FormField
+          control={form.control}
+          name="location.mapsUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('event:location.mapsUrlLabel')}</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  placeholder={t('event:location.mapsUrlPlaceholder')}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ export interface User {
   email: string
   fullName: string
   status?: string
+  isMember: boolean
 }
 
 export interface LoginRequest {
@@ -38,6 +39,7 @@ export interface SessionUser {
   status: string
   role: SessionRole | null
   permissions: string[]
+  isMember: boolean
   avatar?: string | null
 }
 

@@ -182,6 +182,7 @@ Envelope: sukses `{ data, message }`; list `{ data, message, meta: { page, limit
 | `archive:delete` | Gate aksi hapus |
 | `category:read` | Gate pemuatan opsi kategori |
 | `category:create` | Gate "tambah kategori baru" |
+| `category:delete` | Gate aksi hapus kategori di combobox (`DELETE /categories/:id`) |
 
 ### Endpoint
 
@@ -196,6 +197,7 @@ Envelope: sukses `{ data, message }`; list `{ data, message, meta: { page, limit
 | POST | `/documents` | multipart field `file`; `application/pdf` only, max **10 MB**. Permission `archive:create` **ATAU** `archive:update` | 201 `{ data: { id, url, key, filename, mimeType, size }, message }` — endpoint **TERPISAH** untuk dokumen PDF; `url` **absolut** S3. Dipakai `uploadDocument`/`useUploadDocument` (`api/documents.ts`) |
 | GET | `/categories?filter[type]=ARCHIVE&limit=100` | `sortBy` ∈ `name,type,createdAt,updatedAt` | opsi kategori editor |
 | POST | `/categories` | `{ name, type: 'ARCHIVE' }` | **idempotent** — nama+type sama mengembalikan existing (bukan 409); dipakai "tambah kategori langsung" |
+| DELETE | `/categories/:id` | — | 200; hapus kategori (`category:delete`); combobox menampilkan aksi hapus per opsi + dialog konfirmasi (UX sama story) |
 
 Catatan: endpoint list/sort/filter mengikuti `RULES.md` Bab 19/19a/19b (whitelist kolom, filter generik `filter[field]`). `filter[type]`/`filter[status]` memakai enum `ArchiveType`/`ArchiveStatus`.
 
@@ -279,6 +281,7 @@ Perilaku **identik story**:
 - Komponen `category-combobox.tsx` saat ini di `features/story/components/`; karena dipakai 2 fitur (story + archive), **pindahkan ke `components/shared/category-combobox.tsx`** dan update import story (satu baris) — **aksi refactor kecil**, dicatat di §14.
 - Multi-select `Popover` + `Command`; memuat opsi via `GET /categories?filter[type]=ARCHIVE&limit=100` (gate `category:read`).
 - Input "tambah kategori baru" → `POST /categories { name, type: 'ARCHIVE' }` (idempotent) lalu auto-select; gate `canCreate` = `category:create`.
+- **Hapus kategori dari combobox** (gate `category:delete`, UX sama story & hapus author): tiap `CommandItem` menampilkan tombol `Trash2` (`ml-auto`, `variant="ghost" size="icon"`, `stopPropagation`, `aria-label`/`title` `archive:deleteCategory.optionLabel`) bila `canDeleteOption` true (predikat `canDeleteCategory && !categoryIds.includes(id)`); klik → `CategoryDeleteDialog` (`AlertDialog`, `archive:deleteCategory.title/description`) → `useDeleteCategory` (`DELETE /categories/:id`, invalidate `['categories']`) → buang id dari `categoryIds` + `archive:toast.categoryDeleted`; gagal non-422 `archive:toast.categoryDeleteFailed`.
 - Hasil disimpan sebagai `categoryIds`.
 
 ### Status & Workflow (submit/approve/reject)
@@ -351,6 +354,7 @@ Detail read-only dirender oleh `features/archive/components/archive-detail.tsx` 
 | Upload dokumen PDF (`POST /documents`, endpoint terpisah) | `archive:create` / `archive:update` (backend; ANY-of) |
 | Pemilihan kategori (`GET /categories`) | `category:read` |
 | Tambah kategori baru (`POST /categories`) | `category:create` |
+| Aksi hapus kategori (`DELETE /categories/:id`) | `category:delete` |
 | Menu sidebar "Archives" | `archive:read` (terlihat oleh pemegang `archive:read`; sama dengan gate route list) |
 
 - Gate tombol via `can(...)` dari `useAuthPermissions()`; gate route list via `RequirePermission`.
@@ -383,8 +387,9 @@ archive:document.{add,empty,formats,uploading,uploadTooLarge,uploadInvalid,remov
 archive:thumbnail.{upload,uploading,remove,formats,uploadInvalid}
 archive:detail.{back,description,externalLinks,documents,empty}
 archive:delete.{title,description}
+archive:deleteCategory.{title,description,optionLabel}   # dialog + label tombol hapus kategori di combobox
 archive:errors.{loadData,forbidden,loadCategories,loadDetail,uploadFailed,noCreatePermission,noUpdatePermission}   # tanpa loadDocuments — dokumen ikut detail archive
-archive:toast.{created,updated,deleted,createFailed,updateFailed,deleteFailed,approved,rejected,approveFailed,rejectFailed}
+archive:toast.{created,updated,deleted,createFailed,updateFailed,deleteFailed,approved,rejected,approveFailed,rejectFailed,categoryDeleted,categoryDeleteFailed}
 ```
 
 Key validasi ditambahkan ke namespace **`validation`** (`archiveNameRequired`, `archiveNameMax`, `archiveUrlInvalid`, `archiveTypeInvalid`, `archiveStatusInvalid`, dst.).

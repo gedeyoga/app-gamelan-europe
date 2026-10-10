@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 import 'leaflet/dist/leaflet.css'
 
-// Ikon eksplisit (sama seperti picker): `L.Icon.Default` dapat melewati mergeOptions setelah bundling.
+// Ikon eksplisit: `L.Icon.Default` dapat melewati mergeOptions setelah bundling.
 const MARKER_ICON = L.icon({
   iconUrl: markerIcon,
   iconRetinaUrl: markerIcon2x,

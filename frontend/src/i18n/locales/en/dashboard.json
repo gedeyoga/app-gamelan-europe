@@ -6,6 +6,10 @@
   "role": {
     "member": "Member"
   },
+  "member": {
+    "active": "Active member",
+    "becomeMember": "Become a member"
+  },
   "stats": {
     "upcomingEvents": "Upcoming Events",
     "publishedStories": "Published Stories",
@@ -49,6 +53,18 @@
       "empty": "No stories awaiting approval.",
       "error": "Failed to load data."
     },
+    "pendingNetworkSubmissions": {
+      "title": "Network Submissions Awaiting Approval",
+      "subtitle": "Organisations requesting to join the Network.",
+      "empty": "No network submissions awaiting approval.",
+      "error": "Failed to load data."
+    },
+    "pendingSubscriptionRequests": {
+      "title": "Subscription Requests Awaiting Approval",
+      "subtitle": "Subscription requests from members and the public.",
+      "empty": "No subscription requests awaiting approval.",
+      "error": "Failed to load data."
+    },
     "archives": {
       "title": "Latest Archives",
       "subtitle": "Archives you can access.",
@@ -86,6 +102,7 @@
     "networks": "Networks",
     "apiKey": "API Keys",
     "subscription": "Subscription",
+    "subscriptionRequests": "Subscription Requests",
     "billing": "Billing Management"
   },
   "group": {

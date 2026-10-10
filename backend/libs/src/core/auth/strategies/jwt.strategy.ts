@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { CacheService } from '@app/libs/core/redis/cache.service';
+import { BillingService } from '@app/libs/modules/billing/billing.service';
 
 export interface JwtPayload {
   sub: string;
@@ -17,6 +18,8 @@ export interface AuthenticatedUser {
   email: string;
   jti: string;
   exp: number;
+  // Membership aktif user (billing PAID belum kedaluwarsa); fresh per request.
+  isMember: boolean;
   // Diisi hanya untuk principal dari `x-api-key` (bukan JWT).
   apiKeyId?: string;
   permissions?: string[];
@@ -27,6 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: ConfigService,
     private readonly cache: CacheService,
+    private readonly billingService: BillingService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -40,6 +44,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (blacklisted) {
       throw new UnauthorizedException('Token has been revoked');
     }
-    return { id: payload.sub, email: payload.email, jti: payload.jti, exp: payload.exp ?? 0 };
+    return {
+      id: payload.sub,
+      email: payload.email,
+      jti: payload.jti,
+      exp: payload.exp ?? 0,
+      isMember: await this.billingService.hasActiveMembership(payload.sub),
+    };
   }
 }

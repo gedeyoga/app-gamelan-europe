@@ -12,6 +12,7 @@ const authenticatedUser = (id: string): AuthenticatedUser => ({
   email: `${id}@example.com`,
   jti: 'test-jti',
   exp: 9999999999,
+  isMember: false,
 });
 
 const apiKeyUser = (permissions: string[]): AuthenticatedUser => ({
@@ -19,6 +20,7 @@ const apiKeyUser = (permissions: string[]): AuthenticatedUser => ({
   email: 'creator@example.com',
   jti: '',
   exp: 0,
+  isMember: false,
   apiKeyId: 'api-key-id',
   permissions,
 });

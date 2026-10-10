@@ -29,7 +29,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
-import { CategoryCombobox } from '@/components/shared/category-combobox'
+import { CategoryCombobox, type CategoryOption } from '@/components/shared/category-combobox'
 import { UserCombobox, type UserOption } from '@/components/shared/user-combobox'
 import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import { ThumbnailUpload } from '@/components/shared/thumbnail-upload'
@@ -41,6 +41,7 @@ import { mapApiFieldErrors } from '@/lib/field-errors'
 
 import { DocumentUpload } from './document-upload'
 import { ExternalLinksInput } from './external-links-input'
+import { CategoryDeleteDialog } from './category-delete-dialog'
 import { createArchiveSchema, type ArchiveFormValues } from '../lib/schema'
 import { ARCHIVE_TYPES } from '../types'
 import type {
@@ -88,6 +89,8 @@ export interface ArchiveFormProps {
   isLoadingCategories: boolean
   canReadCategories: boolean
   canCreateCategory: boolean
+  /** Gate `category:delete` — aksi hapus kategori di combobox. */
+  canDeleteCategory: boolean
   canPublishArchive: boolean
   canSubmitArchive: boolean
   canApproveArchive: boolean
@@ -116,6 +119,7 @@ export function ArchiveForm({
   isLoadingCategories,
   canReadCategories,
   canCreateCategory,
+  canDeleteCategory,
   canPublishArchive,
   canSubmitArchive,
   canApproveArchive,
@@ -150,6 +154,7 @@ export function ArchiveForm({
   const [publishAction, setPublishAction] = useState<'publish' | 'approve'>('publish')
   const [authorDialogOpen, setAuthorDialogOpen] = useState(false)
   const [deletingAuthor, setDeletingAuthor] = useState<UserOption | null>(null)
+  const [deletingCategory, setDeletingCategory] = useState<CategoryOption | null>(null)
   const [createdAuthors, setCreatedAuthors] = useState<UserOption[]>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
@@ -176,6 +181,14 @@ export function ArchiveForm({
     form.setValue(
       'authorIds',
       (form.getValues('authorIds') ?? []).filter((id) => id !== authorId),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
+
+  function handleCategoryDeleted(categoryId: string) {
+    form.setValue(
+      'categoryIds',
+      (form.getValues('categoryIds') ?? []).filter((id) => id !== categoryId),
       { shouldDirty: true, shouldValidate: true },
     )
   }
@@ -479,6 +492,10 @@ export function ArchiveForm({
                         disabled={!canReadCategories || isPending}
                         canCreate={canCreateCategory}
                         onCreate={onCreateCategory}
+                        canDeleteOption={(option) =>
+                          canDeleteCategory && !field.value.includes(option.id)
+                        }
+                        onDeleteOption={setDeletingCategory}
                       />
                       <FormMessage />
                     </FormItem>
@@ -648,6 +665,17 @@ export function ArchiveForm({
             />
           )}
         </>
+      )}
+
+      {canDeleteCategory && (
+        <CategoryDeleteDialog
+          open={Boolean(deletingCategory)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingCategory(null)
+          }}
+          category={deletingCategory}
+          onDeleted={handleCategoryDeleted}
+        />
       )}
     </Form>
   )

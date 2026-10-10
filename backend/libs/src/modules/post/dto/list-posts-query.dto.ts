@@ -1,9 +1,9 @@
-import { IsEnum, IsOptional } from 'class-validator';
-import { ContentStatus } from '@prisma/client';
+import { IsOptional, IsUUID } from 'class-validator';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 
 export class ListPostsQueryDto extends ListQueryDto {
+  // Relasi: hanya post yang punya link kategori ini (`categories.some`).
   @IsOptional()
-  @IsEnum(ContentStatus)
-  filterStatus?: ContentStatus;
+  @IsUUID()
+  categoryId?: string;
 }

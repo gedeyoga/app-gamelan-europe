@@ -20,13 +20,15 @@ info:
     `POST /archive-submissions/thumbnail`, `POST /archive-submissions/attachments`,
     `POST /story-submissions`, `POST /story-submissions/thumbnail`,
     `POST /story-submissions/images`, `GET /story-submissions/categories`,
+    `POST /network-submissions`,
     `GET /event-types`, `GET /countries`, `GET /countries/{id}`, `GET /states`,
     `GET /states/{id}`, `GET /cities`, `GET /cities/{id}`, `GET /stats/summary`.
     `POST /cities` is **not** public: it requires the `city:create` permission and
     is idempotent by `name` (case-insensitive) + `countryId`/`stateId`.
     The public submission **create**
     endpoints (`POST /event-submissions`, `POST /archive-submissions`,
-    `POST /story-submissions`) are rate-limited per IP to **5 requests/minute**
+    `POST /story-submissions`, `POST /network-submissions`) are rate-limited
+    per IP to **5 requests/minute**
     (`429` on excess) — as are the public upload endpoints
     (`POST /archive-submissions/thumbnail`, `POST /archive-submissions/attachments`,
     `POST /event-submissions/thumbnail`, `POST /story-submissions/thumbnail`,
@@ -57,7 +59,7 @@ tags:
   - name: Events
     description: Events + status transitions.
   - name: EventTypes
-    description: Event type taxonomy. `GET` is public (dropdown for the submission form). Create is idempotent by `name`. No detail endpoint.
+    description: Event type taxonomy. `GET` is public (dropdown for the submission form). Create is idempotent by `name`. No GET detail endpoint; `DELETE /event-types/{id}` removes a type.
   - name: EventSubmissions
     description: |
       Public event submissions (no account). `POST` writes directly to `events`
@@ -73,8 +75,21 @@ tags:
       contact section and rich `content` (sanitized server-side). `POST` writes
       directly to `posts` with `status=REQUEST`, `source=PUBLIC`; admins review
       via the `Story` module.
+  - name: NetworkSubmissions
+    description: |
+      Public network submissions (no account) — organisations join the Network
+      Map. Anonymous `POST` writes **directly to the `networks` table** with
+      `status=REQUEST`, `source=PUBLIC` (mirroring the archive/event/story
+      submission pattern). Admins review via `GET /networks?filter[status]=REQUEST`,
+      approve via `network:approve` (`POST /networks/{id}/approve`, flips to
+      `PUBLISHED` + `publishedAt`) and reject via `network:reject`
+      (`POST /networks/{id}/reject`, back to `DRAFT`). A provided `mapsUrl` is
+      resolved server-side to `lat`/`lng`.
   - name: Networks
-    description: Networks (admin-only). Used as the row-level scoping boundary for network users. No row-level scoping in this module.
+    description: |
+      Networks (admin-only). Also the review queue for public submissions
+      (`filter[status]=REQUEST`). Used as the row-level scoping boundary for
+      network users. No row-level scoping in this module.
   - name: Images
     description: S3 image upload (multipart).
   - name: Archives
@@ -97,6 +112,12 @@ tags:
       idempotent (`city:create`) untuk find-or-create dari form event.
   - name: Stats
     description: "Ringkasan publik: event published, user aktif, jumlah negara terlibat."
+  - name: Subscriptions
+    description: |
+      Subscription packages (admin CRUD, soft-delete). `price` is a Prisma
+      `Decimal` serialized as a `number`; `subscriberCount` is a computed field
+      (unique users holding a `PAID` `Billing` for that package). Soft-deleted
+      rows (`deletedAt != null`) are never returned.
 security:
   - apiKeyAuth: []
 paths:
@@ -921,6 +942,32 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /event-types/{id}:
+    delete:
+      tags: [EventTypes]
+      operationId: deleteEventType
+      summary: Delete event type
+      description: Permission `event-type:delete`. Missing id → 404.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted event type (the row that was removed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /event-submissions:
     post:
       tags: [EventSubmissions]
@@ -1034,25 +1081,28 @@ paths:
       operationId: createArchiveSubmission
       summary: Create an archive submission (public)
       description: |
-        **Public** (`@Public()`, no `x-api-key` required, anonymous). Creates a
-        submission with `status=REQUEST` for admin review. Body is validated with
-        the global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` +
-        `transform`), so unknown fields (e.g. `status`, `reviewedBy`, `archiveId`,
-        `categoryIds`, `documentIds`) → **422**.
+        **Public** (`@Public()`, no `x-api-key` required, anonymous). Writes
+        directly to `archives` with `status=REQUEST`, `source=PUBLIC`,
+        `type=PUBLIC` for admin review. Body is validated with the global
+        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`), so
+        unknown fields (e.g. `status`, `source`, `type`, `categoryIds`,
+        `documentIds`, `createdBy`, `publishedAt`) → **422**.
 
         Only a compact `{ id, status }` is returned — the full row is never echoed
-        to the anonymous caller. Duplicate identical submission (`name`) within
-        ~10 minutes → **409**. Rate-limited per IP to **5 requests/minute** → **429**
+        to the anonymous caller. Rate-limited per IP to **5 requests/minute** → **429**
         on excess. Each `attachments` id must exist as a `Document` row with
-        `entityType=archive-submission` and `entityId=null` (from
+        `entityType=archive` and `entityId=null` (from
         `POST /archive-submissions/attachments`); otherwise → **422**.
+        `submitter` is persisted as a login-less `User` (find-or-create). Admin
+        reviews via `GET /archives?filter[status]=REQUEST` then
+        `POST /archives/{id}/approve` / `reject`.
       security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateArchiveSubmissionRequest'
+              $ref: '#/components/schemas/CreatePublicArchiveRequest'
       responses:
         '201':
           description: Submission created (`REQUEST`). Returns only `{ id, status }`.
@@ -1072,43 +1122,12 @@ paths:
                             type: string
                             format: uuid
                           status:
-                            $ref: '#/components/schemas/ArchiveSubmissionStatus'
-        '409':
-          $ref: '#/components/responses/Conflict'
+                            type: string
+                            example: REQUEST
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '429':
           $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-    get:
-      tags: [ArchiveSubmissions]
-      operationId: listArchiveSubmissions
-      summary: List archive submissions (paginated, admin)
-      description: |
-        Permission `archive-submission:read`. Dashboard queue: filter by status with
-        `filter[status]=REQUEST`; the count per filter is read from `meta.total`.
-        List items expose `attachmentCount` (no raw `attachmentIds`).
-      parameters:
-        - $ref: '#/components/parameters/PageParam'
-        - $ref: '#/components/parameters/LimitParam'
-        - $ref: '#/components/parameters/ArchiveSubmissionSortByParam'
-        - $ref: '#/components/parameters/SortOrderParam'
-        - $ref: '#/components/parameters/SearchParam'
-        - $ref: '#/components/parameters/ArchiveSubmissionFilterParam'
-      responses:
-        '200':
-          description: Paginated list of archive submissions.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArchiveSubmissionListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1123,7 +1142,7 @@ paths:
         | `image/webp`, max `UPLOAD_MAX_SIZE_MB`, default 5 MB). Resized/compressed
         synchronously via `sharp`.
 
-        `entityType` is **hardcoded server-side** to `archive-submission` and is
+        `entityType` is **hardcoded server-side** to `archive` and is
         never read from the request body. The returned `url` is later passed as the
         `thumbnail` field of `POST /archive-submissions`. Rate-limited per IP to
         **10 requests/minute** → **429** on excess.
@@ -1164,7 +1183,7 @@ paths:
         `multipart/form-data` with field `file` (mime `application/pdf` only,
         validated by magic bytes `%PDF-`; max `UPLOAD_DOCUMENT_MAX_SIZE_MB`,
         default 10 MB). The document is stored with
-        `entityType=archive-submission`, `entityId=null`; its `id` is later sent in
+        `entityType=archive`, `entityId=null`; its `id` is later sent in
         the `attachments` array of `POST /archive-submissions`. `entityType` is
         **hardcoded server-side** and is never read from the request body.
         Rate-limited per IP to **10 requests/minute** → **429** on excess.
@@ -1192,120 +1211,6 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '429':
           $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /archive-submissions/{id}:
-    get:
-      tags: [ArchiveSubmissions]
-      operationId: getArchiveSubmission
-      summary: Get archive submission by id (admin)
-      description: |
-        Permission `archive-submission:read`. Detail hydrates `attachments`
-        (`Document[]`) in stored order; raw `attachmentIds` are never returned.
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      responses:
-        '200':
-          description: Archive submission detail.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArchiveSubmissionResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /archive-submissions/{id}/approve:
-    post:
-      tags: [ArchiveSubmissions]
-      operationId: approveArchiveSubmission
-      summary: Approve a submission (recreates a DRAFT archive)
-      description: |
-        Permission `archive-submission:approve`. Transitions `REQUEST → APPROVED`
-        and atomically **recreates** an `Archive` with `status=DRAFT`
-        (`publishedAt=null`); it does **not** publish. The submission is kept as
-        audit (`archiveId` linked). Already-final (`APPROVED`/`REJECTED`) row →
-        **409**. Optional JSON body `{ adminNote? }`; invalid body → 422.
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReviewArchiveSubmissionRequest'
-      responses:
-        '200':
-          description: Submission approved; draft archive recreated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArchiveSubmissionApproveResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationFailed'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /archive-submissions/{id}/reject:
-    post:
-      tags: [ArchiveSubmissions]
-      operationId: rejectArchiveSubmission
-      summary: Reject a submission
-      description: |
-        Permission `archive-submission:reject`. Transitions `REQUEST → REJECTED`
-        (no `Archive` is created). Already-final row → **409**. Optional JSON body
-        `{ adminNote? }`; invalid body → 422.
-      parameters:
-        - $ref: '#/components/parameters/IdPath'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReviewArchiveSubmissionRequest'
-      responses:
-        '200':
-          description: Submission rejected.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/SuccessMessage'
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/ArchiveSubmissionListItem'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1632,6 +1537,140 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /networks/{id}/approve:
+    post:
+      tags: [Networks]
+      operationId: approveNetwork
+      summary: Approve & publish a network submission (REQUEST → PUBLISHED)
+      description: |
+        Permission `network:approve`. Transitions `status` `REQUEST → PUBLISHED`,
+        stamping `publishedAt` (from the optional body, else now) and `approvedAt`
+        (first time only). Wrong current status → **409**; unknown id → **404**.
+        Optional JSON body `{ publishedAt? }` (ISO 8601); invalid body → **422**.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishContentRequest'
+      responses:
+        '200':
+          description: Network transitioned (published).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /networks/{id}/reject:
+    post:
+      tags: [Networks]
+      operationId: rejectNetwork
+      summary: Reject a network submission (REQUEST → DRAFT)
+      description: Permission `network:reject`. Transitions `status` `REQUEST → DRAFT`. Wrong current status → **409**; unknown id → **404**.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Network transitioned (draft).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /network-submissions:
+    post:
+      tags: [NetworkSubmissions]
+      operationId: createPublicNetworkSubmission
+      summary: Create a network submission (public)
+      description: |
+        **Public** (`@Public()`, no `x-api-key` required, anonymous). Writes
+        **directly to the `networks` table** with `status=REQUEST`,
+        `source=PUBLIC` (mirroring the archive/event/story submission pattern —
+        there is no separate submission table). Body is validated with the global
+        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`), so
+        unknown fields (e.g. `status`, `createdBy`, `publishedAt`, `lat`, `lng`)
+        → **422**.
+
+        Server-side rules (all surfaced as `422` with
+        `errors: [{ field, message }]`):
+        - `countryId` must exist; `stateId`, when sent, must belong to `countryId`.
+        - `submitter.countryId` must exist; `submitter.stateId`, when sent, must
+          belong to `submitter.countryId`.
+        - `content` is sanitized server-side (strict allowlist); a payload that
+          becomes empty after sanitization → **422**.
+        - `socialMedia` items must have non-empty `platform` and `url`.
+
+        The backend resolves `countryId`/`stateId` to the `Network`
+        `country`/`state` name strings. When `mapsUrl` is provided it is
+        resolved server-side into `Network.lat`/`lng` + `Network.embedUrl` (an
+        invalid or unresolvable link → **422** `mapsUrl`).
+
+        Only a compact `{ id, status }` is returned — the full row is never
+        echoed to the anonymous caller. Review via `GET /networks?filter[status]=REQUEST`;
+        approve with `POST /networks/{id}/approve`. Rate-limited per IP to
+        **5 requests/minute** → **429** on excess.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePublicNetworkRequest'
+      responses:
+        '201':
+          description: Submission created (`REQUEST`). Returns only `{ id, status }`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessMessage'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: object
+                        required: [id, status]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          status:
+                            $ref: '#/components/schemas/NetworkStatus'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -2206,6 +2245,119 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      operationId: listSubscriptions
+      summary: List subscriptions (paginated, admin)
+      description: |
+        Permission `subscription:read`. Soft-deleted rows (`deletedAt != null`)
+        are always excluded. Does **not** force `status` — admins see all
+        packages and `filter[status]` works as opt-in. Each item carries the
+        computed `subscriberCount`.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SubscriptionSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SubscriptionFilterParam'
+      responses:
+        '200':
+          description: Paginated list of subscriptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /subscriptions/me:
+    get:
+      tags: [Subscriptions]
+      operationId: getMySubscription
+      summary: Get the current user's subscription (self-service)
+      description: |
+        **LOGIN-only** (no RBAC permission). Returns the newest non-`CANCELED`
+        `Billing`'s subscription for the authenticated user, but only when that
+        subscription is `status=ACTIVE` and not soft-deleted; otherwise
+        `data: null`. Declared **before** `/subscriptions/{id}` so the literal
+        `me` segment is not swallowed by the UUID pipe.
+      responses:
+        '200':
+          description: Current user's subscription, or `null` when none is active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionMineResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /subscriptions/available:
+    get:
+      tags: [Subscriptions]
+      operationId: listAvailableSubscriptions
+      summary: List available subscription packages (paginated)
+      description: |
+        **LOGIN-only**. Catalog of non-deleted packages; `status` is **forced**
+        to `ACTIVE` (any user-supplied `filter[status]` is overridden), so
+        `INACTIVE` packages never appear. Each item carries the computed
+        `subscriberCount`.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SubscriptionSortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+        - $ref: '#/components/parameters/SearchParam'
+        - $ref: '#/components/parameters/SubscriptionFilterParam'
+      responses:
+        '200':
+          description: Paginated list of active subscription packages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /subscriptions/{id}:
+    get:
+      tags: [Subscriptions]
+      operationId: getSubscription
+      summary: Get subscription by id
+      description: Permission `subscription:read`. Soft-deleted rows → 404. Invalid UUID → 400.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Subscription detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /stats/summary:
     get:
       tags: [Stats]
@@ -2383,29 +2535,6 @@ components:
       schema:
         type: object
         additionalProperties: true
-    ArchiveSubmissionSortByParam:
-      name: sortBy
-      in: query
-      required: false
-      description: 'Allowed: `name`, `status`, `createdAt`, `updatedAt`. Unknown → 422.'
-      schema:
-        type: string
-        enum: [name, status, createdAt, updatedAt]
-        default: createdAt
-    ArchiveSubmissionFilterParam:
-      name: filter
-      in: query
-      required: false
-      style: deepObject
-      explode: true
-      description: |
-        Deep-object filter. Allowed keys: `status` (`ArchiveSubmissionStatus`),
-        `reviewedAt`, `createdAt`, `updatedAt` (ISO 8601; date operators
-        supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
-        Unknown keys / invalid enum / invalid date → 422. Empty values ignored.
-      schema:
-        type: object
-        additionalProperties: true
     ArchiveSortByParam:
       name: sortBy
       in: query
@@ -2433,10 +2562,10 @@ components:
       name: sortBy
       in: query
       required: false
-      description: 'Allowed: `name`, `state`, `country`, `address`, `website`, `contact`, `createdAt`, `updatedAt`. Unknown → 422.'
+      description: 'Allowed: `name`, `state`, `country`, `address`, `website`, `contact`, `status`, `createdAt`, `updatedAt`. Unknown → 422.'
       schema:
         type: string
-        enum: [name, state, country, address, website, contact, createdAt, updatedAt]
+        enum: [name, state, country, address, website, contact, status, createdAt, updatedAt]
         default: createdAt
     NetworkFilterParam:
       name: filter
@@ -2446,7 +2575,8 @@ components:
       explode: true
       description: |
         Deep-object filter. Allowed keys: `name`, `state`, `country`,
-        `website`, `contact`, `createdAt`, `updatedAt` (ISO 8601; date operators
+        `website`, `contact`, `status` (NetworkStatus), `source` (ContentSource),
+        `createdAt`, `updatedAt` (ISO 8601; date operators
         supported, e.g.
         `filter[createdAt][gte]=2026-09-01T00:00:00Z`). Unknown keys / invalid
         enum / invalid date → 422. Empty values ignored. (`createdAt`/`updatedAt`
@@ -2521,6 +2651,31 @@ components:
         `stateId` (32-bit integer), `createdAt`, `updatedAt` (ISO 8601; date
         operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
         Unknown keys / invalid value → 422. Empty values ignored.
+      schema:
+        type: object
+        additionalProperties: true
+    SubscriptionSortByParam:
+      name: sortBy
+      in: query
+      required: false
+      description: 'Allowed: `name`, `slug`, `subscriptionType`, `status`, `currency`, `price`, `durationInDays`, `createdAt`, `updatedAt`. Unknown → 422.'
+      schema:
+        type: string
+        enum: [name, slug, subscriptionType, status, currency, price, durationInDays, createdAt, updatedAt]
+        default: createdAt
+    SubscriptionFilterParam:
+      name: filter
+      in: query
+      required: false
+      style: deepObject
+      explode: true
+      description: |
+        Deep-object filter. Allowed keys: `name`, `slug`, `currency`,
+        `subscriptionType` (`SubscriptionType`), `status` (`SubscriptionStatus`),
+        `durationInDays` (32-bit integer), `createdAt`, `updatedAt` (ISO 8601;
+        date operators supported, e.g. `filter[createdAt][gte]=2026-09-01T00:00:00Z`).
+        `price` is **not** filterable (sortable only). Unknown keys / invalid
+        enum / invalid value → 422. Empty values ignored.
       schema:
         type: object
         additionalProperties: true
@@ -2625,7 +2780,10 @@ components:
       enum: [PUBLIC, PRIVATE]
     EventEntry:
       type: string
-      enum: [FREE, TICKET]
+      enum: [FREE, TICKET, RESERVATION]
+      description: |
+        Entry mode. `RESERVATION` is a reserved target value — not yet emitted
+        by the backend (current data only sends `FREE` / `TICKET`).
     ContentSource:
       type: string
       enum: [PUBLIC, REGISTERED]
@@ -2638,6 +2796,9 @@ components:
     ArchiveStatus:
       type: string
       enum: [DRAFT, REQUEST, APPROVED, PUBLISHED]
+    ArchiveMaterialType:
+      type: string
+      enum: [TUTORIALS, DOCUMENTARIES, RESEARCH, DOCUMENTS, HISTORY]
     # ---------- envelopes ----------
     SuccessMessage:
       type: object
@@ -2991,6 +3152,13 @@ components:
           items:
             type: string
             format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
+          items:
+            type: string
+            format: uuid
         imageIds:
           type: array
           maxItems: 100
@@ -3043,6 +3211,13 @@ components:
           description: When sent, overrides `status` and sets `status=PUBLISHED`.
         categoryIds:
           type: array
+          items:
+            type: string
+            format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
           items:
             type: string
             format: uuid
@@ -3213,7 +3388,7 @@ components:
           maxLength: 500
     Network:
       type: object
-      required: [id, name, state, country, address, lat, lng, createdAt, updatedAt]
+      required: [id, name, state, country, address, lat, lng, status, source, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -3241,8 +3416,40 @@ components:
             - type: 'null'
         lat:
           type: [number, 'null']
+          description: Resolved server-side from `mapsUrl` when present; an explicit `lat` is overridden by a resolved link.
         lng:
           type: [number, 'null']
+          description: Resolved server-side from `mapsUrl` when present; an explicit `lng` is overridden by a resolved link.
+        status:
+          $ref: '#/components/schemas/NetworkStatus'
+        source:
+          $ref: '#/components/schemas/ContentSource'
+        publishedAt:
+          type: [string, 'null']
+          format: date-time
+        approvedAt:
+          type: [string, 'null']
+          format: date-time
+        organisationType:
+          anyOf:
+            - $ref: '#/components/schemas/NetworkOrganisationType'
+            - type: 'null'
+        ledBy:
+          type: [string, 'null']
+        mapsUrl:
+          type: [string, 'null']
+        embedUrl:
+          type: [string, 'null']
+          format: uri
+        activityType:
+          type: [string, 'null']
+        countryId:
+          type: [integer, 'null']
+        stateId:
+          type: [integer, 'null']
+        createdBy:
+          type: [string, 'null']
+          format: uuid
         createdAt:
           type: string
           format: date-time
@@ -3308,16 +3515,33 @@ components:
           type: number
           minimum: -90
           maximum: 90
+          description: Overridden by a resolved `mapsUrl`.
         lng:
           type: number
           minimum: -180
           maximum: 180
+          description: Overridden by a resolved `mapsUrl`.
+        mapsUrl:
+          type: [string, 'null']
+          maxLength: 2048
+          format: uri
+          description: 'Google Maps link; the server resolves it to `lat`/`lng` + `embedUrl` (overriding explicit `lat`/`lng`). An invalid URL or unresolvable link → 422 `mapsUrl`.'
+        organisationType:
+          anyOf:
+            - $ref: '#/components/schemas/NetworkOrganisationType'
+            - type: 'null'
+        ledBy:
+          type: [string, 'null']
+          maxLength: 200
+        activityType:
+          type: [string, 'null']
+          maxLength: 100
     UpdateNetworkRequest:
       type: object
       additionalProperties: false
       description: |
         All fields optional; omit a field to leave it untouched. Sending `{}` returns the resource unchanged.
-        `website`/`contact`/`socialMedia` accept explicit `null` to clear the value.
+        `website`/`contact`/`socialMedia`/`mapsUrl`/`organisationType`/`ledBy`/`activityType` accept explicit `null` to clear the value.
       properties:
         name:
           type: string
@@ -3353,11 +3577,146 @@ components:
           type: number
           minimum: -90
           maximum: 90
+          description: Overridden by a resolved `mapsUrl`.
         lng:
           type: number
           minimum: -180
           maximum: 180
+          description: Overridden by a resolved `mapsUrl`.
+        mapsUrl:
+          type: [string, 'null']
+          maxLength: 2048
+          format: uri
+          description: 'Google Maps link; the server resolves it to `lat`/`lng` + `embedUrl` (overriding explicit `lat`/`lng`). An invalid URL or unresolvable link → 422 `mapsUrl`. `null` (or empty) clears it, keeping existing coordinates.'
+        organisationType:
+          anyOf:
+            - $ref: '#/components/schemas/NetworkOrganisationType'
+            - type: 'null'
+          description: '`null` clears it.'
+        ledBy:
+          type: [string, 'null']
+          maxLength: 200
+          description: '`null` clears it.'
+        activityType:
+          type: [string, 'null']
+          maxLength: 100
+          description: '`null` clears it.'
 
+    # ---------- network submissions ----------
+    NetworkStatus:
+      type: string
+      enum: [DRAFT, REQUEST, APPROVED, PUBLISHED]
+    NetworkOrganisationType:
+      type: string
+      enum: [GAMELAN_GROUP, ASSOCIATION, INSTITUTION]
+    PublicNetworkSubmitter:
+      type: object
+      additionalProperties: false
+      description: |
+        Nested `submitter` section ("data pengirim") of a public network
+        submission — its own section, audit-only; stored as a public user
+        referenced by `Network.createdBy` (not field-copied). Required on
+        `CreatePublicNetworkRequest`.
+      required: [fullName, email, countryId]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+    CreatePublicNetworkRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        Public network submission payload (anonymous). Mirrors the frontend form
+        (`components/network/NetworkSubmissionForm.tsx`).
+
+        `content` is sanitized server-side (strict allowlist); a payload that
+        becomes empty after sanitization → 422. Validated by the global
+        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`):
+        unknown fields (e.g. `status`, `createdBy`, `publishedAt`, `lat`, `lng`)
+        → 422.
+
+        Cross-field / server rules, all surfaced as 422 with
+        `errors: [{ field, message }]`:
+        - `countryId` must exist.
+        - `stateId`, when sent, must belong to `countryId`.
+        - `submitter.countryId` must exist; `submitter.stateId`, when sent,
+          must belong to `submitter.countryId`.
+        - each `socialMedia.N.url` must be a valid URL.
+
+        The backend writes a `Network` row directly (`status=REQUEST`,
+        `source=PUBLIC`): `countryId`/`stateId` are resolved to `country`/`state`
+        name strings. When `mapsUrl` is provided it is resolved server-side into
+        `Network.lat`/`lng` + `Network.embedUrl` (an invalid or unresolvable link
+        → 422 `mapsUrl`).
+        `submitter` is audit-only.
+      required: [organisationType, name, countryId, contact, content, submitter]
+      properties:
+        organisationType:
+          $ref: '#/components/schemas/NetworkOrganisationType'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Organisation name.
+        ledBy:
+          type: string
+          maxLength: 200
+          description: Person or group leading the organisation.
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+        address:
+          type: string
+          maxLength: 500
+        mapsUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: 'Google Maps link; the server resolves it to `lat`/`lng` + `embedUrl`. An invalid URL or unresolvable link → 422 `mapsUrl`.'
+        website:
+          type: string
+          format: uri
+          maxLength: 500
+        contact:
+          type: string
+          format: email
+          maxLength: 200
+          description: Organisation contact email.
+        socialMedia:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/NetworkSocialMedia'
+        activityType:
+          type: string
+          maxLength: 100
+          description: |
+            Free-text ensemble/activity type (e.g. "Gamelan Ensemble",
+            "Dance Group"). A dedicated taxonomy may replace this later.
+        content:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: Organisation description; sanitized server-side.
+        submitter:
+          $ref: '#/components/schemas/PublicNetworkSubmitter'
+          description: |
+            Required. Submitter identity (audit-only); stored as a public user
+            referenced by `Network.createdBy`, not copied into `Network` fields.
     # ---------- events ----------
     EventDate:
       type: object
@@ -3409,6 +3768,14 @@ components:
           anyOf:
             - $ref: '#/components/schemas/CityRef'
             - type: 'null'
+        mapsUrl:
+          type: [string, 'null']
+          format: uri
+          description: 'User-supplied Google Maps link (long URL or shortlink); `null` when unset.'
+        embedUrl:
+          type: [string, 'null']
+          format: uri
+          description: 'Keyless Google Maps embed URL generated server-side from the resolved coordinates; `null` when unset.'
     Event:
       type: object
       required:
@@ -3457,6 +3824,10 @@ components:
           $ref: '#/components/schemas/ContentVisibility'
         entry:
           $ref: '#/components/schemas/EventEntry'
+        websiteUrl:
+          type: [string, 'null']
+          format: uri
+          description: 'Website or ticketing link; `null` when unset. The frontend renders the `LINKS` row when present.'
         source:
           $ref: '#/components/schemas/ContentSource'
         createdBy:
@@ -3552,6 +3923,11 @@ components:
           type: number
           minimum: -180
           maximum: 180
+        mapsUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: 'Google Maps link; the server resolves shortlinks to `lat`/`lng` and generates `embedUrl`; an unresolvable link → 422 `location.mapsUrl`.'
         countryId:
           type: integer
           description: Optional. When `stateId` is sent, it must belong to `countryId`.
@@ -3606,6 +3982,13 @@ components:
           items:
             type: string
             format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
+          items:
+            type: string
+            format: uuid
         dates:
           type: array
           maxItems: 100
@@ -3655,6 +4038,13 @@ components:
         eventTypeIds:
           type: array
           maxItems: 50
+          items:
+            type: string
+            format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
           items:
             type: string
             format: uuid
@@ -3711,6 +4101,10 @@ components:
         - `author.countryId` must exist.
         - `author.stateId`, when sent, must belong to `author.countryId`.
         - `eventTypeId` must exist.
+        - `cityId`, when sent, must belong to `countryId` and, when `stateId` is
+          also sent, to that `stateId`.
+        - `mapsUrl`, when sent, must be a Google Maps link whose coordinates can
+          be resolved (server follows shortlinks); otherwise → 422 `mapsUrl`.
         - `thumbnail`, when sent, must be an EGS storage URL (prefix
           `S3_PUBLIC_BASE_URL`) referencing an uploaded, still-unbound image with
           `entityType=event` (from `POST /event-submissions/thumbnail`).
@@ -3747,166 +4141,66 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+        cityId:
+          type: integer
+          description: 'Existing `City.id`. Optional; when sent it must belong to `countryId`/`stateId` (validated server-side → 422 `cityId`).'
+        venue:
+          type: string
+          maxLength: 200
+          description: 'Venue name; stored as the event location''s `name` when sent, otherwise the location falls back to state/country.'
+        address:
+          type: string
+          maxLength: 500
+          description: 'Venue street address; falls back to a derived `state, country` string when omitted.'
+        mapsUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: 'Optional Google Maps link (long URL or shortlink). Server resolves it to `lat`/`lng` and generates `embedUrl`; an unresolvable link → 422 `mapsUrl`.'
+        entry:
+          $ref: '#/components/schemas/EventEntry'
+          description: 'Entry mode. Defaults to `FREE` when omitted.'
+        websiteUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: 'Website or ticketing link; stored on the event (`websiteUrl`).'
         thumbnail:
           type: string
           format: uri
           maxLength: 2048
           description: Optional EGS storage image URL from `POST /event-submissions/thumbnail`.
     # ---------- archive submissions ----------
-    ArchiveSubmissionStatus:
-      type: string
-      enum: [REQUEST, APPROVED, REJECTED]
-    ArchiveSubmission:
-      type: object
-      description: |
-        Common archive-submission fields. Never echo a list's raw `attachmentIds`;
-        the list view exposes `attachmentCount` and the detail view resolves
-        `attachments` (see `ArchiveSubmissionListItem` / `ArchiveSubmissionResponse`).
-      required:
-        - id
-        - name
-        - description
-        - thumbnail
-        - externalLinks
-        - status
-        - adminNote
-        - reviewedBy
-        - reviewedAt
-        - archiveId
-        - archive
-        - createdAt
-        - updatedAt
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        description:
-          type: [string, 'null']
-        thumbnail:
-          type: [string, 'null']
-        externalLinks:
-          type: array
-          items:
-            type: string
-            format: uri
-        status:
-          $ref: '#/components/schemas/ArchiveSubmissionStatus'
-        adminNote:
-          type: [string, 'null']
-        reviewedBy:
-          type: [string, 'null']
-          format: uuid
-        reviewedAt:
-          type: [string, 'null']
-          format: date-time
-        archiveId:
-          type: [string, 'null']
-          format: uuid
-        archive:
-          anyOf:
-            - type: object
-              required: [id, status]
-              properties:
-                id:
-                  type: string
-                  format: uuid
-                status:
-                  $ref: '#/components/schemas/ArchiveStatus'
-            - type: 'null'
-          description: Recreated archive (`status=DRAFT` after approve); `null` until approved.
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    ArchiveSubmissionListItem:
-      allOf:
-        - $ref: '#/components/schemas/ArchiveSubmission'
-        - type: object
-          required: [attachmentCount]
-          properties:
-            attachmentCount:
-              type: integer
-              minimum: 0
-    ArchiveSubmissionResponse:
-      allOf:
-        - $ref: '#/components/schemas/SuccessMessage'
-        - type: object
-          required: [data]
-          properties:
-            data:
-              allOf:
-                - $ref: '#/components/schemas/ArchiveSubmission'
-                - type: object
-                  required: [attachments]
-                  properties:
-                    attachments:
-                      type: array
-                      description: Bound documents resolved in stored order; raw `attachmentIds` are never returned.
-                      items:
-                        $ref: '#/components/schemas/Document'
-    ArchiveSubmissionListResponse:
-      allOf:
-        - $ref: '#/components/schemas/SuccessMessage'
-        - type: object
-          required: [data, meta]
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ArchiveSubmissionListItem'
-            meta:
-              $ref: '#/components/schemas/PaginationMeta'
-    ArchiveSubmissionApproveResponse:
-      allOf:
-        - $ref: '#/components/schemas/SuccessMessage'
-        - type: object
-          required: [data]
-          properties:
-            data:
-              type: object
-              required: [submission, archive]
-              properties:
-                submission:
-                  $ref: '#/components/schemas/ArchiveSubmissionListItem'
-                archive:
-                  type: object
-                  required: [id, status]
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    status:
-                      $ref: '#/components/schemas/ArchiveStatus'
-                      description: Always `DRAFT` after approve (not published).
-    CreateArchiveSubmissionRequest:
+    CreatePublicArchiveRequest:
       type: object
       additionalProperties: false
       description: |
-        Public submission payload (anonymous). Validated by the global
-        `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`):
-        unknown fields (e.g. `status`, `reviewedBy`, `archiveId`, `categoryIds`,
-        `documentIds`) → 422.
+        Public archive submission payload (anonymous). Writes directly to
+        `archives` (`status=REQUEST`, `source=PUBLIC`, `type=PUBLIC`). Validated
+        by the global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` +
+        `transform`): unknown fields (e.g. `status`, `source`, `type`,
+        `categoryIds`, `documentIds`, `createdBy`, `publishedAt`) → 422.
 
         Cross-field / server rules, all surfaced as 422 with
         `errors: [{ field, message }]`:
         - `thumbnail`, when sent, must be an EGS storage URL (prefix
           `S3_PUBLIC_BASE_URL`) referencing an uploaded, still-unbound image with
-          `entityType=archive-submission` (from `POST /archive-submissions/thumbnail`).
+          `entityType=archive` (from `POST /archive-submissions/thumbnail`).
         - each `attachments.N` must reference an uploaded, still-unbound `Document`
-          with `entityType=archive-submission` (from
-          `POST /archive-submissions/attachments`).
-      required: [name]
+          with `entityType=archive` (from `POST /archive-submissions/attachments`).
+        - `stateId` (when sent) must belong to `countryId`; `submitter.stateId`
+          (when sent) must belong to `submitter.countryId`.
+      required: [name, submitter]
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 200
+          description: 'Title of the material (UI: "Title").'
         description:
           type: string
+          maxLength: 500
+          description: 'UI: "Short description" (plain text).'
         thumbnail:
           type: string
           maxLength: 2048
@@ -3925,14 +4219,51 @@ components:
           items:
             type: string
             format: uuid
-    ReviewArchiveSubmissionRequest:
+        materialType:
+          $ref: '#/components/schemas/ArchiveMaterialType'
+          description: UI "Material type" select. Maps to an `ARCHIVE` category (idempotent by name).
+        date:
+          type: string
+          format: date
+          description: UI date picker (YYYY-MM-DD). Stored on `Archive.date`.
+        author:
+          type: string
+          maxLength: 200
+          description: Free-text author (not a `User`).
+        organisation:
+          type: string
+          maxLength: 200
+          description: Free-text organisation (not a `Network`).
+        countryId:
+          type: integer
+          description: Existing `Country.id` of the material origin.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
+        submitter:
+          $ref: '#/components/schemas/ArchivePublicSubmitter'
+    ArchivePublicSubmitter:
       type: object
       additionalProperties: false
-      description: Optional body for `approve` / `reject`.
+      description: |
+        Nested `submitter` section ("data pengirim"). Persisted as a login-less
+        `User` (find-or-create by lowercased email) used as `createdBy` + author.
+      required: [fullName, email, countryId]
       properties:
-        adminNote:
+        fullName:
           type: string
-          maxLength: 1000
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        countryId:
+          type: integer
+          description: Existing `Country.id`.
+        stateId:
+          type: integer
+          description: Optional; must belong to `countryId`.
 
     # ---------- story submissions ----------
     StorySubmissionSubmitter:
@@ -4107,6 +4438,13 @@ components:
         - creator
         - createdAt
         - updatedAt
+        - source
+        - date
+        - author
+        - organisation
+        - countryId
+        - stateId
+        - materialType
       properties:
         id:
           type: string
@@ -4152,6 +4490,23 @@ components:
         updatedAt:
           type: string
           format: date-time
+        source:
+          $ref: '#/components/schemas/ContentSource'
+        date:
+          type: [string, 'null']
+          format: date-time
+        author:
+          type: [string, 'null']
+        organisation:
+          type: [string, 'null']
+        countryId:
+          type: [integer, 'null']
+        stateId:
+          type: [integer, 'null']
+        materialType:
+          anyOf:
+            - $ref: '#/components/schemas/ArchiveMaterialType'
+            - type: 'null'
     Archive:
       allOf:
         - $ref: '#/components/schemas/ArchiveListItem'
@@ -4217,6 +4572,13 @@ components:
           items:
             type: string
             format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
+          items:
+            type: string
+            format: uuid
         externalLinks:
           type: array
           maxItems: 50
@@ -4265,6 +4627,13 @@ components:
           items:
             type: string
             format: uuid
+        authorIds:
+          type: array
+          maxItems: 100
+          description: Ordered author user ids; replaces the whole array on update.
+          items:
+            type: string
+            format: uuid
         externalLinks:
           type: array
           maxItems: 50
@@ -4277,6 +4646,88 @@ components:
           items:
             type: string
             format: uuid
+
+    # ---------- subscriptions ----------
+    SubscriptionType:
+      type: string
+      enum: [MONTHLY, YEARLY]
+    SubscriptionStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    Subscription:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - subscriptionType
+        - status
+        - currency
+        - price
+        - durationInDays
+        - subscriberCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        subscriptionType:
+          $ref: '#/components/schemas/SubscriptionType'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        currency:
+          type: string
+        price:
+          type: number
+          description: Prisma `Decimal` serialized as a number.
+        durationInDays:
+          type: integer
+          minimum: 1
+        subscriberCount:
+          type: integer
+          minimum: 0
+          description: Computed — number of unique users with a `PAID` `Billing` for this package.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SubscriptionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Subscription'
+    SubscriptionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Subscription'
+            meta:
+              $ref: '#/components/schemas/PaginationMeta'
+    SubscriptionMineResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              anyOf:
+                - $ref: '#/components/schemas/Subscription'
+                - type: 'null'
 
     # ---------- upload ----------
     UploadImageRequest:

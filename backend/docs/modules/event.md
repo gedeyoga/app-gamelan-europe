@@ -105,6 +105,8 @@ model EventLocation {
   eventId   String   @map("event_id")
   name      String
   address   String?
+  mapsUrl   String?  @map("maps_url")
+  embedUrl  String?  @map("embed_url")
   lat       Decimal? @db.Decimal(10, 7)
   lng       Decimal? @db.Decimal(10, 7)
   countryId Int?     @map("country_id")
@@ -147,6 +149,7 @@ export const eventSelect = {
   locations: {
     select: {
       name: true, address: true, lat: true, lng: true,
+      mapsUrl: true, embedUrl: true,
       countryId: true, stateId: true, cityId: true,
       country: { select: { id: true, name: true, iso2: true } },
       state: { select: { id: true, name: true } },
@@ -163,6 +166,7 @@ export type EventEntity = Omit<EventRow, 'dates' | 'eventTypes' | 'locations'> &
   eventTypes: { id: string; name: string }[];
   location: {
     name: string; address: string | null; lat: number | null; lng: number | null;
+    mapsUrl: string | null; embedUrl: string | null;
     countryId: number | null; stateId: number | null; cityId: number | null;
     country: { id: number; name: string; iso2: string } | null;
     state: { id: number; name: string } | null;
@@ -220,7 +224,7 @@ event.network?.name            // 1. org event (approve submission publik / di-s
 | `networkId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Network` → tidak ada = **422** per-field (`networkId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.network`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
 | `location` | **wajib**, nested `EventLocationDto` (`@ValidateNested` + `@Type`) |
 
-`EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`; `countryId`/`stateId`/`cityId` opsional `@Type(() => Number) @IsInt()` (chain geo — divalidasi service, lihat §9). `name` **tetap** label lokasi bebas; **tidak ada** kolom venue.
+`EventLocationDto`: `name` trim wajib `@MaxLength(200)`; `address` opsional `@MaxLength(500)`; `lat`/`lng` opsional `@IsNumber()` + `@IsLatitude()`/`@IsLongitude()`; `mapsUrl` opsional trim `@IsUrl()` `@MaxLength(2048)` (server resolve → lihat §9.5); `countryId`/`stateId`/`cityId` opsional `@Type(() => Number) @IsInt()` (chain geo — divalidasi service, lihat §9). `name` **tetap** label lokasi bebas; **tidak ada** kolom venue.
 
 `EventDateDto` (nested di `dates`): `date` wajib `@IsISO8601()`; `startTime`/`endTime` opsional `@Matches(/^([01]\d|2[0-3]):[0-5]\d$/)` → `"HH:mm"` 24h.
 
@@ -335,6 +339,16 @@ const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(),
 
 - Cocok untuk section dashboard "Event Mendatang". Absen → perilaku list lama; `true` → hanya event dengan tanggal hari ini/ke depan; `false` → list lama; nilai lain → **422**.
 
+**Filter relasi tipe event (`eventTypeId`)** — opsional, UUID (query param top-level, bukan `filter[...]`). Bila ada, hanya event yang punya **minimal satu** link ke tipe tsb:
+
+```typescript
+// EventService.eventTypeWhere — selalu di-AND dengan scopeWhere (scope tidak diganti)
+{ eventTypes: { some: { eventTypeId } } }
+```
+
+- Komposisi penuh: `scopeWhere ∧ filter ∧ eventMonth ∧ upcoming ∧ mine ∧ eventTypeId ∧ search`.
+- Bukan UUID valid → **422** (`@IsUUID()`). Absen → perilaku list lama.
+
 
 ### `GET /api/v1/event-types`
 
@@ -356,6 +370,7 @@ Respons list `{ data, meta: { page, limit, total }, message }`.
 - `GET /api/v1/events?eventMonth=2026-09&sortBy=name&sortOrder=asc` (events yang punya tanggal di September 2026; navigasi prev/next bulan lewat FE)
 - `GET /api/v1/events?mine=true&eventMonth=2026-09` (section "My Event": organisasi/user sendiri + filter bulan)
 - `GET /api/v1/events?filter[status]=PUBLISHED&upcoming=true` (dashboard: event terbit dengan >=1 tanggal di masa depan; AND dengan scope)
+- `GET /api/v1/events?eventTypeId=550e8400-e29b-41d4-a716-446655440000&sortBy=name&sortOrder=asc` (event pada satu tipe)
 - `GET /api/v1/event-types?search=workshop&sortBy=name&sortOrder=asc&limit=100`
 
 ---
@@ -378,6 +393,7 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 | POST | `/api/v1/events/:id/unpublish` | PERMISSION `event:unpublish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
 | POST | `/api/v1/event-types` | PERMISSION `event-type:create` | `CreateEventTypeDto` (idempoten) | 201 `{ data, message }` |
 | GET | `/api/v1/event-types` | PERMISSION `event-type:read` | `ListQueryDto` | 200 `{ data, meta, message }` |
+| DELETE | `/api/v1/event-types/:id` | PERMISSION `event-type:delete` | `id` UUID | 200 `{ data, message }` |
 | POST | `/api/v1/images` | PERMISSION `story:create`/`story:update`/`event:create`/`event:update` (ANY-of) | multipart `file`, `entityType=event` | 201 `{ data, message }` |
 
 Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin` otomatis mendapat semuanya.
@@ -474,10 +490,25 @@ Fitur "Event Details": `EventLocation` punya relasi geo seragam **Country > Stat
 {
   "location": {
     "name": "Bali", "address": "Bali, Indonesia", "lat": null, "lng": null,
+    "mapsUrl": null, "embedUrl": null,
     "countryId": 101, "stateId": null, "cityId": null,
     "country": { "id": 101, "name": "Indonesia", "iso2": "ID" },
     "state": null, "city": null
   }
 }
 ```
+
+### 9.5 Resolusi link Google Maps (`mapsUrl` → `lat`/`lng`/`embed_url`)
+
+Kolom `event_locations.embed_url` (field `embedUrl`) = URL embed Google Maps keyless yang dibuat server dari koordinat hasil resolve. Kolom lama `mapsUrl` menyimpan link yang di-supply user apa adanya. Migration `20261009000000_add_event_location_embed_url`.
+
+`libs/src/common/utils/google-maps.util.ts` (dipindah dari `modules/event/utils/`, dipakai bersama `event` + `network`):
+
+- `isGoogleMapsUrl(raw)` — host `google.<tld>`, `maps.google.<tld>`, `www.google.<tld>`, `maps.app.goo.gl`, `goo.gl`; path maps-ish atau host shortlink.
+- `parseLatLng(url)` — prioritas `!3d<lat>!4d<lng>` (pin) → `@<lat>,<lng>` (viewport) → query `q`/`query`/`ll`/`center`/`destination`/`daddr` (`lat,lng` | `loc:lat,lng` | `lat lng`). Range divalidasi (lat −90..90, lng −180..180).
+- `buildEmbedUrl(lat, lng)` — `https://www.google.com/maps?q=<lat>,<lng>&z=15&hl=en&output=embed`.
+- `resolveGoogleMapsLink(raw)` — pakai koordinat langsung bila ada (tanpa jaringan); selain itu follow redirect shortlink (`fetch` + timeout 8s) lalu parse `response.url`. Return `null` di semua kegagalan (tak pernah throw).
+
+`EventService.resolveLocationMaps(location, field)` memanggil util ini saat `create`/`update` (bila `location.mapsUrl` ada) dan `createPublicSubmission` (bila `dto.mapsUrl` ada). Koordinat hasil resolve **menimpa** `lat`/`lng` kiriman klien; link tak resolvable → **422** (`location.mapsUrl` admin, `mapsUrl` submission publik). Tanpa `mapsUrl` → `lat`/`lng`/`embedUrl` dibiarkan apa adanya.
+
 

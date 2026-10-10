@@ -2,15 +2,18 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
   Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { NetworkOrganisationType } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -66,6 +69,13 @@ export class CreateNetworkDto {
   @MaxLength(500)
   website?: string | null;
 
+  // Link Google Maps (long URL / shortlink).
+  @IsOptional()
+  @Transform(trim)
+  @IsUrl({}, { message: 'mapsUrl must be a URL' })
+  @MaxLength(2048)
+  mapsUrl?: string | null;
+
   @Transform(trim)
   @IsOptional()
   @IsString()
@@ -79,6 +89,23 @@ export class CreateNetworkDto {
   @ValidateNested({ each: true })
   @Type(() => NetworkSocialMediaDto)
   socialMedia?: NetworkSocialMediaDto[] | null;
+
+  // `null` eksplisit = kosongkan (update).
+  @IsOptional()
+  @IsEnum(NetworkOrganisationType)
+  organisationType?: NetworkOrganisationType | null;
+
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  ledBy?: string | null;
+
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  activityType?: string | null;
 
   @IsOptional()
   @IsNumber()

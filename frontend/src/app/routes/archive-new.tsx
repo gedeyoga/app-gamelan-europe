@@ -39,6 +39,7 @@ export function ArchiveNewPage() {
   const canCreate = can('archive:create')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canDeleteCategory = can('category:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishArchive = can('archive:publish')
@@ -153,6 +154,7 @@ export function ArchiveNewPage() {
         isLoadingCategories={categoriesQuery.isPending}
         canReadCategories={canReadCategories}
         canCreateCategory={canCreateCategory}
+        canDeleteCategory={canDeleteCategory}
         canPublishArchive={canPublishArchive}
         canSubmitArchive={canSubmitArchive}
         canApproveArchive={canApproveArchive}

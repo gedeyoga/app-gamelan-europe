@@ -38,7 +38,10 @@
     "switcherAria": "Change language"
   },
   "sort": {
-    "by": "Sort by {{column}}"
+    "by": "Sort by {{column}}",
+    "asc": "Ascending",
+    "desc": "Descending",
+    "default": "Default"
   },
   "dateTime": {
     "hour": "Hour",
@@ -65,5 +68,11 @@
     "noThumbnail": "No thumbnail",
     "noLocation": "Location not available",
     "openEvent": "Open event {{name}}"
+  },
+  "member": {
+    "lockedTitle": "Members only",
+    "lockedDescription": "This content is available to members. Become a member to unlock it.",
+    "becomeMember": "Become a member",
+    "badge": "Member"
   }
 }

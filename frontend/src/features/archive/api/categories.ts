@@ -23,3 +23,7 @@ export function createArchiveCategory(
     body: JSON.stringify(payload),
   })
 }
+
+export function deleteCategory(id: string): Promise<ArchiveCategory> {
+  return request<ArchiveCategory>(`/categories/${id}`, { method: 'DELETE' })
+}

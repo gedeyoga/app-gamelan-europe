@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { MemberGate } from '@/components/shared/member-gate'
+import { useMembership } from '@/features/auth/hooks/use-membership'
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { formatDateTime } from '@/lib/datetime'
 import { sanitizeHtml } from '@/lib/sanitize-html'
 import { cn } from '@/lib/utils'
@@ -43,6 +46,11 @@ const CONTENT_CLASS = cn(
 
 export function StoryDetail({ story, className }: StoryDetailProps) {
   const { t } = useTranslation()
+  const isMember = useMembership()
+  const { canViewPrivate } = useAuthPermissions()
+  // Header/thumbnail tetap tampil sebagai teaser; hanya body yang dikunci. Unlock = member
+  // ATAU `canViewPrivate` (mirror otorisasi backend `canViewPrivate || isMember`).
+  const isLocked = story.visibility === 'PRIVATE' && !isMember && !canViewPrivate
   const creatorName = story.creator?.fullName ?? t('story:detail.authorFallback')
   const hasContent = Boolean(story.content && story.content.trim().length > 0)
   const safeContent = useMemo(() => sanitizeHtml(story.content ?? ''), [story.content])
@@ -97,32 +105,31 @@ export function StoryDetail({ story, className }: StoryDetailProps) {
       )}
 
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8">
-        {hasContent ? (
-          // `content` = HTML dari API/editor kaya teks; disanitasi via DOMPurify sebelum render.
-          <div className={CONTENT_CLASS} dangerouslySetInnerHTML={{ __html: safeContent }} />
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('story:detail.noContent')}</p>
-        )}
+        <MemberGate unlocked={!isLocked}>
+          {hasContent ? (
+            // `content` = HTML dari API/editor kaya teks; disanitasi via DOMPurify sebelum render.
+            <div className={CONTENT_CLASS} dangerouslySetInnerHTML={{ __html: safeContent }} />
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('story:detail.noContent')}</p>
+          )}
 
-        {(story.gallery ?? []).length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold">{t('story:detail.gallery')}</h2>
-            <StoryGallery images={story.gallery ?? []} />
-          </section>
-        )}
+          {(story.gallery ?? []).length > 0 && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">{t('story:detail.gallery')}</h2>
+              <StoryGallery images={story.gallery ?? []} />
+            </section>
+          )}
 
-        {(story.flyer ?? []).map(
-          (group, index) =>
-            group.images.length > 0 && (
-              <section
-                key={`${group.type}-${index}`}
-                className="flex flex-col gap-3"
-              >
-                <h2 className="text-lg font-semibold">{labelForType(group.type, t)}</h2>
-                <StoryGallery images={group.images} />
-              </section>
-            ),
-        )}
+          {(story.flyer ?? []).map(
+            (group, index) =>
+              group.images.length > 0 && (
+                <section key={`${group.type}-${index}`} className="flex flex-col gap-3">
+                  <h2 className="text-lg font-semibold">{labelForType(group.type, t)}</h2>
+                  <StoryGallery images={group.images} />
+                </section>
+              ),
+          )}
+        </MemberGate>
       </div>
     </article>
   )

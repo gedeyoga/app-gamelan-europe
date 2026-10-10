@@ -5,7 +5,7 @@ import { PostService } from './post.service';
 
 const UNKNOWN_USER = '00000000-0000-4000-8000-000000000000';
 const allScope = () => ({
-  resolve: jest.fn().mockResolvedValue({ kind: 'all', userId: 'admin', canViewPrivate: true }),
+  resolve: jest.fn().mockResolvedValue({ kind: 'all', userId: 'admin', canViewPrivate: true, isMember: false }),
 });
 
 describe('PostRepository author replace', () => {

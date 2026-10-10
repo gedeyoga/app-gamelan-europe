@@ -48,9 +48,9 @@ export function DashboardPendingEvents({
     return (
       <div className={cn('flex flex-col gap-3', className)}>
         {Array.from({ length: 3 }).map((_, index) => (
-          <Card key={index} className="overflow-hidden p-0">
-            <div className="flex flex-col sm:flex-row">
-              <Skeleton className="aspect-video w-full rounded-none sm:w-48" />
+          <Card key={index} className="@container overflow-hidden p-0">
+            <div className="flex flex-col @md:flex-row">
+              <Skeleton className="aspect-video w-full rounded-none @md:w-48" />
               <div className="flex flex-1 flex-col gap-3 p-4">
                 <Skeleton className="h-5 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />

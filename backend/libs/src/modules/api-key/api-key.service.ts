@@ -99,6 +99,7 @@ export class ApiKeyService {
       email: found.creator.email,
       jti: '',
       exp: 0,
+      isMember: false,
       apiKeyId: found.id,
       permissions: found.permissions.map((p) => p.permission.code),
     };

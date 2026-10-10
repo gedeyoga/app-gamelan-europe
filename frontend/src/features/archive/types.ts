@@ -47,13 +47,13 @@ export interface Archive {
   type: ArchiveType
   status: ArchiveStatus
   publishedAt: string | null
-  /** Daftar URL eksternal berurut. */
-  externalLinks: string[]
+  /** Daftar URL eksternal berurut. `null` bila `type === 'MEMBER'` & pemanggil bukan member. */
+  externalLinks: string[] | null
   categories: ArchiveCategory[]
   authors: { id: string; fullName: string }[]
   creator: ArchiveCreator | null
-  /** Hanya ada pada detail (`GET /archives/:id`), terurut dari `documentIds`. */
-  documents?: ArchiveDocument[]
+  /** Hanya ada pada detail (`GET /archives/:id`), terurut dari `documentIds`. `null` bila member-only & pemanggil bukan member. */
+  documents?: ArchiveDocument[] | null
   createdAt: string
   updatedAt: string
 }

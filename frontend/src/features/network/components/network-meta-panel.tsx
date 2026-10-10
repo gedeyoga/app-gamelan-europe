@@ -12,14 +12,24 @@ import {
 } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { LocationMapPicker } from '@/components/shared/location-map-picker'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
 import { cn } from '@/lib/utils'
 
 import { useCountries } from '@/features/geo/hooks/use-countries'
 import { useStates } from '@/features/geo/hooks/use-states'
 
+import { ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_OTHER, ORGANISATION_TYPES } from '../lib/constants'
 import type { NetworkFormValues } from '../lib/schema'
+
+// Radix Select tidak mengizinkan item ber-`value=""`; sentinel ini dipetakan ke `''`.
+const NONE_VALUE = '__none__'
 
 export interface NetworkMetaPanelProps {
   form: UseFormReturn<NetworkFormValues>
@@ -28,13 +38,16 @@ export interface NetworkMetaPanelProps {
 }
 
 // Query geo di panel: `iso2` diturunkan dari country terpilih (state tidak bisa di-fetch dari route).
-export function NetworkMetaPanel({ form, disabled = false, className }: NetworkMetaPanelProps) {
+export function NetworkMetaPanel({
+  form,
+  disabled = false,
+  className,
+}: NetworkMetaPanelProps) {
   const { t } = useTranslation()
 
   const countryValue = form.watch('country')
   const stateValue = form.watch('state')
-  const latValue = form.watch('lat')
-  const lngValue = form.watch('lng')
+  const activityType = form.watch('activityType')
 
   const countriesQuery = useCountries()
   const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
@@ -68,11 +81,6 @@ export function NetworkMetaPanel({ form, disabled = false, className }: NetworkM
     form.setValue('state', '', { shouldDirty: true, shouldValidate: true })
   }
 
-  function handlePick(nextLat: string, nextLng: string) {
-    form.setValue('lat', nextLat, { shouldDirty: true, shouldValidate: true })
-    form.setValue('lng', nextLng, { shouldDirty: true, shouldValidate: true })
-  }
-
   return (
     <div className={cn('flex flex-col gap-4', className)}>
       <FormField
@@ -83,6 +91,56 @@ export function NetworkMetaPanel({ form, disabled = false, className }: NetworkM
             <FormLabel>{t('network:form.name')}</FormLabel>
             <FormControl>
               <Input {...field} disabled={disabled} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="organisationType"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('network:form.organisationType.label')}</FormLabel>
+            <Select
+              value={field.value || NONE_VALUE}
+              onValueChange={(value) => field.onChange(value === NONE_VALUE ? '' : value)}
+              disabled={disabled}
+            >
+              <FormControl>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t('network:form.organisationType.placeholder')} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>
+                  {t('network:form.organisationType.placeholder')}
+                </SelectItem>
+                {ORGANISATION_TYPES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`network:form.organisationType.options.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="ledBy"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('network:form.ledBy.label')}</FormLabel>
+            <FormControl>
+              <Input
+                {...field}
+                placeholder={t('network:form.ledBy.placeholder')}
+                disabled={disabled}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -148,6 +206,24 @@ export function NetworkMetaPanel({ form, disabled = false, className }: NetworkM
             <FormLabel>{t('network:form.address')}</FormLabel>
             <FormControl>
               <Input {...field} disabled={disabled} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="mapsUrl"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('network:form.mapsUrl')}</FormLabel>
+            <FormControl>
+              <Input
+                {...field}
+                placeholder={t('network:form.mapsUrlPlaceholder')}
+                disabled={disabled}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -271,15 +347,57 @@ export function NetworkMetaPanel({ form, disabled = false, className }: NetworkM
         ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">{t('network:form.mapLabel')}</p>
-        <LocationMapPicker
-          lat={latValue}
-          lng={lngValue}
-          onChange={handlePick}
-          disabled={disabled}
+      <FormField
+        control={form.control}
+        name="activityType"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('network:form.activityType.label')}</FormLabel>
+            <Select
+              value={field.value || NONE_VALUE}
+              onValueChange={(value) => field.onChange(value === NONE_VALUE ? '' : value)}
+              disabled={disabled}
+            >
+              <FormControl>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t('network:form.activityType.placeholder')} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>
+                  {t('network:form.activityType.placeholder')}
+                </SelectItem>
+                {ACTIVITY_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {t(`network:form.activityType.options.${option.key}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {activityType === ACTIVITY_TYPE_OTHER && (
+        <FormField
+          control={form.control}
+          name="activityTypeOther"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('network:form.activityType.otherLabel')}</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  placeholder={t('network:form.activityType.otherPlaceholder')}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-      </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,12 @@
 import { useMemo } from 'react'
 
 import { useAuth } from '../auth-provider'
-import { getPermissions, hasAnyPermission, hasPermission } from '../lib/permissions'
+import {
+  canViewPrivate as canViewPrivateFromCodes,
+  getPermissions,
+  hasAnyPermission,
+  hasPermission,
+} from '../lib/permissions'
 
 export interface AuthPermissions {
   /** Daftar kode permission milik user sesi (`resource:action`), `[]` bila tamu/tanpa role. */
@@ -11,6 +16,10 @@ export interface AuthPermissions {
   /** Cek minimal satu dari daftar, mis. `canAny(['user:update', 'user:delete'])`. */
   canAny: (codes: string[]) => boolean
   isAuthenticated: boolean
+  /** Apakah user sesi adalah member (`SessionUser.isMember`, default `false`). */
+  isMember: boolean
+  /** Mirror backend `canViewPrivate` — punya permission tulis/status konten (`story|event|archive`). */
+  canViewPrivate: boolean
 }
 
 /**
@@ -27,6 +36,8 @@ export function useAuthPermissions(): AuthPermissions {
       can: (code: string) => hasPermission(user, code),
       canAny: (codes: string[]) => hasAnyPermission(user, codes),
       isAuthenticated,
+      isMember: user?.isMember ?? false,
+      canViewPrivate: canViewPrivateFromCodes(permissions),
     }
   }, [user, isAuthenticated])
 }

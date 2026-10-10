@@ -10,6 +10,12 @@
     "card": "Card view",
     "list": "List view"
   },
+  "filter": {
+    "status": "Filter by status",
+    "allStatuses": "All statuses",
+    "eventType": "Filter by event type",
+    "allEventTypes": "All event types"
+  },
   "errors": {
     "loadData": "Failed to load event data. Please try again.",
     "forbidden": "You don't have access to view event data.",
@@ -129,7 +135,8 @@
     "citySelectState": "Select state first",
     "addressLabel": "Address",
     "addressPlaceholder": "Enter address...",
-    "mapLabel": "Pick location on map"
+    "mapsUrlLabel": "Google Maps link",
+    "mapsUrlPlaceholder": "https://maps.app.goo.gl/..."
   },
   "publishDialog": {
     "title": "Publish event",
@@ -152,6 +159,11 @@
   "delete": {
     "title": "Delete Event",
     "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+  "deleteEventType": {
+    "title": "Delete Event Type",
+    "description": "Delete event type \"{{name}}\"? Events using it will lose this type. This action cannot be undone.",
+    "optionLabel": "Delete event type {{name}}"
   },
   "thumbnail": {
     "uploadInvalid": "Image must be PNG, JPG, or WebP and at most 5 MB."
@@ -198,6 +210,8 @@
     "approved": "Event approved successfully",
     "rejected": "Event rejected successfully",
     "approveFailed": "Failed to approve event",
-    "rejectFailed": "Failed to reject event"
+    "rejectFailed": "Failed to reject event",
+    "eventTypeDeleted": "Event type deleted successfully",
+    "eventTypeDeleteFailed": "Failed to delete event type"
   }
 }

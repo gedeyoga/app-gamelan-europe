@@ -18,3 +18,7 @@ export function createEventType(payload: CreateEventTypeInput): Promise<EventTyp
     body: JSON.stringify(payload),
   })
 }
+
+export function deleteEventType(id: string): Promise<EventType> {
+  return request<EventType>(`/event-types/${id}`, { method: 'DELETE' })
+}

@@ -10,10 +10,17 @@ export const archiveSelect = {
   thumbnail: true,
   type: true,
   status: true,
+  source: true,
   publishedAt: true,
   approvedAt: true,
   externalLinks: true,
   documentIds: true,
+  date: true,
+  author: true,
+  organisation: true,
+  countryId: true,
+  stateId: true,
+  materialType: true,
   creator: { select: { id: true, fullName: true, networkId: true } },
   categories: {
     select: {
@@ -74,9 +81,10 @@ export function mapArchive(row: ArchiveRow): ArchiveEntity {
 }
 
 // Redaksi member-only (pure, diekspor agar mudah di-unit-test).
-// `type=MEMBER` + pemanggil tanpa akses member (`canViewPrivate=false`) →
-// `externalLinks` (list & detail) dan `documents` (detail, bila ada) di-null-kan.
-// `PUBLIC` maupun pemanggil berhak tidak diubah. `description` tetap terlihat.
+// `type=MEMBER` + pemanggil tanpa akses member (`canViewPrivate=false && isMember=false` →
+// caller mengirim-kan `false`) → `externalLinks` (list & detail) dan `documents` (detail, bila ada)
+// di-null-kan. `PUBLIC` maupun pemanggil berhak (`canViewPrivate || isMember`) tidak diubah.
+// `description` tetap terlihat.
 export function redactMemberOnly<T extends { type: ArchiveType; externalLinks: string[] | null }>(
   archive: T,
   canViewPrivate: boolean,

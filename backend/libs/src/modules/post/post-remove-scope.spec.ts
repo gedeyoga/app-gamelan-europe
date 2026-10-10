@@ -6,7 +6,7 @@ import { PostService } from './post.service';
 
 // Scope `own` milik aktor lain → `assertWritable` harus menolak, kecuali `skipScopeCheck` eksplisit.
 const ownScope = () => ({
-  resolve: jest.fn().mockResolvedValue({ kind: 'own', userId: 'actor', canViewPrivate: false }),
+  resolve: jest.fn().mockResolvedValue({ kind: 'own', userId: 'actor', canViewPrivate: false, isMember: false }),
 });
 
 function makePostService() {
@@ -76,6 +76,11 @@ function makeArchiveService() {
   const storage = { deleteObjects: jest.fn().mockResolvedValue(undefined) };
   const service = new ArchiveService(
     archiveRepository as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
     {} as never,
     {} as never,
     documentRepository as never,

@@ -87,7 +87,7 @@ class MockJwtGuard implements CanActivate {
     const header = request.headers['authorization'];
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
     if (!token) throw new UnauthorizedException('Unauthorized');
-    request.user = { id: token, email: `${token}@example.com`, jti: 'e2e-jti', exp: 9999999999 };
+    request.user = { id: token, email: `${token}@example.com`, jti: 'e2e-jti', exp: 9999999999, isMember: false };
     return true;
   }
 }

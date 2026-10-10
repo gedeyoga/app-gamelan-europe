@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LayoutGrid, List, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +6,13 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,11 +35,14 @@ import { EventCard } from '@/features/event/components/event-card'
 import { EventTable } from '@/features/event/components/event-table'
 import { useDeleteEvent } from '@/features/event/hooks/use-delete-event'
 import { useEvents } from '@/features/event/hooks/use-events'
+import { useEventTypes } from '@/features/event/hooks/use-event-types'
+import { CONTENT_STATUSES } from '@/features/event/types'
 import type { Event } from '@/features/event/types'
 
 import { OrgEventsPage } from './events-org'
 
 const PAGE_LIMIT = 10
+const ALL = 'ALL'
 
 type ViewMode = 'card' | 'list'
 
@@ -68,16 +78,30 @@ function AdminEventsPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<ListSortOrder | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [eventTypeFilter, setEventTypeFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null)
 
   const debouncedSearch = useDebouncedValue(search, 400)
+
+  const filter = useMemo(() => {
+    const next: Record<string, string> = {}
+    if (statusFilter) next.status = statusFilter
+    return next
+  }, [statusFilter])
+
+  const eventTypesQuery = useEventTypes(can('event-type:read'))
+  const eventTypes = eventTypesQuery.data?.items ?? []
+
   const eventsQuery = useEvents({
     page,
     limit: PAGE_LIMIT,
     search: debouncedSearch,
     sortBy,
     sortOrder,
+    eventTypeId: eventTypeFilter || undefined,
+    filter,
   })
   const deleteEvent = useDeleteEvent()
 
@@ -146,6 +170,44 @@ function AdminEventsPage() {
           placeholder={t('event:search.placeholder')}
           ariaLabel={t('event:search.ariaLabel')}
         />
+        <Select
+          value={statusFilter || ALL}
+          onValueChange={(value) => {
+            setStatusFilter(value === ALL ? '' : value)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={t('event:filter.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('event:filter.allStatuses')}</SelectItem>
+            {CONTENT_STATUSES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {t(`event:statusOptions.${value}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={eventTypeFilter || ALL}
+          onValueChange={(value) => {
+            setEventTypeFilter(value === ALL ? '' : value)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={t('event:filter.eventType')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('event:filter.allEventTypes')}</SelectItem>
+            {eventTypes.map((type) => (
+              <SelectItem key={type.id} value={type.id}>
+                {type.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="inline-flex items-center rounded-md border p-0.5">
           <Toggle
             size="sm"

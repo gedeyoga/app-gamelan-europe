@@ -8,6 +8,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Save,
+  Send,
   X,
 } from 'lucide-react'
 
@@ -62,7 +63,10 @@ export interface StoryFormProps {
   isLoadingCategories: boolean
   canReadCategories: boolean
   canCreateCategory: boolean
+  /** Gate `category:delete` — aksi hapus kategori di combobox. */
+  canDeleteCategory: boolean
   canPublishStory: boolean
+  canSubmitStory: boolean
   canApproveStory: boolean
   canRejectStory: boolean
   onCreateCategory: (name: string) => Promise<StoryCategory | undefined>
@@ -89,7 +93,9 @@ export function StoryForm({
   isLoadingCategories,
   canReadCategories,
   canCreateCategory,
+  canDeleteCategory,
   canPublishStory,
+  canSubmitStory,
   canApproveStory,
   canRejectStory,
   onCreateCategory,
@@ -327,6 +333,17 @@ export function StoryForm({
           {t('story:form.publish')}
         </Button>
       )}
+      {!canPublishStory && canSubmitStory && status === 'DRAFT' && (
+        <Button
+          type="button"
+          size="sm"
+          disabled={isPending}
+          onClick={() => void requestStatusChange('request', t('story:form.requestPublish'))}
+        >
+          <Send className="size-4" data-icon="inline-start" />
+          {t('story:form.requestPublish')}
+        </Button>
+      )}
     </>
   )
 
@@ -469,6 +486,7 @@ export function StoryForm({
                     isLoadingCategories={isLoadingCategories}
                     canReadCategories={canReadCategories}
                     canCreateCategory={canCreateCategory}
+                    canDeleteCategory={canDeleteCategory}
                     onCreateCategory={onCreateCategory}
                     authors={authors}
                     isLoadingUsers={isLoadingUsers}

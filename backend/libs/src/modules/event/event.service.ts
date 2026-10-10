@@ -13,12 +13,13 @@ import { NetworkService } from '@app/libs/modules/network/network.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { UserService } from '@app/libs/modules/user/user.service';
 import { ListEventsQueryDto } from './dto/list-events-query.dto';
-import { EventRepository, CreateEventData, UpdateEventData } from './event.repository';
+import { EventRepository, CreateEventData, EventLocationData, UpdateEventData } from './event.repository';
 import { EventEntity, EventResponse } from './entities/event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { CreatePublicEventDto, MAX_EVENT_RANGE_DAYS } from './dto/create-public-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { slugify } from './utils/slug.util';
+import { resolveGoogleMapsLink } from '@app/libs/common/utils/google-maps.util';
 
 export const EVENT_SEARCHABLE_FIELDS = ['name', 'slug'];
 export const EVENT_SORT_FIELDS = ['name', 'slug', 'status', 'visibility', 'publishedAt', 'createdAt', 'updatedAt'];
@@ -140,6 +141,17 @@ export class EventService {
     }
   }
 
+  // Resolve `mapsUrl` (bila ada) → koordinat + `embedUrl` (server-side). Resolved menimpa lat/lng klien.
+  // Tanpa `mapsUrl` → location dibiarkan apa adanya (lat/lng yang dikirim tetap). Gagal resolve → 422.
+  private async resolveLocationMaps(location: EventLocationData, field: string): Promise<EventLocationData> {
+    if (!location.mapsUrl) return location;
+    const resolved = await resolveGoogleMapsLink(location.mapsUrl);
+    if (!resolved) {
+      throw this.validationError(field, 'mapsUrl must be a Google Maps link with resolvable coordinates');
+    }
+    return { ...location, lat: resolved.lat, lng: resolved.lng, embedUrl: resolved.embedUrl };
+  }
+
   // Scope baca. `none` tidak pernah sampai sini (list early-return); dikembalikan kosong agar aman.
   private scopeWhere(scope: AccessScope): Prisma.EventWhereInput | undefined {
     switch (scope.kind) {
@@ -148,14 +160,14 @@ export class EventService {
       case 'network':
         return { creator: { networkId: scope.networkId } };
       case 'own':
-        return ownReadWhere(scope.userId, scope.canViewPrivate) as Prisma.EventWhereInput;
+        return ownReadWhere(scope.userId, scope.canViewPrivate || scope.isMember) as Prisma.EventWhereInput;
       case 'published': {
         // Terbit berdasarkan `publishedAt`: PUBLISHED + publishedAt terisi + <= sekarang (scheduled future tersembunyi).
         const base: Prisma.EventWhereInput = {
           status: ContentStatus.PUBLISHED,
           publishedAt: { not: null, lte: new Date() },
         };
-        return scope.canViewPrivate ? base : { ...base, visibility: ContentVisibility.PUBLIC };
+        return scope.canViewPrivate || scope.isMember ? base : { ...base, visibility: ContentVisibility.PUBLIC };
       }
       case 'none':
         return { id: { in: [] } };
@@ -196,10 +208,16 @@ export class EventService {
     return { createdBy: userId };
   }
 
+  // Relasi: hanya event dengan minimal satu link tipe `eventTypeId` (`eventTypes.some`).
+  private eventTypeWhere(eventTypeId?: string): Prisma.EventWhereInput | undefined {
+    if (!eventTypeId) return undefined;
+    return { eventTypes: { some: { eventTypeId } } };
+  }
+
   // Baca: org hanya konten organisasinya; published hanya status PUBLISHED; none tolak.
   private assertReadable(event: EventEntity, scope: AccessScope): void {
     if (scope.kind === 'none') throw new ForbiddenException('Forbidden resource');
-    if (event.visibility === ContentVisibility.PRIVATE && !scope.canViewPrivate) {
+    if (event.visibility === ContentVisibility.PRIVATE && !(scope.canViewPrivate || scope.isMember)) {
       throw new ForbiddenException('Forbidden resource');
     }
     if (scope.kind === 'network' && event.creator?.networkId !== scope.networkId) {
@@ -283,13 +301,14 @@ export class EventService {
       dateFields: EVENT_DATE_FIELDS,
     });
     const searchWhere = buildSearch<Prisma.EventWhereInput>(query.search, EVENT_SEARCHABLE_FIELDS);
-    // Susun AND: scope + filter + eventMonth + upcoming + mine, lalu AND dengan search (combineWhere). Bagian kosong dibuang.
+    // Susun AND: scope + filter + eventMonth + upcoming + mine + eventType, lalu AND dengan search (combineWhere). Bagian kosong dibuang.
     const clauses = [
       this.scopeWhere(scope),
       filterWhere,
       this.monthWhere(query.eventMonth),
       this.upcomingWhere(query.upcoming),
       query.mine === 'true' ? this.mineWhere(scope, userId) : undefined,
+      this.eventTypeWhere(query.eventTypeId),
     ].filter((w): w is Prisma.EventWhereInput => !!w && Object.keys(w).length > 0);
     const combined = clauses.length === 1 ? clauses[0] : { AND: clauses };
     const where = combineWhere<Prisma.EventWhereInput>(
@@ -314,7 +333,13 @@ export class EventService {
     return this.toResponse(event);
   }
 
-  private buildCreateData(dto: CreateEventDto, slug: string, status: ContentStatus, createdBy?: string): CreateEventData {
+  private buildCreateData(
+    dto: CreateEventDto,
+    slug: string,
+    status: ContentStatus,
+    createdBy: string | undefined,
+    location: EventLocationData,
+  ): CreateEventData {
     const now = new Date();
     // Tanggal publish manual → pakai tanggal user + paksa PUBLISHED. Tanpa itu, perilaku lama.
     const autoPublish = dto.publishedAt !== undefined;
@@ -338,7 +363,7 @@ export class EventService {
       approvedAt: autoPublish || status === ContentStatus.PUBLISHED ? now : undefined,
       eventTypeIds: dto.eventTypeIds,
       dates: dto.dates?.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime })),
-      location: dto.location,
+      location,
       authorIds: dto.authorIds,
     };
   }
@@ -355,10 +380,14 @@ export class EventService {
     await this.assertNetwork(scoped.networkId);
     await this.assertAuthors(scoped.authorIds);
     await this.assertLocationGeo(scoped.location);
+    // Resolve mapsUrl lebih awal agar semua jalur slug (eksplisit/auto/retry) memakai koordinat final.
+    const location = await this.resolveLocationMaps(scoped.location, 'location.mapsUrl');
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (scoped.slug) {
-      return this.toResponse(await this.eventRepository.create(this.buildCreateData(scoped, scoped.slug, status, userId)));
+      return this.toResponse(
+        await this.eventRepository.create(this.buildCreateData(scoped, scoped.slug, status, userId, location)),
+      );
     }
 
     // Slug auto: retry singkat bila kalah race cek-lalu-insert (P2002 → ConflictException).
@@ -366,7 +395,9 @@ export class EventService {
     let slug = await this.uniqueSlug(base);
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        return this.toResponse(await this.eventRepository.create(this.buildCreateData(scoped, slug, status, userId)));
+        return this.toResponse(
+          await this.eventRepository.create(this.buildCreateData(scoped, slug, status, userId, location)),
+        );
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
         slug = await this.uniqueSlug(base);
@@ -382,16 +413,23 @@ export class EventService {
     const country = await this.countryRepository.findByIdOrNull(dto.countryId);
     if (!country) throw this.validationError('countryId', 'countryId does not exist');
     let state = null;
-    if (dto.stateId !== undefined) {
+    if (dto.stateId != null) {
       state = await this.stateRepository.findByIdOrNull(dto.stateId);
       if (!state || state.countryId !== dto.countryId) {
         throw this.validationError('stateId', 'stateId must belong to countryId');
       }
     }
+    // cityId opsional: harus ada + milik stateId (bila dikirim) & countryId.
+    if (dto.cityId != null) {
+      const city = await this.cityRepository.findByIdOrNull(dto.cityId);
+      if (!city || city.countryId !== dto.countryId || (dto.stateId != null && city.stateId !== dto.stateId)) {
+        throw this.validationError('cityId', 'cityId must belong to countryId/stateId');
+      }
+    }
 
     const authorCountry = await this.countryRepository.findByIdOrNull(dto.author.countryId);
     if (!authorCountry) throw this.validationError('author.countryId', 'author.countryId does not exist');
-    if (dto.author.stateId !== undefined) {
+    if (dto.author.stateId != null) {
       const authorState = await this.stateRepository.findByIdOrNull(dto.author.stateId);
       if (!authorState || authorState.countryId !== dto.author.countryId) {
         throw this.validationError('author.stateId', 'author.stateId must belong to author.countryId');
@@ -407,6 +445,14 @@ export class EventService {
         throw this.validationError('thumbnail', 'thumbnail must reference an uploaded EGS image');
       }
     }
+
+    // Resolve link Maps SEBELUM membuat User/Network agar link invalid tidak meninggalkan orphan record.
+    const maps = dto.mapsUrl
+      ? await this.resolveLocationMaps(
+          { name: dto.venue || (state?.name ?? country.name), mapsUrl: dto.mapsUrl },
+          'mapsUrl',
+        )
+      : undefined;
 
     const user = await this.userService.findOrCreatePublicUser({
       fullName: dto.author.fullName,
@@ -434,6 +480,8 @@ export class EventService {
       status: ContentStatus.REQUEST,
       source: ContentSource.PUBLIC,
       visibility: ContentVisibility.PUBLIC,
+      entry: dto.entry ?? EventEntry.FREE,
+      websiteUrl: dto.websiteUrl ?? null,
       createdBy: user.id,
       networkId: network.id,
       eventTypeIds: [dto.eventTypeId],
@@ -443,11 +491,14 @@ export class EventService {
         endTime: endTime ?? undefined,
       })),
       location: {
-        name: state?.name ?? country.name,
-        address: state?.name ? `${state.name}, ${country.name}` : country.name,
+        // venue/address dikirim → pakai; selain itu fallback derived (state/country).
+        name: dto.venue || (state?.name ?? country.name),
+        address: dto.address || (state?.name ? `${state.name}, ${country.name}` : country.name),
         countryId: country.id,
         stateId: state?.id ?? null,
-        cityId: null,
+        cityId: dto.cityId ?? null,
+        mapsUrl: dto.mapsUrl ?? null,
+        ...(maps ? { lat: maps.lat, lng: maps.lng, embedUrl: maps.embedUrl } : {}),
       },
       authorIds: [user.id],
     };
@@ -482,7 +533,25 @@ export class EventService {
       data.dates = dto.dates.map((d) => ({ date: new Date(d.date), startTime: d.startTime, endTime: d.endTime }));
     if (dto.location !== undefined) {
       await this.assertLocationGeo(dto.location);
-      data.location = dto.location;
+      // `existing.location` = lokasi lama (entity ter-mapping; bukan `locations[]` mentah).
+      const prior = existing.location;
+      const incomingUrl = dto.location.mapsUrl?.trim() ?? '';
+      const existingUrl = prior?.mapsUrl ?? '';
+      if (incomingUrl && incomingUrl !== existingUrl) {
+        // Link baru/diubah → resolve via jaringan (gagal → 422).
+        data.location = await this.resolveLocationMaps(dto.location, 'location.mapsUrl');
+      } else {
+        // Link sama/kosong → pakai kembali koordinat lama, tanpa panggilan jaringan.
+        // ponytail: `mapsUrl` kosong sengaja mempertahankan koordinat lama; untuk menghapus
+        // lokasi butuh alur "clear location" eksplisit (bukan sekadar absen/empty mapsUrl).
+        data.location = {
+          ...dto.location,
+          mapsUrl: incomingUrl || existingUrl || null,
+          lat: prior?.lat != null ? Number(prior.lat) : dto.location.lat,
+          lng: prior?.lng != null ? Number(prior.lng) : dto.location.lng,
+          embedUrl: prior?.embedUrl ?? null,
+        };
+      }
     }
     if (dto.networkId !== undefined) {
       await this.assertNetwork(dto.networkId);

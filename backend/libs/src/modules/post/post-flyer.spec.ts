@@ -5,7 +5,7 @@ const UUID_1 = '11111111-1111-4111-8111-111111111111';
 const UUID_2 = '22222222-2222-4222-8222-222222222222';
 
 const allScope = () => ({
-  resolve: jest.fn().mockResolvedValue({ kind: 'all', userId: 'admin', canViewPrivate: true }),
+  resolve: jest.fn().mockResolvedValue({ kind: 'all', userId: 'admin', canViewPrivate: true, isMember: false }),
 });
 
 function makeService(overrides: {

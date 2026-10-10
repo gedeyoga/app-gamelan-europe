@@ -6,6 +6,10 @@
   "role": {
     "member": "Member"
   },
+  "member": {
+    "active": "Member aktif",
+    "becomeMember": "Jadi member"
+  },
   "stats": {
     "upcomingEvents": "Event Akan Datang",
     "publishedStories": "Story Terbit",
@@ -49,6 +53,18 @@
       "empty": "Tidak ada story yang menunggu persetujuan.",
       "error": "Gagal memuat data."
     },
+    "pendingNetworkSubmissions": {
+      "title": "Usulan Network Menunggu Persetujuan",
+      "subtitle": "Organisasi yang mengajukan bergabung ke Network.",
+      "empty": "Belum ada usulan network yang menunggu persetujuan.",
+      "error": "Gagal memuat data."
+    },
+    "pendingSubscriptionRequests": {
+      "title": "Permintaan Langganan Menunggu Persetujuan",
+      "subtitle": "Permintaan langganan dari member dan publik.",
+      "empty": "Belum ada permintaan langganan yang menunggu persetujuan.",
+      "error": "Gagal memuat data."
+    },
     "archives": {
       "title": "Arsip Terbaru",
       "subtitle": "Arsip yang dapat Anda akses.",
@@ -86,6 +102,7 @@
     "networks": "Network",
     "apiKey": "API Keys",
     "subscription": "Subscription",
+    "subscriptionRequests": "Permintaan Langganan",
     "billing": "Billing Management"
   },
   "group": {

@@ -38,7 +38,10 @@
     "switcherAria": "Ganti bahasa"
   },
   "sort": {
-    "by": "Urutkan berdasarkan {{column}}"
+    "by": "Urutkan berdasarkan {{column}}",
+    "asc": "Naik",
+    "desc": "Turun",
+    "default": "Bawaan"
   },
   "dateTime": {
     "hour": "Jam",
@@ -65,5 +68,11 @@
     "noThumbnail": "Tanpa thumbnail",
     "noLocation": "Lokasi belum tersedia",
     "openEvent": "Buka event {{name}}"
+  },
+  "member": {
+    "lockedTitle": "Khusus member",
+    "lockedDescription": "Konten ini tersedia untuk member. Jadilah member untuk membukanya.",
+    "becomeMember": "Jadi member",
+    "badge": "Member"
   }
 }

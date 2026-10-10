@@ -38,6 +38,7 @@ describe('ApiKeyService.authenticate', () => {
       email: 'admin@example.com',
       jti: '',
       exp: 0,
+      isMember: false,
       apiKeyId: 'key-1',
       permissions: ['user:read', 'role:read'],
     });

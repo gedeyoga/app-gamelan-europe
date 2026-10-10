@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,10 @@ export interface CategoryComboboxProps {
   onCreate: (name: string) => Promise<CategoryOption | undefined>
   /** Namespace i18n label; default `story` (dipakai archive lewat `archive`). */
   i18nPrefix?: string
+  /** Predikat per opsi: tampilkan aksi hapus bila true. */
+  canDeleteOption?: (option: CategoryOption) => boolean
+  /** Dipanggil saat aksi hapus pada satu opsi diklik. */
+  onDeleteOption?: (option: CategoryOption) => void
   className?: string
 }
 
@@ -44,6 +48,8 @@ export function CategoryCombobox({
   canCreate = false,
   onCreate,
   i18nPrefix = 'story',
+  canDeleteOption,
+  onDeleteOption,
   className,
 }: CategoryComboboxProps) {
   const { t } = useTranslation()
@@ -124,7 +130,12 @@ export function CategoryCombobox({
             </CommandEmpty>
             <CommandGroup>
               {filtered.map((option) => (
-                <CommandItem key={option.id} value={option.id} onSelect={() => toggle(option.id)}>
+                <CommandItem
+                  key={option.id}
+                  value={option.id}
+                  onSelect={() => toggle(option.id)}
+                  className="pr-1.5 [&>svg:last-child]:hidden"
+                >
                   <Check
                     className={cn(
                       'size-4',
@@ -132,6 +143,25 @@ export function CategoryCombobox({
                     )}
                   />
                   {option.name}
+                  {canDeleteOption?.(option) && onDeleteOption && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto size-6 shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label={t(`${i18nPrefix}:deleteCategory.optionLabel`, {
+                        name: option.name,
+                      })}
+                      title={t(`${i18nPrefix}:deleteCategory.optionLabel`, { name: option.name })}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onDeleteOption(option)
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
                 </CommandItem>
               ))}
               {canAddNew && (

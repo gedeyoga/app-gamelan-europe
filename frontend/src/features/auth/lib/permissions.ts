@@ -32,6 +32,31 @@ export function hasAnyPermission(user: MaybeSessionUser, codes: string[]): boole
   return codes.some((code) => owned.includes(code))
 }
 
+// Sumber tunggal scope konten — MIRROR backend `access-scope.service.ts` (canViewPrivateFromCodes).
+export const CONTENT_RESOURCES = ['story', 'event', 'archive'] as const
+// Action tulis konten (create/update/submit) → penanda "pengelola konten".
+export const CONTENT_WRITE_ACTIONS = ['create', 'update', 'submit'] as const
+// Action status-manager/moderator konten (approve/publish/reject/unpublish) → scope `all`.
+export const CONTENT_MODERATOR_ACTIONS = ['approve', 'publish', 'reject', 'unpublish'] as const
+
+function hasActions(codes: string[], resource: string, actions: readonly string[]): boolean {
+  return actions.some((action) => codes.includes(`${resource}:${action}`))
+}
+
+/**
+ * `canViewPrivate` backend: HANYA content manager/status-manager (punya permission tulis ATAU
+ * status konten) — BUKAN sekadar `*:read`. Harus sama persis dengan `canViewPrivateFromCodes`
+ * backend; dipakai untuk mengizinkan user ber-privilege melihat konten PRIVATE/MEMBER.
+ */
+export function canViewPrivate(codes: string[]): boolean {
+  if (!Array.isArray(codes) || codes.length === 0) return false
+  return CONTENT_RESOURCES.some(
+    (resource) =>
+      hasActions(codes, resource, CONTENT_WRITE_ACTIONS) ||
+      hasActions(codes, resource, CONTENT_MODERATOR_ACTIONS),
+  )
+}
+
 /**
  * Type guard untuk error 403 dari backend.
  * Dipakai di query/mutation untuk menampilkan empty-state "Tidak punya akses",

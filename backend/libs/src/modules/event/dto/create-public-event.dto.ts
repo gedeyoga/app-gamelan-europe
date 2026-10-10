@@ -1,12 +1,14 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
+  IsEnum,
   IsInt,
   IsISO8601,
   IsNotEmpty,
   IsNotEmptyObject,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   MaxLength,
   registerDecorator,
@@ -14,6 +16,7 @@ import {
   ValidationOptions,
   ValidateNested,
 } from 'class-validator';
+import { EventEntry } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const trimLower = ({ value }: { value: unknown }) =>
@@ -142,4 +145,38 @@ export class CreatePublicEventDto {
   @IsString()
   @MaxLength(2048)
   thumbnail?: string;
+
+  // Target contract addition (EGS form): lokasi terperinci. Semua opsional (omit-not-null).
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(200)
+  venue?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(500)
+  address?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsUrl()
+  @MaxLength(2048)
+  mapsUrl?: string;
+
+  @IsOptional()
+  @IsEnum(EventEntry)
+  entry?: EventEntry;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsUrl()
+  @MaxLength(2048)
+  websiteUrl?: string;
 }

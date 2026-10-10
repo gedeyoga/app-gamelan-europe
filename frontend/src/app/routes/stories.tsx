@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LayoutGrid, List, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +6,13 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,9 +35,12 @@ import { StoryCard } from '@/features/story/components/story-card'
 import { StoryTable } from '@/features/story/components/story-table'
 import { useDeleteStory } from '@/features/story/hooks/use-delete-story'
 import { useStories } from '@/features/story/hooks/use-stories'
+import { useCategories } from '@/features/story/hooks/use-categories'
+import { CONTENT_STATUSES } from '@/features/story/types'
 import type { Story } from '@/features/story/types'
 
 const PAGE_LIMIT = 10
+const ALL = 'ALL'
 
 type ViewMode = 'card' | 'list'
 
@@ -66,16 +76,30 @@ export function StoriesPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<ListSortOrder | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
   const [deletingStory, setDeletingStory] = useState<Story | null>(null)
 
   const debouncedSearch = useDebouncedValue(search, 400)
+
+  const filter = useMemo(() => {
+    const next: Record<string, string> = {}
+    if (statusFilter) next.status = statusFilter
+    return next
+  }, [statusFilter])
+
+  const categoriesQuery = useCategories(can('category:read'))
+  const categories = categoriesQuery.data?.items ?? []
+
   const storiesQuery = useStories({
     page,
     limit: PAGE_LIMIT,
     search: debouncedSearch,
     sortBy,
     sortOrder,
+    categoryId: categoryFilter || undefined,
+    filter,
   })
   const deleteStory = useDeleteStory()
 
@@ -144,6 +168,44 @@ export function StoriesPage() {
           placeholder={t('story:search.placeholder')}
           ariaLabel={t('story:search.ariaLabel')}
         />
+        <Select
+          value={statusFilter || ALL}
+          onValueChange={(value) => {
+            setStatusFilter(value === ALL ? '' : value)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={t('story:filter.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('story:filter.allStatuses')}</SelectItem>
+            {CONTENT_STATUSES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {t(`story:statusOptions.${value}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={categoryFilter || ALL}
+          onValueChange={(value) => {
+            setCategoryFilter(value === ALL ? '' : value)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={t('story:filter.category')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('story:filter.allCategories')}</SelectItem>
+            {categories.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="inline-flex items-center rounded-md border p-0.5">
           <Toggle
             size="sm"

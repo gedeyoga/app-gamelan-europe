@@ -30,11 +30,26 @@
     "createDescription": "Create a new network.",
     "editTitle": "Edit Network",
     "name": "Name",
+    "organisationType": {
+      "label": "Organisation type",
+      "placeholder": "Select organisation type",
+      "options": {
+        "GAMELAN_GROUP": "Gamelan group",
+        "ASSOCIATION": "Association",
+        "INSTITUTION": "Institution"
+      }
+    },
+    "ledBy": {
+      "label": "Led by",
+      "placeholder": "Artistic director / leader"
+    },
     "state": "State",
     "country": "Country",
     "address": "Address",
     "website": "Website",
     "websitePlaceholder": "https://example.com",
+    "mapsUrl": "Google Maps link",
+    "mapsUrlPlaceholder": "https://maps.app.goo.gl/",
     "contact": "Contact",
     "contactPlaceholder": "Email or phone number",
     "socialMedia": {
@@ -48,7 +63,22 @@
       "urlPlaceholder": "https://instagram.com/...",
       "empty": "No social media added yet"
     },
-    "mapLabel": "Pick location on map",
+    "activityType": {
+      "label": "Activity type",
+      "placeholder": "Select activity type",
+      "otherLabel": "Describe your activity type",
+      "otherPlaceholder": "e.g. Puppet theatre collective",
+      "options": {
+        "gamelanEnsemble": "Gamelan Ensemble",
+        "danceGroup": "Dance Group",
+        "theatreDrama": "Theatre / Drama Group",
+        "musicGroup": "Music Group",
+        "educationWorkshop": "Education / Workshop",
+        "researchAcademic": "Research / Academic",
+        "culturalInstitution": "Cultural Institution",
+        "other": "Other"
+      }
+    },
     "settingsTitle": "Settings",
     "hideSettings": "Hide settings",
     "showSettings": "Show settings",
@@ -70,6 +100,10 @@
     "deleted": "Network deleted successfully",
     "createFailed": "Failed to create network",
     "updateFailed": "Failed to update network",
-    "deleteFailed": "Failed to delete network"
+    "deleteFailed": "Failed to delete network",
+    "approved": "Network request approved successfully",
+    "approveFailed": "Failed to approve network request",
+    "rejected": "Network request rejected successfully",
+    "rejectFailed": "Failed to reject network request"
   }
 }

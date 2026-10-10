@@ -51,8 +51,7 @@ function toFormValues(event: Event): EventFormValues {
     location: {
       name: event.location?.name ?? '',
       address: event.location?.address ?? '',
-      lat: event.location?.lat != null ? String(event.location.lat) : '',
-      lng: event.location?.lng != null ? String(event.location.lng) : '',
+      mapsUrl: event.location?.mapsUrl ?? '',
       countryId: event.location?.countryId != null ? String(event.location.countryId) : '',
       stateId: event.location?.stateId != null ? String(event.location.stateId) : '',
       cityId: event.location?.cityId != null ? String(event.location.cityId) : '',
@@ -69,6 +68,7 @@ export function EventEditPage() {
   const canUpdate = can('event:update')
   const canReadEventTypes = can('event-type:read')
   const canCreateEventType = can('event-type:create')
+  const canDeleteEventType = can('event-type:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishEvent = can('event:publish')
@@ -239,6 +239,7 @@ export function EventEditPage() {
           isLoadingEventTypes={eventTypesQuery.isPending}
           canReadEventTypes={canReadEventTypes}
           canCreateEventType={canCreateEventType}
+          canDeleteEventType={canDeleteEventType}
           canPublishEvent={canPublishEvent}
           canSubmitEvent={canSubmitEvent}
           canApproveEvent={canApproveEvent}

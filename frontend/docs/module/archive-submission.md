@@ -1,5 +1,17 @@
 # Module: Archive Submission (Admin) — Brief
 
+> **⛔ SUPERSEDED / REMOVED (2026-10).** Fitur `archive-submission` **dihapus dari frontend**. Tabel/endpoint terpisah `archive_submissions` + `POST /archive-submissions*`, permission `archive-submission:*`, folder `src/features/archive-submission/`, komponen dashboard submission khusus, dan route/halaman submission **sudah tidak ada**. **Pengajuan publik kini langsung menulis ke tabel `archives`** dengan `status=REQUEST` + `source=PUBLIC` (`type=PUBLIC`). Review admin memakai **section dashboard existing** `pendingArchives` — komponen `DashboardPendingArchives` + hook `useArchives` (filter `status=REQUEST`) di `src/app/routes/dashboard-home.tsx` — lalu editor `/archives/:id` dan aksi `POST /archives/:id/approve|reject` (permission `archive:*`). **Kontrak baru**: `backend/docs/modules/archive-submission.md`. Dokumen ini dipertahankan hanya sebagai catatan historis.
+>
+> **Ringkas — apa yang TIDAK ada lagi di FE ini:**
+>
+> - **Tidak ada** folder `src/features/archive-submission/` (api/hooks/types).
+> - **Tidak ada** komponen dashboard submission khusus (`dashboard-pending-archive-submissions.tsx`, `DashboardPendingArchiveSubmissions`, view type `DashboardPendingArchiveSubmissionItem`). Section `pendingArchives` existing sudah menampilkan baris `archives` `status=REQUEST` (termasuk usulan publik `source=PUBLIC`).
+> - **Tidak ada** permission `archive-submission:read|approve|reject` di FE — review digate `archive:approve`/`archive:reject` (`isArchiveModerator`) dan editor `archive:*`.
+> - **Tidak ada** route/halaman submission (`/archive-submissions`, `ArchiveSubmissionsPage`, `archive-submission-table`).
+> - Grep `frontend/src` untuk `archive-submission`/`archiveSubmission` = **nol** (kode maupun string).
+>
+> **⚠️ Sejarah (jangan diimplementasikan).** Isi §1–§11 di bawah adalah rencana lama modul `archive-submission` yang **dibatalkan** — dipertahankan sebagai catatan historis. Padanan pola refactor: `docs/module/event-submission.md` (header "SUPERSEDED / REMOVED").
+
 Dokumen ini mencatat bagian **sisi ADMIN** modul Archive Submission pada frontend React: **API + hooks** untuk list usulan arsip masuk + flow approve/reject, **dikonsumsi oleh container dashboard** (`src/app/routes/dashboard-home.tsx`). Mengikuti konvensi `frontend/AGENTS.md` dan meniru persis brief analog `docs/module/event-submission.md`.
 
 **Tujuan fitur**: consumer eksternal (website/pihak di luar EGS) mengirim usulan arsip lewat **API publik** backend → admin meninjau di **section dashboard** → usulan yang **di-approve direcreate backend menjadi row `Archive` berstatus `DRAFT`** → admin **diarahkan ke editor `/archives/:id/edit`** untuk mengedit, lalu **publish langsung** (alur publish existing, permission `archive:publish`) agar tayang. **Reject = tidak dipindahkan** (usulan ditolak, tidak ada `Archive` dibuat).

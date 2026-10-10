@@ -1,0 +1,115 @@
+{
+  "title": "Permintaan Langganan",
+  "subtitle": "Tinjau permintaan langganan dari member dan publik.",
+  "search": {
+    "placeholder": "Cari nama, email, atau organisasi...",
+    "ariaLabel": "Cari permintaan langganan"
+  },
+  "filter": {
+    "all": "Semua",
+    "statusLabel": "Status"
+  },
+  "table": {
+    "requester": "Pemohon",
+    "email": "Email",
+    "plan": "Paket",
+    "type": "Tipe",
+    "status": "Status",
+    "created": "Dibuat",
+    "empty": "Belum ada permintaan langganan",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian"
+  },
+  "requestTypeOptions": {
+    "NEW": "Baru",
+    "RENEWAL": "Perpanjangan"
+  },
+  "statusOptions": {
+    "PENDING": "Menunggu",
+    "APPROVED": "Disetujui",
+    "REJECTED": "Ditolak"
+  },
+  "actions": {
+    "view": "Lihat",
+    "approve": "Setujui",
+    "reject": "Tolak"
+  },
+  "approveDialog": {
+    "title": "Setujui permintaan",
+    "description": "Setujui permintaan langganan dari {{name}}? Billing akan dibuat otomatis.",
+    "confirm": "Setujui",
+    "proofLabel": "Bukti pembayaran",
+    "proofOptional": "(opsional)",
+    "proofUpload": "Unggah file",
+    "proofEmpty": "Tarik file ke sini atau klik untuk memilih.",
+    "proofUploading": "Mengunggah...",
+    "proofFormats": "JPG, PNG, WebP, atau PDF maks 10 MB.",
+    "proofRemove": "Hapus bukti",
+    "proofInvalid": "File harus JPG, PNG, WebP, atau PDF.",
+    "proofTooLarge": "Ukuran file maksimal 10 MB.",
+    "proofFailed": "Gagal mengunggah bukti pembayaran."
+  },
+  "rejectDialog": {
+    "title": "Tolak permintaan",
+    "description": "Tolak permintaan langganan dari {{name}}?",
+    "noteLabel": "Catatan",
+    "notePlaceholder": "Alasan penolakan (opsional)",
+    "confirm": "Tolak"
+  },
+  "detail": {
+    "back": "Kembali",
+    "requester": "Pemohon",
+    "organisation": "Organisasi",
+    "phone": "Telepon",
+    "country": "Negara",
+    "website": "Situs web",
+    "address": "Alamat",
+    "reason": "Alasan",
+    "plan": "Paket",
+    "type": "Tipe permintaan",
+    "planType": "Siklus",
+    "price": "Harga",
+    "duration": "Durasi",
+    "createdAt": "Diajukan",
+    "review": "Review",
+    "reviewedBy": "Direview oleh",
+    "reviewedAt": "Direview pada",
+    "reviewNote": "Catatan review",
+    "notReviewed": "Belum direview.",
+    "viewBilling": "Lihat billing",
+    "notFound": "Permintaan langganan tidak ditemukan."
+  },
+  "form": {
+    "title": "Ajukan langganan",
+    "description": "Pilih paket dan jelaskan alasan Anda berlangganan.",
+    "planLabel": "Paket langganan",
+    "reasonLabel": "Alasan",
+    "reasonPlaceholder": "Jelaskan permintaan Anda...",
+    "contactSection": "Kontak (opsional)",
+    "phone": "Telepon",
+    "website": "Situs web",
+    "country": "Negara",
+    "organisation": "Organisasi",
+    "address": "Alamat",
+    "submit": "Kirim permintaan",
+    "noSubscriptions": "Belum ada paket langganan tersedia."
+  },
+  "myRequests": {
+    "title": "Permintaan Langganan",
+    "empty": "Anda belum punya permintaan langganan.",
+    "requestButton": "Ajukan Langganan"
+  },
+  "toast": {
+    "created": "Permintaan langganan terkirim",
+    "approved": "Permintaan langganan disetujui",
+    "rejected": "Permintaan langganan ditolak",
+    "createFailed": "Gagal mengirim permintaan langganan",
+    "approveFailed": "Gagal menyetujui permintaan langganan",
+    "rejectFailed": "Gagal menolak permintaan langganan"
+  },
+  "errors": {
+    "forbidden": "Anda tidak punya akses melihat permintaan langganan.",
+    "load": "Gagal memuat permintaan langganan.",
+    "empty": "Belum ada permintaan langganan."
+  }
+}

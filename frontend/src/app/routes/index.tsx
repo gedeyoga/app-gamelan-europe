@@ -19,11 +19,14 @@ import { EventNewPage } from './event-new'
 import { LoginPage } from './login'
 import { MyBillingsPage } from './my-billings'
 import { NetworkEditPage } from './network-edit'
+import { NetworkJoinPage } from './network-join'
 import { NetworkNewPage } from './network-new'
 import { NetworksPage } from './networks'
 import { ProfilePage } from './profile'
 import { RegisterPage } from './register'
 import { RolesPage } from './roles'
+import { SubscriptionRequestDetailPage } from './subscription-request-detail'
+import { SubscriptionRequestsPage } from './subscription-requests'
 import { SubscriptionsPage } from './subscriptions'
 import { StoriesPage } from './stories'
 import { StoryDetailPage } from './story-detail'
@@ -117,6 +120,15 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'subscription-requests',
+        element: (
+          <RequirePermission code="subscription-request:read">
+            <SubscriptionRequestsPage />
+          </RequirePermission>
+        ),
+      },
+      { path: 'subscription-requests/:id', element: <SubscriptionRequestDetailPage /> },
+      {
         path: 'billings',
         element: (
           <RequirePermission code="billing:read">
@@ -144,6 +156,10 @@ export const router = createBrowserRouter([
         <RegisterPage />
       </GuestRoute>
     ),
+  },
+  {
+    path: '/network/join',
+    element: <NetworkJoinPage />,
   },
   {
     path: '*',

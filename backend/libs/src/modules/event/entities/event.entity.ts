@@ -14,6 +14,7 @@ export const eventSelect = {
   thumbnail: true,
   visibility: true,
   entry: true,
+  websiteUrl: true,
   createdBy: true,
   networkId: true,
   creator: {
@@ -51,6 +52,8 @@ export const eventSelect = {
       address: true,
       lat: true,
       lng: true,
+      mapsUrl: true,
+      embedUrl: true,
       countryId: true,
       stateId: true,
       cityId: true,
@@ -75,6 +78,8 @@ export type EventLocationEntity = {
   address: string | null;
   lat: number | null;
   lng: number | null;
+  mapsUrl: string | null;
+  embedUrl: string | null;
   countryId: number | null;
   stateId: number | null;
   cityId: number | null;
@@ -127,6 +132,8 @@ export function mapEvent(row: EventRow): EventEntity {
           address: location.address,
           lat: location.lat === null ? null : Number(location.lat),
           lng: location.lng === null ? null : Number(location.lng),
+          mapsUrl: location.mapsUrl,
+          embedUrl: location.embedUrl,
           countryId: location.countryId,
           stateId: location.stateId,
           cityId: location.cityId,

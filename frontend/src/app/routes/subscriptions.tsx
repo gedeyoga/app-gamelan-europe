@@ -4,16 +4,21 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 import { DataTablePagination } from '@/components/shared/data-table-pagination'
 import { SearchBar } from '@/components/shared/search-bar'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-import { nextSort, type ListSortOrder } from '@/lib/list-params'
+import type { ListSortOrder } from '@/lib/list-params'
 import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from '@/lib/toast'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { DeleteSubscriptionDialog } from '@/features/subscription/components/delete-subscription-dialog'
+import { SubscriptionCardGrid } from '@/features/subscription/components/subscription-card-grid'
 import { SubscriptionFormDialog } from '@/features/subscription/components/subscription-form-dialog'
-import { SubscriptionTable } from '@/features/subscription/components/subscription-table'
+import {
+  SUBSCRIPTION_SORT_DEFAULT,
+  SubscriptionSortControl,
+} from '@/features/subscription/components/subscription-sort-control'
 import { useCreateSubscription } from '@/features/subscription/hooks/use-create-subscription'
 import { useDeleteSubscription } from '@/features/subscription/hooks/use-delete-subscription'
 import { useSubscriptions } from '@/features/subscription/hooks/use-subscriptions'
@@ -26,11 +31,30 @@ import type {
 
 const PAGE_LIMIT = 10
 
-function SubscriptionsTableSkeleton() {
+function SubscriptionsCardSkeleton() {
   return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <Skeleton key={index} className="h-12 w-full" />
+    <div className={CARD_GRID_CLASS}>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col gap-4 rounded-xl border p-4"
+          aria-hidden="true"
+        >
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-5 w-20 rounded-md" />
+          </div>
+          <Skeleton className="h-8 w-1/2" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Skeleton className="h-9 w-full rounded-md" />
+            <Skeleton className="h-9 w-full rounded-md" />
+          </div>
+        </div>
       ))}
     </div>
   )
@@ -79,10 +103,15 @@ export function SubscriptionsPage() {
     setPage(1)
   }
 
-  function handleSort(field: string) {
-    const next = nextSort(sortBy, sortOrder, field)
-    setSortBy(next.sortBy)
-    setSortOrder(next.sortOrder)
+  function handleSort(value: string) {
+    if (value === SUBSCRIPTION_SORT_DEFAULT) {
+      setSortBy(null)
+      setSortOrder(null)
+    } else {
+      const [field, order] = value.split(':')
+      setSortBy(field)
+      setSortOrder(order === 'desc' ? 'desc' : 'asc')
+    }
     setPage(1)
   }
 
@@ -164,12 +193,17 @@ export function SubscriptionsPage() {
         )}
       </div>
 
-      <SearchBar
-        value={search}
-        onChange={handleSearchChange}
-        placeholder={t('subscription:search.placeholder')}
-        ariaLabel={t('subscription:search.ariaLabel')}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBar
+          value={search}
+          onChange={handleSearchChange}
+          placeholder={t('subscription:search.placeholder')}
+          ariaLabel={t('subscription:search.ariaLabel')}
+        />
+        <div className="ml-auto">
+          <SubscriptionSortControl sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+        </div>
+      </div>
 
       {subscriptionsQuery.isError ? (
         subscriptionsForbidden ? (
@@ -185,13 +219,10 @@ export function SubscriptionsPage() {
       ) : (
         <>
           {subscriptionsQuery.isPending ? (
-            <SubscriptionsTableSkeleton />
+            <SubscriptionsCardSkeleton />
           ) : (
-            <SubscriptionTable
+            <SubscriptionCardGrid
               items={subscriptionsQuery.data?.items ?? []}
-              sortBy={sortBy}
-              sortOrder={sortOrder}
-              onSort={handleSort}
               searchTerm={debouncedSearch}
               onResetSearch={handleResetSearch}
               onEdit={openEditDialog}

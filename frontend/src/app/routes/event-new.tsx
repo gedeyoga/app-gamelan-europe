@@ -36,6 +36,7 @@ export function EventNewPage() {
   const canCreate = can('event:create')
   const canReadEventTypes = can('event-type:read')
   const canCreateEventType = can('event-type:create')
+  const canDeleteEventType = can('event-type:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishEvent = can('event:publish')
@@ -160,6 +161,7 @@ export function EventNewPage() {
         isLoadingEventTypes={eventTypesQuery.isPending}
         canReadEventTypes={canReadEventTypes}
         canCreateEventType={canCreateEventType}
+        canDeleteEventType={canDeleteEventType}
         canPublishEvent={canPublishEvent}
         canSubmitEvent={canSubmitEvent}
         canApproveEvent={canApproveEvent}

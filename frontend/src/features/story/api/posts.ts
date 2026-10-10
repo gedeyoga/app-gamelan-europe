@@ -4,6 +4,8 @@ import { appendListParams, type ListParams } from '@/lib/list-params'
 import type { CreateStoryInput, Story, UpdateStoryInput } from '../types'
 
 export interface ListPostsParams extends ListParams {
+  /** Filter kategori (UUID); param query top-level `categoryId`. */
+  categoryId?: string
   /** Filter generik `filter[<key>]=<value>` (mis. `{ status: 'PUBLISHED' }`). */
   filter?: Record<string, string>
 }
@@ -11,6 +13,7 @@ export interface ListPostsParams extends ListParams {
 export function listPosts(params: ListPostsParams): Promise<ListResult<Story>> {
   const search = new URLSearchParams()
   appendListParams(search, params)
+  if (params.categoryId) search.set('categoryId', params.categoryId)
   for (const [key, value] of Object.entries(params.filter ?? {})) {
     search.set(`filter[${key}]`, value)
   }
@@ -47,6 +50,10 @@ export function approveStory(id: string, publishedAt: string): Promise<Story> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ publishedAt }),
   })
+}
+
+export function submitStory(id: string): Promise<Story> {
+  return request<Story>(`/posts/${id}/submit`, { method: 'POST' })
 }
 
 export function rejectStory(id: string): Promise<Story> {

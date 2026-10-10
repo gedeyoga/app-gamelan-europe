@@ -1,86 +1,86 @@
 {
   "title": "Billing Management",
-  "subtitle": "Manage billing records",
-  "add": "Add Billing",
+  "subtitle": "Manage member subscriptions",
   "search": {
-    "placeholder": "Search code or currency...",
-    "ariaLabel": "Search billings"
+    "placeholder": "Search name or email...",
+    "ariaLabel": "Search members"
   },
   "errors": {
-    "loadData": "Failed to load billing data. Please try again.",
+    "loadData": "Failed to load member data. Please try again.",
     "forbidden": "You don't have access to view billing data.",
-    "loadOptions": "Failed to load form options (user/network/subscription)."
-  },
-  "table": {
-    "code": "Code",
-    "user": "User",
-    "subscription": "Subscription",
-    "status": "Status",
-    "total": "Total",
-    "created": "Created",
-    "empty": "No billings yet",
-    "notFound": "No results for \"{{term}}\".",
-    "reset": "Reset search",
-    "edit": "Edit",
-    "delete": "Delete"
+    "loadSubscriptions": "Failed to load subscription packages."
   },
   "statusOptions": {
     "PENDING": "Pending",
     "PAID": "Paid",
     "CANCELED": "Canceled"
   },
-  "subscriptionTypeOptions": {
-    "MONTHLY": "Monthly",
-    "YEARLY": "Yearly"
+  "memberStatusOptions": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "NONE": "No subscription"
   },
-  "lineTypeOptions": {
-    "ITEM": "Item",
-    "DISCOUNT": "Discount",
-    "TAX": "Tax"
-  },
-  "form": {
-    "createTitle": "Add Billing",
-    "editTitle": "Edit Billing",
-    "createDescription": "Create a new billing record.",
-    "editDescription": "Update billing record data.",
-    "code": "Code",
+  "table": {
+    "photo": "Profile photo",
     "user": "User",
-    "selectUser": "Select user",
-    "network": "Network",
-    "selectNetwork": "Select network",
-    "noNetwork": "No network",
-    "subscription": "Subscription",
-    "selectSubscription": "Select subscription",
+    "plan": "Subscription",
+    "expiry": "Expiry date",
     "status": "Status",
-    "subscriptionType": "Type",
-    "currency": "Currency",
-    "total": "Total",
-    "discount": "Discount",
-    "tax": "Tax",
-    "paidAt": "Paid at",
-    "canceledAt": "Canceled at",
-    "datePlaceholder": "Pick date & time",
-    "lines": "Billing lines",
-    "linesEmpty": "No lines yet",
-    "addLine": "Add line",
-    "removeLine": "Remove line",
-    "lineLabel": "Line {{number}}",
-    "description": "Description",
-    "lineType": "Type",
-    "qty": "Qty",
-    "amount": "Amount",
-    "lineCurrency": "Currency"
+    "empty": "No members yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search"
   },
-  "delete": {
-    "title": "Delete Billing",
-    "description": "Are you sure you want to delete billing {{code}}? This action cannot be undone."
+  "actions": {
+    "upgrade": "Upgrade",
+    "new": "New subscription",
+    "cancel": "Cancel",
+    "history": "History"
+  },
+  "subscribe": {
+    "createTitle": "New subscription",
+    "upgradeTitle": "Upgrade subscription",
+    "createDescription": "Choose a subscription package for {{name}}.",
+    "upgradeDescription": "Choose a new subscription package for {{name}}.",
+    "selectSubscription": "Subscription package",
+    "noSubscriptions": "No subscription packages available.",
+    "confirm": "Subscribe",
+    "proofLabel": "Payment proof",
+    "proofOptional": "(optional)",
+    "proofEmpty": "Drag a file here or click to choose.",
+    "proofUpload": "Upload file",
+    "proofUploading": "Uploading...",
+    "proofFormats": "JPG, PNG, WebP, or PDF up to 10 MB.",
+    "proofRemove": "Remove proof",
+    "proofInvalid": "File must be a JPG, PNG, WebP, or PDF.",
+    "proofTooLarge": "File size must not exceed 10 MB.",
+    "proofFailed": "Failed to upload payment proof."
+  },
+  "cancel": {
+    "title": "Cancel subscription",
+    "description": "Cancel the active subscription of {{name}}? This action cannot be undone.",
+    "confirm": "Cancel subscription"
+  },
+  "history": {
+    "title": "Billing history",
+    "description": "Billing records for {{name}}.",
+    "empty": "No billing records yet",
+    "viewProof": "View proof",
+    "table": {
+      "code": "Code",
+      "plan": "Subscription",
+      "status": "Status",
+      "proof": "Payment proof",
+      "total": "Total",
+      "paidAt": "Paid at",
+      "canceledAt": "Canceled at",
+      "expiryDate": "Expiry date",
+      "created": "Created"
+    }
   },
   "toast": {
-    "created": "Billing created successfully",
-    "updated": "Billing updated successfully",
-    "deleted": "Billing deleted successfully",
-    "createFailed": "Failed to create billing",
-    "updateFailed": "Failed to update billing",
-    "deleteFailed": "Failed to delete billing"
+    "subscribed": "Subscription updated successfully",
+    "canceled": "Subscription canceled successfully",
+    "subscribeFailed": "Failed to update subscription",
+    "cancelFailed": "Failed to cancel subscription"
   }
 }

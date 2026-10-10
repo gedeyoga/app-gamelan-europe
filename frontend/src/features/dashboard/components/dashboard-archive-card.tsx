@@ -2,7 +2,10 @@ import { ArrowRight, CalendarDays, ImageOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { MemberBadge, MemberLockBadge } from '@/components/shared/member-gate'
 import { Badge } from '@/components/ui/badge'
+import { useMembership } from '@/features/auth/hooks/use-membership'
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { formatDateTime } from '@/lib/datetime'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +31,9 @@ export interface DashboardArchiveCardProps {
  */
 export function DashboardArchiveCard({ archive, className }: DashboardArchiveCardProps) {
   const { t } = useTranslation('dashboard')
+  const isMember = useMembership()
+  const { canViewPrivate } = useAuthPermissions()
+  const unlocked = isMember || canViewPrivate
   const categoryOverflow = archive.categories.length - MAX_VISIBLE_CATEGORIES
 
   return (
@@ -62,12 +68,20 @@ export function DashboardArchiveCard({ archive, className }: DashboardArchiveCar
           aria-hidden="true"
         />
 
-        <Badge
-          variant={TYPE_VARIANT[archive.type]}
-          className="absolute top-3 left-3 z-10 shadow-sm"
-        >
-          {t(`archive:typeOptions.${archive.type}`)}
-        </Badge>
+        {archive.type === 'MEMBER' ? (
+          unlocked ? (
+            <MemberBadge className="absolute top-3 left-3 z-10 shadow-sm" />
+          ) : (
+            <MemberLockBadge className="absolute top-3 left-3 z-10 shadow-sm" />
+          )
+        ) : (
+          <Badge
+            variant={TYPE_VARIANT[archive.type]}
+            className="absolute top-3 left-3 z-10 shadow-sm"
+          >
+            {t(`archive:typeOptions.${archive.type}`)}
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">

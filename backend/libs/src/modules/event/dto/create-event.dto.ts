@@ -12,6 +12,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   Matches,
   MaxLength,
@@ -59,6 +60,13 @@ export class EventLocationDto {
   @IsNumber()
   @IsLongitude()
   lng?: number;
+
+  // Link Google Maps (long URL / shortlink). Server resolve → lat/lng + embedUrl; gagal → 422.
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsUrl({}, { message: 'mapsUrl must be a URL' })
+  @MaxLength(2048)
+  mapsUrl?: string;
 
   @IsOptional()
   @Type(() => Number)

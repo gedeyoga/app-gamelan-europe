@@ -10,6 +10,12 @@
     "card": "Tampilan kartu",
     "list": "Tampilan daftar"
   },
+  "filter": {
+    "status": "Filter berdasarkan status",
+    "allStatuses": "Semua status",
+    "eventType": "Filter berdasarkan tipe event",
+    "allEventTypes": "Semua tipe event"
+  },
   "errors": {
     "loadData": "Gagal memuat data event. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data event.",
@@ -129,7 +135,8 @@
     "citySelectState": "Pilih provinsi dulu",
     "addressLabel": "Alamat",
     "addressPlaceholder": "Masukkan alamat...",
-    "mapLabel": "Pilih lokasi di peta"
+    "mapsUrlLabel": "Link Google Maps",
+    "mapsUrlPlaceholder": "https://maps.app.goo.gl/..."
   },
   "publishDialog": {
     "title": "Terbitkan Event",
@@ -152,6 +159,11 @@
   "delete": {
     "title": "Hapus Event",
     "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "deleteEventType": {
+    "title": "Hapus Tipe Event",
+    "description": "Hapus tipe event \"{{name}}\"? Event yang memakainya akan kehilangan tipe ini. Tindakan ini tidak dapat dibatalkan.",
+    "optionLabel": "Hapus tipe event {{name}}"
   },
   "thumbnail": {
     "uploadInvalid": "Gambar harus PNG, JPG, atau WebP dan maksimal 5 MB."
@@ -198,6 +210,8 @@
     "approved": "Event berhasil disetujui",
     "rejected": "Event berhasil ditolak",
     "approveFailed": "Gagal menyetujui event",
-    "rejectFailed": "Gagal menolak event"
+    "rejectFailed": "Gagal menolak event",
+    "eventTypeDeleted": "Tipe event berhasil dihapus",
+    "eventTypeDeleteFailed": "Gagal menghapus tipe event"
   }
 }

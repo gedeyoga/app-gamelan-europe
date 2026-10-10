@@ -1,9 +1,10 @@
-import { ArrowLeft, RefreshCw, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Lock, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useMembership } from '@/features/auth/hooks/use-membership'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { ArchiveDetail } from '@/features/archive/components/archive-detail'
@@ -15,7 +16,11 @@ export function ArchiveDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams<{ id: string }>()
-  const { can } = useAuthPermissions()
+  const { can, canViewPrivate } = useAuthPermissions()
+  const isMember = useMembership()
+  // 403 = "khusus member" HANYA bila user benar-benar terkunci (bukan member & tanpa
+  // `canViewPrivate`); 403 lain (scope/izin) tetap tampil generik `errors.forbidden`.
+  const isMemberLocked = !isMember && !canViewPrivate
 
   const canRead = can('archive:read')
   const archiveQuery = useArchive(id, canRead)
@@ -64,10 +69,25 @@ export function ArchiveDetailPage() {
         </div>
       ) : archiveQuery.isError ? (
         isForbiddenError(archiveQuery.error) ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
-            <ShieldAlert className="size-6 text-destructive" />
-            <p className="text-sm font-medium">{t('archive:errors.forbidden')}</p>
-          </div>
+          isMemberLocked ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center">
+              <Lock className="size-6 text-muted-foreground" aria-hidden="true" />
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium">{t('common:member.lockedTitle')}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('common:member.lockedDescription')}
+                </p>
+              </div>
+              <Button asChild>
+                <Link to="/my-billings">{t('common:member.becomeMember')}</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+              <ShieldAlert className="size-6 text-destructive" />
+              <p className="text-sm font-medium">{t('archive:errors.forbidden')}</p>
+            </div>
+          )
         ) : isNotFoundError(archiveQuery.error) ? (
           <p className="text-center text-sm text-muted-foreground">{t('archive:detail.notFound')}</p>
         ) : (

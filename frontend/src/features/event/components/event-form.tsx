@@ -64,6 +64,8 @@ export interface EventFormProps {
   isLoadingEventTypes: boolean
   canReadEventTypes: boolean
   canCreateEventType: boolean
+  /** Gate `event-type:delete` — aksi hapus tipe event di combobox. */
+  canDeleteEventType: boolean
   canPublishEvent: boolean
   canSubmitEvent: boolean
   canApproveEvent: boolean
@@ -94,10 +96,8 @@ function buildLocation(values: EventFormValues['location']): EventLocationInput 
   const location: EventLocationInput = { name: values.name.trim() }
   const address = values.address.trim()
   if (address !== '') location.address = address
-  const lat = Number(values.lat)
-  const lng = Number(values.lng)
-  if (values.lat.trim() !== '' && Number.isFinite(lat)) location.lat = lat
-  if (values.lng.trim() !== '' && Number.isFinite(lng)) location.lng = lng
+  const mapsUrl = values.mapsUrl.trim()
+  if (mapsUrl !== '') location.mapsUrl = mapsUrl
   const countryId = Number(values.countryId)
   const stateId = Number(values.stateId)
   const cityId = Number(values.cityId)
@@ -119,6 +119,7 @@ export function EventForm({
   isLoadingEventTypes,
   canReadEventTypes,
   canCreateEventType,
+  canDeleteEventType,
   canPublishEvent,
   canSubmitEvent,
   canApproveEvent,
@@ -459,6 +460,7 @@ export function EventForm({
                     isLoadingEventTypes={isLoadingEventTypes}
                     canReadEventTypes={canReadEventTypes}
                     canCreateEventType={canCreateEventType}
+                    canDeleteEventType={canDeleteEventType}
                     onCreateEventType={onCreateEventType}
                     authors={authors}
                     isLoadingUsers={isLoadingUsers}

@@ -11,6 +11,8 @@ import { DashboardApprovalColumn } from '@/features/dashboard/components/dashboa
 import { EventHighlightCard } from '@/components/shared/event-highlight-card'
 import { DashboardHero } from '@/features/dashboard/components/dashboard-hero'
 import { DashboardPendingArchives } from '@/features/dashboard/components/dashboard-pending-archives'
+import { DashboardPendingNetworkSubmissions } from '@/features/dashboard/components/dashboard-pending-network-submissions'
+import { DashboardPendingSubscriptionRequests } from '@/features/dashboard/components/dashboard-pending-subscription-requests'
 import { DashboardPendingStories } from '@/features/dashboard/components/dashboard-pending-stories'
 import { DashboardPendingEvents } from '@/features/dashboard/components/dashboard-pending-events'
 import { DashboardSection } from '@/features/dashboard/components/dashboard-section'
@@ -22,7 +24,9 @@ import type {
   DashboardEventItem,
   DashboardPendingArchiveItem,
   DashboardPendingEventItem,
+  DashboardPendingNetworkSubmissionItem,
   DashboardPendingStoryItem,
+  DashboardPendingSubscriptionRequestItem,
   DashboardStoryItem,
 } from '@/features/dashboard/types'
 import { useAuth } from '@/features/auth/auth-provider'
@@ -34,6 +38,17 @@ import { useApproveEvent } from '@/features/event/hooks/use-approve-event'
 import { useEvents } from '@/features/event/hooks/use-events'
 import { useRejectEvent } from '@/features/event/hooks/use-reject-event'
 import { formatEventDate } from '@/features/event/lib/format'
+import { useApproveNetwork } from '@/features/network/hooks/use-approve-network'
+import { useNetworks } from '@/features/network/hooks/use-networks'
+import { useRejectNetwork } from '@/features/network/hooks/use-reject-network'
+import { useUploadPaymentProof } from '@/features/billing/hooks/use-upload-payment-proof'
+import type { PaymentProof } from '@/features/billing/types'
+import { ApproveSubscriptionRequestDialog } from '@/features/subscription-request/components/approve-subscription-request-dialog'
+import { RejectSubscriptionRequestDialog } from '@/features/subscription-request/components/reject-subscription-request-dialog'
+import { useApproveSubscriptionRequest } from '@/features/subscription-request/hooks/use-approve-subscription-request'
+import { useRejectSubscriptionRequest } from '@/features/subscription-request/hooks/use-reject-subscription-request'
+import { useSubscriptionRequests } from '@/features/subscription-request/hooks/use-subscription-requests'
+import type { SubscriptionRequest } from '@/features/subscription-request/types'
 import { useStories } from '@/features/story/hooks/use-stories'
 import { useApproveStory } from '@/features/story/hooks/use-approve-story'
 import { useRejectStory } from '@/features/story/hooks/use-reject-story'
@@ -57,14 +72,18 @@ export function DashboardHomePage() {
   const isAdmin = canAny(['event:approve', 'event:reject', 'event:publish', 'event:unpublish'])
   const isArchiveModerator = canAny(['archive:approve', 'archive:reject'])
   const isStoryModerator = canAny(['story:approve', 'story:reject'])
+  const canReadNetworks = can('network:read')
   const canReadUsers = can('user:read')
   const canReadArchives = can('archive:read')
+  const canReadSubscriptionRequests = can('subscription-request:read')
   const [storiesPage, setStoriesPage] = useState(1)
   const [archivesPage, setArchivesPage] = useState(1)
   const [eventsPage, setEventsPage] = useState(1)
   const [pendingEventsPage, setPendingEventsPage] = useState(1)
   const [pendingArchivesPage, setPendingArchivesPage] = useState(1)
   const [pendingStoriesPage, setPendingStoriesPage] = useState(1)
+  const [pendingNetworkSubmissionsPage, setPendingNetworkSubmissionsPage] = useState(1)
+  const [pendingSubscriptionRequestsPage, setPendingSubscriptionRequestsPage] = useState(1)
   // Cutoff = awal hari ini UTC (bukan `Date.now()`) agar event "hari ini" tetap upcoming.
   // ponytail: cutoff diambil sekali per mount; upgrade ke live clock bila dashboard
   // harus tetap benar saat dibiarkan terbuka melewati tengah malam.
@@ -121,6 +140,18 @@ export function DashboardHomePage() {
     filter: { status: 'REQUEST' },
     enabled: isStoryModerator,
   })
+  const pendingNetworkSubmissionsQuery = useNetworks({
+    page: pendingNetworkSubmissionsPage,
+    limit: PENDING_LIMIT,
+    filter: { status: 'REQUEST' },
+    enabled: canReadNetworks,
+  })
+  const pendingSubscriptionRequestsQuery = useSubscriptionRequests({
+    page: pendingSubscriptionRequestsPage,
+    limit: PENDING_LIMIT,
+    filter: { status: 'PENDING' },
+    enabled: canReadSubscriptionRequests,
+  })
   const totalEventsQuery = useEvents({ page: 1, limit: 1, enabled: isAdmin })
   const totalStoriesQuery = useStories({ page: 1, limit: 1, enabled: isAdmin })
   const totalMembersQuery = useUsers({ page: 1, limit: 1, enabled: isAdmin && canReadUsers })
@@ -131,9 +162,19 @@ export function DashboardHomePage() {
   const rejectArchive = useRejectArchive()
   const approveStory = useApproveStory()
   const rejectStory = useRejectStory()
+  const approveNetwork = useApproveNetwork()
+  const rejectNetwork = useRejectNetwork()
+  const approveSubscriptionRequest = useApproveSubscriptionRequest()
+  const rejectSubscriptionRequest = useRejectSubscriptionRequest()
+  const uploadPaymentProof = useUploadPaymentProof()
   const [approveTargetId, setApproveTargetId] = useState<string | null>(null)
   const [archiveApproveTargetId, setArchiveApproveTargetId] = useState<string | null>(null)
   const [storyApproveTargetId, setStoryApproveTargetId] = useState<string | null>(null)
+  const [subscriptionRequestApproveTarget, setSubscriptionRequestApproveTarget] =
+    useState<SubscriptionRequest | null>(null)
+  const [subscriptionRequestRejectTarget, setSubscriptionRequestRejectTarget] =
+    useState<SubscriptionRequest | null>(null)
+  const [paymentProof, setPaymentProof] = useState<PaymentProof | null>(null)
 
   const busyId = approveEvent.isPending
     ? approveEvent.variables?.id
@@ -151,6 +192,18 @@ export function DashboardHomePage() {
     ? approveStory.variables?.id
     : rejectStory.isPending
       ? rejectStory.variables
+      : undefined
+
+  const networkSubmissionBusyId = approveNetwork.isPending
+    ? approveNetwork.variables?.id
+    : rejectNetwork.isPending
+      ? rejectNetwork.variables
+      : undefined
+
+  const subscriptionRequestBusyId = approveSubscriptionRequest.isPending
+    ? approveSubscriptionRequest.variables?.id
+    : rejectSubscriptionRequest.isPending
+      ? rejectSubscriptionRequest.variables?.id
       : undefined
 
   // Nilai kartu statistik admin: `…` saat memuat, `—` saat gagal, angka setelah ada data.
@@ -262,6 +315,32 @@ export function DashboardHomePage() {
     [pendingStoriesQuery.data],
   )
 
+  const pendingNetworkSubmissions = useMemo<DashboardPendingNetworkSubmissionItem[]>(
+    () =>
+      (pendingNetworkSubmissionsQuery.data?.items ?? []).map((network) => ({
+        id: network.id,
+        name: network.name,
+        organisationType: network.organisationType ?? null,
+        country: network.country ?? null,
+        state: network.state ?? null,
+        contact: network.contact ?? null,
+      })),
+    [pendingNetworkSubmissionsQuery.data],
+  )
+
+  const pendingSubscriptionRequests = useMemo<DashboardPendingSubscriptionRequestItem[]>(
+    () =>
+      (pendingSubscriptionRequestsQuery.data?.items ?? []).map((request) => ({
+        id: request.id,
+        fullName: request.fullName,
+        email: request.email,
+        planName: request.subscription.name,
+        requestType: request.requestType,
+        createdAt: request.createdAt,
+      })),
+    [pendingSubscriptionRequestsQuery.data],
+  )
+
   const eventsTotalPages = Math.max(1, Math.ceil(events.length / PAGE))
   const pendingEventsTotal = pendingQuery.data?.total ?? 0
   const pendingEventsPages = Math.max(1, Math.ceil(pendingEventsTotal / PENDING_LIMIT))
@@ -269,6 +348,16 @@ export function DashboardHomePage() {
   const pendingArchivesPages = Math.max(1, Math.ceil(pendingArchivesTotal / PENDING_LIMIT))
   const pendingStoriesTotal = pendingStoriesQuery.data?.total ?? 0
   const pendingStoriesPages = Math.max(1, Math.ceil(pendingStoriesTotal / PENDING_LIMIT))
+  const pendingNetworkSubmissionsTotal = pendingNetworkSubmissionsQuery.data?.total ?? 0
+  const pendingNetworkSubmissionsPages = Math.max(
+    1,
+    Math.ceil(pendingNetworkSubmissionsTotal / PENDING_LIMIT),
+  )
+  const pendingSubscriptionRequestsTotal = pendingSubscriptionRequestsQuery.data?.total ?? 0
+  const pendingSubscriptionRequestsPages = Math.max(
+    1,
+    Math.ceil(pendingSubscriptionRequestsTotal / PENDING_LIMIT),
+  )
 
   // Clamp boundary halaman klien bila daftar menyusut (mis. approve/reject item terakhir).
   useEffect(() => {
@@ -298,6 +387,20 @@ export function DashboardHomePage() {
       setPendingStoriesPage(pendingStoriesPages)
     }
   }, [pendingStoriesPage, pendingStoriesPages])
+
+  useEffect(() => {
+    if (pendingNetworkSubmissionsPage > pendingNetworkSubmissionsPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingNetworkSubmissionsPage(pendingNetworkSubmissionsPages)
+    }
+  }, [pendingNetworkSubmissionsPage, pendingNetworkSubmissionsPages])
+
+  useEffect(() => {
+    if (pendingSubscriptionRequestsPage > pendingSubscriptionRequestsPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingSubscriptionRequestsPage(pendingSubscriptionRequestsPages)
+    }
+  }, [pendingSubscriptionRequestsPage, pendingSubscriptionRequestsPages])
 
   function handleConfirmApprove(publishedAt: string) {
     if (!approveTargetId) return
@@ -386,6 +489,91 @@ export function DashboardHomePage() {
     })
   }
 
+  function handleApproveNetwork(id: string) {
+    approveNetwork.mutate(
+      { id },
+      {
+        onSuccess: () => toastSuccess(t('network:toast.approved')),
+        onError: (err: unknown) => {
+          void queryClient.invalidateQueries({ queryKey: ['network'] })
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('network:toast.approveFailed')))
+        },
+      },
+    )
+  }
+
+  function handleRejectNetwork(id: string) {
+    rejectNetwork.mutate(id, {
+      onSuccess: () => toastSuccess(t('network:toast.rejected')),
+      onError: (err: unknown) => {
+        if (isValidationError(err)) return
+        toastError(getApiErrorMessage(err, t('network:toast.rejectFailed')))
+      },
+    })
+  }
+
+  function findSubscriptionRequest(id: string): SubscriptionRequest | null {
+    return (
+      pendingSubscriptionRequestsQuery.data?.items.find((request) => request.id === id) ?? null
+    )
+  }
+
+  function handleApproveSubscriptionRequest() {
+    if (!subscriptionRequestApproveTarget) return
+    approveSubscriptionRequest.mutate(
+      {
+        id: subscriptionRequestApproveTarget.id,
+        ...(paymentProof
+          ? { paymentProofUrl: paymentProof.url, paymentProofName: paymentProof.filename }
+          : {}),
+      },
+      {
+        onSuccess: () => {
+          closeSubscriptionRequestApprove()
+          toastSuccess(t('subscriptionRequest:toast.approved'))
+        },
+        onError: (err: unknown) => {
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('subscriptionRequest:toast.approveFailed')))
+        },
+      },
+    )
+  }
+
+  function openSubscriptionRequestApprove(id: string) {
+    setPaymentProof(null)
+    uploadPaymentProof.reset()
+    setSubscriptionRequestApproveTarget(findSubscriptionRequest(id))
+  }
+
+  function closeSubscriptionRequestApprove() {
+    setSubscriptionRequestApproveTarget(null)
+    setPaymentProof(null)
+    uploadPaymentProof.reset()
+  }
+
+  function handleSelectProof(file: File) {
+    uploadPaymentProof.mutate(file, { onSuccess: setPaymentProof })
+  }
+
+  function handleRejectSubscriptionRequest(note: string) {
+    if (!subscriptionRequestRejectTarget) return
+    rejectSubscriptionRequest.mutate(
+      { id: subscriptionRequestRejectTarget.id, note: note || undefined },
+      {
+        onSuccess: () => {
+          setSubscriptionRequestRejectTarget(null)
+          toastSuccess(t('subscriptionRequest:toast.rejected'))
+        },
+        onError: (err: unknown) => {
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('subscriptionRequest:toast.rejectFailed')))
+        },
+      },
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-6">
       <DashboardHero fullName={user?.fullName ?? ''} roleName={roleName} />
@@ -427,39 +615,77 @@ export function DashboardHomePage() {
         )}
       </div>
 
-      {isAdmin && (
-        <DashboardSection
-          title={t('section.pendingEvents.title')}
-          subtitle={t('section.pendingEvents.subtitle')}
-        >
-          <div className="flex flex-col gap-3">
-            <DashboardPendingEvents
-              items={pendingEvents}
-              isPending={pendingQuery.isPending}
-              isError={pendingQuery.isError}
-              canApprove={can('event:approve')}
-              canReject={can('event:reject')}
-              canUpdate={can('event:update')}
-              isRefreshing={pendingQuery.isFetching}
-              onEdit={(id) => navigate(`/events/${id}/edit`)}
-              onApprove={setApproveTargetId}
-              onReject={handleReject}
-              busyId={busyId}
-            />
-            {!pendingQuery.isError && !pendingQuery.isPending && pendingEventsTotal > 0 && (
-              <DataTablePagination
-                page={pendingEventsPage}
-                limit={PENDING_LIMIT}
-                total={pendingEventsTotal}
-                entityName={t('section.pendingEvents.title')}
-                isPending={pendingQuery.isFetching}
-                onPrev={() => setPendingEventsPage((page) => Math.max(1, page - 1))}
-                onNext={() => setPendingEventsPage((page) => page + 1)}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        {isAdmin && (
+          <DashboardSection
+            title={t('section.pendingEvents.title')}
+            subtitle={t('section.pendingEvents.subtitle')}
+          >
+            <div className="flex flex-col gap-3">
+              <DashboardPendingEvents
+                items={pendingEvents}
+                isPending={pendingQuery.isPending}
+                isError={pendingQuery.isError}
+                canApprove={can('event:approve')}
+                canReject={can('event:reject')}
+                canUpdate={can('event:update')}
+                isRefreshing={pendingQuery.isFetching}
+                onEdit={(id) => navigate(`/events/${id}/edit`)}
+                onApprove={setApproveTargetId}
+                onReject={handleReject}
+                busyId={busyId}
               />
-            )}
-          </div>
-        </DashboardSection>
-      )}
+              {!pendingQuery.isError && !pendingQuery.isPending && pendingEventsTotal > 0 && (
+                <DataTablePagination
+                  page={pendingEventsPage}
+                  limit={PENDING_LIMIT}
+                  total={pendingEventsTotal}
+                  entityName={t('section.pendingEvents.title')}
+                  isPending={pendingQuery.isFetching}
+                  onPrev={() => setPendingEventsPage((page) => Math.max(1, page - 1))}
+                  onNext={() => setPendingEventsPage((page) => page + 1)}
+                />
+              )}
+            </div>
+          </DashboardSection>
+        )}
+
+        {isStoryModerator && (
+          <DashboardSection
+            title={t('section.pendingStories.title')}
+            subtitle={t('section.pendingStories.subtitle')}
+          >
+            <div className="flex flex-col gap-3">
+              <DashboardPendingStories
+                items={pendingStories}
+                isPending={pendingStoriesQuery.isPending}
+                isError={pendingStoriesQuery.isError}
+                canApprove={can('story:approve')}
+                canReject={can('story:reject')}
+                canUpdate={can('story:update')}
+                isRefreshing={pendingStoriesQuery.isFetching}
+                onEdit={(id) => navigate(`/stories/${id}/edit`)}
+                onApprove={setStoryApproveTargetId}
+                onReject={handleRejectStory}
+                busyId={storyBusyId}
+              />
+              {!pendingStoriesQuery.isError &&
+                !pendingStoriesQuery.isPending &&
+                pendingStoriesTotal > 0 && (
+                  <DataTablePagination
+                    page={pendingStoriesPage}
+                    limit={PENDING_LIMIT}
+                    total={pendingStoriesTotal}
+                    entityName={t('section.pendingStories.title')}
+                    isPending={pendingStoriesQuery.isFetching}
+                    onPrev={() => setPendingStoriesPage((page) => Math.max(1, page - 1))}
+                    onNext={() => setPendingStoriesPage((page) => page + 1)}
+                  />
+                )}
+            </div>
+          </DashboardSection>
+        )}
+      </div>
 
       {isArchiveModerator && (
         <DashboardSection
@@ -473,7 +699,9 @@ export function DashboardHomePage() {
               isError={pendingArchivesQuery.isError}
               canApprove={can('archive:approve')}
               canReject={can('archive:reject')}
+              canUpdate={can('archive:update')}
               isRefreshing={pendingArchivesQuery.isFetching}
+              onEdit={(id) => navigate(`/archives/${id}/edit`)}
               onApprove={setArchiveApproveTargetId}
               onReject={handleRejectArchive}
               busyId={archiveBusyId}
@@ -495,36 +723,75 @@ export function DashboardHomePage() {
         </DashboardSection>
       )}
 
-      {isStoryModerator && (
+      {canReadNetworks && (
         <DashboardSection
-          title={t('section.pendingStories.title')}
-          subtitle={t('section.pendingStories.subtitle')}
+          title={t('section.pendingNetworkSubmissions.title')}
+          subtitle={t('section.pendingNetworkSubmissions.subtitle')}
         >
           <div className="flex flex-col gap-3">
-            <DashboardPendingStories
-              items={pendingStories}
-              isPending={pendingStoriesQuery.isPending}
-              isError={pendingStoriesQuery.isError}
-              canApprove={can('story:approve')}
-              canReject={can('story:reject')}
-              canUpdate={can('story:update')}
-              isRefreshing={pendingStoriesQuery.isFetching}
-              onEdit={(id) => navigate(`/stories/${id}/edit`)}
-              onApprove={setStoryApproveTargetId}
-              onReject={handleRejectStory}
-              busyId={storyBusyId}
+            <DashboardPendingNetworkSubmissions
+              items={pendingNetworkSubmissions}
+              isPending={pendingNetworkSubmissionsQuery.isPending}
+              isError={pendingNetworkSubmissionsQuery.isError}
+              canApprove={can('network:approve')}
+              canReject={can('network:reject')}
+              canUpdate={can('network:update')}
+              isRefreshing={pendingNetworkSubmissionsQuery.isFetching}
+              onEdit={(id) => navigate(`/networks/${id}/edit`)}
+              onApprove={handleApproveNetwork}
+              onReject={handleRejectNetwork}
+              busyId={networkSubmissionBusyId}
             />
-            {!pendingStoriesQuery.isError &&
-              !pendingStoriesQuery.isPending &&
-              pendingStoriesTotal > 0 && (
+            {!pendingNetworkSubmissionsQuery.isError &&
+              !pendingNetworkSubmissionsQuery.isPending &&
+              pendingNetworkSubmissionsTotal > 0 && (
                 <DataTablePagination
-                  page={pendingStoriesPage}
+                  page={pendingNetworkSubmissionsPage}
                   limit={PENDING_LIMIT}
-                  total={pendingStoriesTotal}
-                  entityName={t('section.pendingStories.title')}
-                  isPending={pendingStoriesQuery.isFetching}
-                  onPrev={() => setPendingStoriesPage((page) => Math.max(1, page - 1))}
-                  onNext={() => setPendingStoriesPage((page) => page + 1)}
+                  total={pendingNetworkSubmissionsTotal}
+                  entityName={t('section.pendingNetworkSubmissions.title')}
+                  isPending={pendingNetworkSubmissionsQuery.isFetching}
+                  onPrev={() =>
+                    setPendingNetworkSubmissionsPage((page) => Math.max(1, page - 1))
+                  }
+                  onNext={() => setPendingNetworkSubmissionsPage((page) => page + 1)}
+                />
+              )}
+          </div>
+        </DashboardSection>
+      )}
+
+      {canReadSubscriptionRequests && (
+        <DashboardSection
+          title={t('section.pendingSubscriptionRequests.title')}
+          subtitle={t('section.pendingSubscriptionRequests.subtitle')}
+        >
+          <div className="flex flex-col gap-3">
+            <DashboardPendingSubscriptionRequests
+              items={pendingSubscriptionRequests}
+              isPending={pendingSubscriptionRequestsQuery.isPending}
+              isError={pendingSubscriptionRequestsQuery.isError}
+              canApprove={can('subscription-request:approve')}
+              canReject={can('subscription-request:reject')}
+              isRefreshing={pendingSubscriptionRequestsQuery.isFetching}
+              onView={(id) => navigate(`/subscription-requests/${id}`)}
+              onApprove={openSubscriptionRequestApprove}
+              onReject={(id) => setSubscriptionRequestRejectTarget(findSubscriptionRequest(id))}
+              busyId={subscriptionRequestBusyId}
+            />
+            {!pendingSubscriptionRequestsQuery.isError &&
+              !pendingSubscriptionRequestsQuery.isPending &&
+              pendingSubscriptionRequestsTotal > 0 && (
+                <DataTablePagination
+                  page={pendingSubscriptionRequestsPage}
+                  limit={PENDING_LIMIT}
+                  total={pendingSubscriptionRequestsTotal}
+                  entityName={t('section.pendingSubscriptionRequests.title')}
+                  isPending={pendingSubscriptionRequestsQuery.isFetching}
+                  onPrev={() =>
+                    setPendingSubscriptionRequestsPage((page) => Math.max(1, page - 1))
+                  }
+                  onNext={() => setPendingSubscriptionRequestsPage((page) => page + 1)}
                 />
               )}
           </div>
@@ -697,6 +964,43 @@ export function DashboardHomePage() {
         confirmLabel={t('story:workflow.approve')}
         cancelLabel={t('common:actions.cancel')}
       />
+
+      {subscriptionRequestApproveTarget && (
+        <ApproveSubscriptionRequestDialog
+          name={subscriptionRequestApproveTarget.fullName}
+          isSubmitting={approveSubscriptionRequest.isPending}
+          paymentProof={paymentProof}
+          isUploadingProof={uploadPaymentProof.isPending}
+          proofError={
+            uploadPaymentProof.error
+              ? getApiErrorMessage(
+                  uploadPaymentProof.error,
+                  t('subscriptionRequest:approveDialog.proofFailed'),
+                )
+              : null
+          }
+          onSelectProof={handleSelectProof}
+          onRemoveProof={() => {
+            setPaymentProof(null)
+            uploadPaymentProof.reset()
+          }}
+          onConfirm={handleApproveSubscriptionRequest}
+          onOpenChange={(open) => {
+            if (!open) closeSubscriptionRequestApprove()
+          }}
+        />
+      )}
+
+      {subscriptionRequestRejectTarget && (
+        <RejectSubscriptionRequestDialog
+          name={subscriptionRequestRejectTarget.fullName}
+          isSubmitting={rejectSubscriptionRequest.isPending}
+          onConfirm={handleRejectSubscriptionRequest}
+          onOpenChange={(open) => {
+            if (!open) setSubscriptionRequestRejectTarget(null)
+          }}
+        />
+      )}
 
     </div>
   )

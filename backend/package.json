@@ -19,7 +19,8 @@
     "prisma:migrate:reset": "prisma migrate reset --force --schema libs/prisma/schema.prisma",
     "prisma:seed": "ts-node libs/prisma/seed.ts",
     "prisma:seed:geo": "ts-node libs/prisma/seed-geo.ts",
-    "prisma:seed:api-key": "ts-node libs/prisma/seed-api-key.ts"
+    "prisma:seed:api-key": "ts-node libs/prisma/seed-api-key.ts",
+    "prisma:seed:api-key:archive": "ts-node libs/prisma/seed-api-key-archive.ts"
   },
   "prisma": {
     "seed": "ts-node libs/prisma/seed.ts"

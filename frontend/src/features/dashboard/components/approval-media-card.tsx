@@ -42,9 +42,9 @@ export function ApprovalMediaCard({
   const { t } = useTranslation('common')
 
   return (
-    <Card className={cn('overflow-hidden p-0', CARD_HOVER_CLASS, className)}>
-      <div className="flex flex-col sm:flex-row">
-        <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-muted sm:w-48">
+    <Card className={cn('@container overflow-hidden p-0', CARD_HOVER_CLASS, className)}>
+      <div className="flex flex-col @md:flex-row">
+        <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-muted @md:w-48">
           {thumbnail ? (
             <img src={thumbnail} alt={title} loading="lazy" className="size-full object-cover" />
           ) : (
@@ -56,15 +56,15 @@ export function ApprovalMediaCard({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="font-heading line-clamp-2 font-semibold">{title}</h3>
             {badge}
           </div>
 
           {metadata.length > 0 && (
             <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-              {metadata.map(({ icon: Icon, value }) => (
-                <span key={value} className="flex items-center gap-1.5">
+              {metadata.map(({ icon: Icon, value }, index) => (
+                <span key={`${index}-${value}`} className="flex items-center gap-1.5">
                   <Icon className="size-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">{value}</span>
                 </span>

@@ -1,86 +1,86 @@
 {
   "title": "Billing Management",
-  "subtitle": "Kelola data billing",
-  "add": "Tambah Billing",
+  "subtitle": "Kelola langganan member",
   "search": {
-    "placeholder": "Cari kode atau mata uang...",
-    "ariaLabel": "Cari billing"
+    "placeholder": "Cari nama atau email...",
+    "ariaLabel": "Cari member"
   },
   "errors": {
-    "loadData": "Gagal memuat data billing. Silakan coba lagi.",
+    "loadData": "Gagal memuat data member. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data billing.",
-    "loadOptions": "Gagal memuat opsi form (user/network/subscription)."
-  },
-  "table": {
-    "code": "Kode",
-    "user": "User",
-    "subscription": "Subscription",
-    "status": "Status",
-    "total": "Total",
-    "created": "Dibuat",
-    "empty": "Belum ada billing",
-    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
-    "reset": "Reset pencarian",
-    "edit": "Edit",
-    "delete": "Hapus"
+    "loadSubscriptions": "Gagal memuat paket langganan."
   },
   "statusOptions": {
     "PENDING": "Pending",
     "PAID": "Lunas",
     "CANCELED": "Dibatalkan"
   },
-  "subscriptionTypeOptions": {
-    "MONTHLY": "Bulanan",
-    "YEARLY": "Tahunan"
+  "memberStatusOptions": {
+    "ACTIVE": "Aktif",
+    "INACTIVE": "Tidak aktif",
+    "NONE": "Tanpa langganan"
   },
-  "lineTypeOptions": {
-    "ITEM": "Item",
-    "DISCOUNT": "Diskon",
-    "TAX": "Pajak"
-  },
-  "form": {
-    "createTitle": "Tambah Billing",
-    "editTitle": "Edit Billing",
-    "createDescription": "Buat data billing baru.",
-    "editDescription": "Perbarui data billing.",
-    "code": "Kode",
+  "table": {
+    "photo": "Foto profil",
     "user": "User",
-    "selectUser": "Pilih user",
-    "network": "Network",
-    "selectNetwork": "Pilih network",
-    "noNetwork": "Tanpa network",
-    "subscription": "Subscription",
-    "selectSubscription": "Pilih subscription",
+    "plan": "Paket",
+    "expiry": "Tanggal kedaluwarsa",
     "status": "Status",
-    "subscriptionType": "Tipe",
-    "currency": "Mata Uang",
-    "total": "Total",
-    "discount": "Diskon",
-    "tax": "Pajak",
-    "paidAt": "Dibayar pada",
-    "canceledAt": "Dibatalkan pada",
-    "datePlaceholder": "Pilih tanggal & jam",
-    "lines": "Baris billing",
-    "linesEmpty": "Belum ada baris",
-    "addLine": "Tambah baris",
-    "removeLine": "Hapus baris",
-    "lineLabel": "Baris {{number}}",
-    "description": "Deskripsi",
-    "lineType": "Tipe",
-    "qty": "Qty",
-    "amount": "Jumlah",
-    "lineCurrency": "Mata Uang"
+    "empty": "Belum ada member",
+    "notFound": "Tidak ditemukan untuk \"{{term}}\".",
+    "reset": "Reset pencarian"
   },
-  "delete": {
-    "title": "Hapus Billing",
-    "description": "Yakin ingin menghapus billing {{code}}? Tindakan ini tidak dapat dibatalkan."
+  "actions": {
+    "upgrade": "Upgrade",
+    "new": "Langganan Baru",
+    "cancel": "Batalkan",
+    "history": "Riwayat"
+  },
+  "subscribe": {
+    "createTitle": "Langganan Baru",
+    "upgradeTitle": "Upgrade Langganan",
+    "createDescription": "Pilih paket langganan untuk {{name}}.",
+    "upgradeDescription": "Pilih paket langganan baru untuk {{name}}.",
+    "selectSubscription": "Paket langganan",
+    "noSubscriptions": "Tidak ada paket langganan tersedia.",
+    "confirm": "Langganan",
+    "proofLabel": "Bukti pembayaran",
+    "proofOptional": "(opsional)",
+    "proofEmpty": "Tarik file ke sini atau klik untuk memilih.",
+    "proofUpload": "Unggah file",
+    "proofUploading": "Mengunggah...",
+    "proofFormats": "JPG, PNG, WebP, atau PDF maksimal 10 MB.",
+    "proofRemove": "Hapus bukti",
+    "proofInvalid": "File harus JPG, PNG, WebP, atau PDF.",
+    "proofTooLarge": "Ukuran file tidak boleh melebihi 10 MB.",
+    "proofFailed": "Gagal mengunggah bukti pembayaran."
+  },
+  "cancel": {
+    "title": "Batalkan Langganan",
+    "description": "Batalkan langganan aktif milik {{name}}? Tindakan ini tidak dapat dibatalkan.",
+    "confirm": "Batalkan Langganan"
+  },
+  "history": {
+    "title": "Riwayat Billing",
+    "description": "Data billing milik {{name}}.",
+    "empty": "Belum ada data billing",
+    "viewProof": "Lihat bukti",
+    "table": {
+      "code": "Kode",
+      "plan": "Paket",
+      "status": "Status",
+      "proof": "Bukti pembayaran",
+      "total": "Total",
+      "paidAt": "Dibayar pada",
+      "canceledAt": "Dibatalkan pada",
+      "expiryDate": "Kedaluwarsa",
+      "created": "Dibuat"
+    }
   },
   "toast": {
-    "created": "Billing berhasil dibuat",
-    "updated": "Billing berhasil diperbarui",
-    "deleted": "Billing berhasil dihapus",
-    "createFailed": "Gagal membuat billing",
-    "updateFailed": "Gagal memperbarui billing",
-    "deleteFailed": "Gagal menghapus billing"
+    "subscribed": "Langganan berhasil diperbarui",
+    "canceled": "Langganan berhasil dibatalkan",
+    "subscribeFailed": "Gagal memperbarui langganan",
+    "cancelFailed": "Gagal membatalkan langganan"
   }
 }

@@ -128,6 +128,11 @@
     "title": "Delete Archive",
     "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
   },
+  "deleteCategory": {
+    "title": "Delete Category",
+    "description": "Delete category \"{{name}}\"? Archives using it will lose this category. This action cannot be undone.",
+    "optionLabel": "Delete category {{name}}"
+  },
   "errors": {
     "loadData": "Failed to load archive data. Please try again.",
     "forbidden": "You don't have access to view archive data.",
@@ -147,6 +152,8 @@
     "approved": "Archive approved successfully",
     "rejected": "Archive rejected successfully",
     "approveFailed": "Failed to approve archive",
-    "rejectFailed": "Failed to reject archive"
+    "rejectFailed": "Failed to reject archive",
+    "categoryDeleted": "Category deleted successfully",
+    "categoryDeleteFailed": "Failed to delete category"
   }
 }

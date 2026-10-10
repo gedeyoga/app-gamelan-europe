@@ -4,6 +4,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MemberGate } from '@/components/shared/member-gate'
+import { useMembership } from '@/features/auth/hooks/use-membership'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { EventDetail } from '@/features/event/components/event-detail'
@@ -15,7 +17,10 @@ export function EventDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams<{ id: string }>()
-  const { can } = useAuthPermissions()
+  const { can, canViewPrivate } = useAuthPermissions()
+  const isMember = useMembership()
+  // 403 = "khusus member" HANYA bila user benar-benar terkunci; 403 lain tetap generik.
+  const isMemberLocked = !isMember && !canViewPrivate
 
   const canRead = can('event:read')
   const eventQuery = useEvent(id, canRead)
@@ -85,10 +90,14 @@ export function EventDetailPage() {
         </div>
       ) : eventQuery.isError ? (
         isForbiddenError(eventQuery.error) ? (
-          <div className="mx-auto mt-20 flex w-full max-w-5xl flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
-            <ShieldAlert className="size-6 text-destructive" />
-            <p className="text-sm font-medium">{t('event:errors.forbidden')}</p>
-          </div>
+          isMemberLocked ? (
+            <MemberGate unlocked={false} className="mx-auto mt-20 w-full max-w-5xl" />
+          ) : (
+            <div className="mx-auto mt-20 flex w-full max-w-5xl flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+              <ShieldAlert className="size-6 text-destructive" />
+              <p className="text-sm font-medium">{t('event:errors.forbidden')}</p>
+            </div>
+          )
         ) : isNotFoundError(eventQuery.error) ? (
           <p className="mx-auto w-full max-w-5xl px-4 pt-20 text-center text-sm text-muted-foreground">
             {t('event:detail.notFound')}

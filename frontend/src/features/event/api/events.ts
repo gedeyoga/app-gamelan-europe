@@ -10,6 +10,8 @@ export interface ListEventsParams extends ListParams {
   mine?: boolean
   /** `true` → hanya event dengan minimal satu tanggal ≥ sekarang. */
   upcoming?: boolean
+  /** Filter tipe event (UUID); param query top-level `eventTypeId`. */
+  eventTypeId?: string
   /** Filter generik `filter[<key>]=<value>` (mis. `{ status: 'PUBLISHED' }`). */
   filter?: Record<string, string>
 }
@@ -20,6 +22,7 @@ export function listEvents(params: ListEventsParams): Promise<ListResult<Event>>
   if (params.eventMonth) search.set('eventMonth', params.eventMonth)
   if (params.mine) search.set('mine', 'true')
   if (params.upcoming) search.set('upcoming', 'true')
+  if (params.eventTypeId) search.set('eventTypeId', params.eventTypeId)
   for (const [key, value] of Object.entries(params.filter ?? {})) {
     search.set(`filter[${key}]`, value)
   }

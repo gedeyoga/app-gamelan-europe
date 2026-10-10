@@ -14,6 +14,7 @@ import { UserService } from '@app/libs/modules/user/user.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
 import { PermissionService } from '@app/libs/modules/permission/permission.service';
 import { ImageService } from '@app/libs/modules/image/image.service';
+import { BillingService } from '@app/libs/modules/billing/billing.service';
 import { RegisterUserDto } from '@app/libs/modules/user/dto/register-user.dto';
 import { LoginDto } from '@app/libs/modules/user/dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -29,7 +30,7 @@ const AVATAR_ENTITY_TYPE = 'user';
 export interface AuthUserEntity {
   accessToken: string;
   refreshToken: string;
-  user: UserEntity;
+  user: UserEntity & { isMember: boolean };
 }
 
 @Injectable()
@@ -43,6 +44,7 @@ export class AuthService {
     private readonly cache: CacheService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
     private readonly imageService: ImageService,
+    private readonly billingService: BillingService,
   ) {}
 
   register(dto: RegisterUserDto) {
@@ -61,8 +63,10 @@ export class AuthService {
     const accessToken = await this.signAccessToken(user.id, user.email);
     const refreshToken = await this.issueRefreshToken(user.id);
     const profile = await this.userRepository.findById(user.id);
+    // Membership dihitung sekali untuk user yang login (tidak di-bake ke JWT).
+    const isMember = await this.billingService.hasActiveMembership(user.id);
 
-    return { accessToken, refreshToken, user: profile };
+    return { accessToken, refreshToken, user: { ...profile, isMember } };
   }
 
   async refresh(dto: RefreshTokenDto): Promise<{ accessToken: string; refreshToken: string }> {
@@ -113,6 +117,7 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.userRepository.findById(userId);
     const permissions = await this.permissionService.getPermissionCodesByUserId(userId);
+    const isMember = await this.billingService.hasActiveMembership(userId);
     return {
       id: user.id,
       email: user.email,
@@ -125,6 +130,7 @@ export class AuthService {
       stateId: user.stateId,
       state: user.state,
       permissions,
+      isMember,
     };
   }
 

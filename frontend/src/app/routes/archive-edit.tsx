@@ -42,7 +42,7 @@ function toFormValues(archive: Archive): ArchiveFormValues {
     publishedAt: archive.publishedAt ?? '',
     categoryIds: archive.categories.map((category) => category.id),
     authorIds: archive.authors.map((author) => author.id),
-    externalLinks: archive.externalLinks,
+    externalLinks: archive.externalLinks ?? [],
   }
 }
 
@@ -55,6 +55,7 @@ export function ArchiveEditPage() {
   const canUpdate = can('archive:update')
   const canReadCategories = can('category:read')
   const canCreateCategory = can('category:create')
+  const canDeleteCategory = can('category:delete')
   const canManageAuthors = can('user:create') && can('user:read')
   const canDeleteAuthors = can('user:delete') && can('admin:access')
   const canPublishArchive = can('archive:publish')
@@ -203,6 +204,7 @@ export function ArchiveEditPage() {
           isLoadingCategories={categoriesQuery.isPending}
           canReadCategories={canReadCategories}
           canCreateCategory={canCreateCategory}
+          canDeleteCategory={canDeleteCategory}
           canPublishArchive={canPublishArchive}
           canSubmitArchive={canSubmitArchive}
           canApproveArchive={canApproveArchive}

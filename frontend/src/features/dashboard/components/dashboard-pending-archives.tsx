@@ -1,4 +1,4 @@
-import { Check, ImageOff, X } from 'lucide-react'
+import { Check, ImageOff, Pencil, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -15,8 +15,10 @@ export interface DashboardPendingArchivesProps {
   isError: boolean
   canApprove: boolean
   canReject: boolean
+  canUpdate: boolean
   /** Query list sedang refetch (mis. setelah mutation); tombol aksi ditahan. */
   isRefreshing?: boolean
+  onEdit: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
   /** Id arsip yang sedang diproses; tombol aksi baris tsb dinonaktifkan. */
@@ -30,7 +32,9 @@ export function DashboardPendingArchives({
   isError,
   canApprove,
   canReject,
+  canUpdate,
   isRefreshing = false,
+  onEdit,
   onApprove,
   onReject,
   busyId,
@@ -94,6 +98,18 @@ export function DashboardPendingArchives({
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                {canUpdate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={actionsDisabled}
+                    aria-busy={busy}
+                    onClick={() => onEdit(item.id)}
+                  >
+                    <Pencil className="size-4" data-icon="inline-start" />
+                    {t('common:actions.edit')}
+                  </Button>
+                )}
                 {canApprove && (
                   <Button
                     size="sm"

@@ -10,24 +10,33 @@ import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { NetworkForm } from '@/features/network/components/network-form'
 import { useNetwork } from '@/features/network/hooks/use-network'
 import { useUpdateNetwork } from '@/features/network/hooks/use-update-network'
+import { ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_OTHER } from '@/features/network/lib/constants'
 import type { NetworkFormValues } from '@/features/network/lib/schema'
 import type { CreateNetworkInput, Network } from '@/features/network/types'
 import { useUploadImage } from '@/features/story/hooks/use-upload-image'
 
 function toFormValues(network: Network): NetworkFormValues {
+  const activityType = network.activityType ?? ''
+  const isKnownActivityType = ACTIVITY_TYPE_OPTIONS.some(
+    (option) => option.value === activityType,
+  )
   return {
     name: network.name,
+    organisationType: network.organisationType ?? '',
+    ledBy: network.ledBy ?? '',
     state: network.state ?? '',
     country: network.country ?? '',
     address: network.address ?? '',
     website: network.website ?? '',
+    mapsUrl: network.mapsUrl ?? '',
     contact: network.contact ?? '',
     socialMedia: (network.socialMedia ?? []).map((item) => ({
       platform: item.platform,
       url: item.url,
     })),
-    lat: network.lat === null ? '' : String(network.lat),
-    lng: network.lng === null ? '' : String(network.lng),
+    activityType:
+      activityType === '' || isKnownActivityType ? activityType : ACTIVITY_TYPE_OTHER,
+    activityTypeOther: activityType === '' || isKnownActivityType ? '' : activityType,
     content: network.content ?? '',
   }
 }

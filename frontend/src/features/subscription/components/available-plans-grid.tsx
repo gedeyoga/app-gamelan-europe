@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 
+import { formatPriceInput } from '../lib/price'
 import type { Subscription } from '../types'
 
 export interface AvailablePlansGridProps {
@@ -22,30 +24,40 @@ export function AvailablePlansGrid({ items }: AvailablePlansGridProps) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className={CARD_GRID_CLASS}>
       {items.map((plan) => (
         <Card key={plan.id}>
           <CardHeader>
-            <CardTitle>{plan.name}</CardTitle>
+            <CardTitle className="truncate" title={plan.name}>
+              {plan.name}
+            </CardTitle>
             <CardDescription>{plan.slug}</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t('myBilling:availablePlans.type')}
-              </p>
-              <p>
-                {t(`subscription:subscriptionTypeOptions.${plan.subscriptionType}`, {
-                  defaultValue: plan.subscriptionType,
-                })}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t('myBilling:availablePlans.currency')}
-              </p>
-              <p>{plan.currency}</p>
-            </div>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-2xl font-semibold tracking-tight tabular-nums">
+              <span className="mr-1 text-sm font-normal text-muted-foreground">{plan.currency}</span>
+              {formatPriceInput(plan.price.toFixed(2))}
+            </p>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">
+                  {t('myBilling:availablePlans.type')}
+                </dt>
+                <dd>
+                  {t(`subscription:subscriptionTypeOptions.${plan.subscriptionType}`, {
+                    defaultValue: plan.subscriptionType,
+                  })}
+                </dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">
+                  {t('myBilling:availablePlans.duration')}
+                </dt>
+                <dd className="tabular-nums">
+                  {t('myBilling:availablePlans.durationValue', { count: plan.durationInDays })}
+                </dd>
+              </div>
+            </dl>
           </CardContent>
         </Card>
       ))}

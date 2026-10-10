@@ -18,6 +18,8 @@ export interface EventType {
 export interface EventLocation {
   name: string
   address: string | null
+  mapsUrl: string | null
+  embedUrl: string | null
   lat: number | null
   lng: number | null
   countryId: number | null
@@ -69,8 +71,7 @@ export interface Event {
 export interface EventLocationInput {
   name: string
   address?: string
-  lat?: number
-  lng?: number
+  mapsUrl?: string
   countryId?: number
   stateId?: number
   cityId?: number

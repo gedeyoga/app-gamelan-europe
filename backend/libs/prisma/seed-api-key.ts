@@ -7,7 +7,9 @@ import { DEFAULT_PERMISSIONS } from './seed-data';
 // Tidak pernah membuat/meng-upsert API key maupun Permission.
 // Tanpa env: daftar permission diambil dari FILE (seed-data.ts).
 //
-// Semua API key di DB akan di-replace permission-nya dengan daftar di file.
+// Semua API key di DB akan di-replace permission-nya dengan daftar di file:
+// HANYA permission read (`*:read`, mis. user:read, archive:read), KECUALI
+// `apikey:*` (menu API key tidak diberikan ke API key itu sendiri).
 // Bila belum ada API key sama sekali -> dilewati (exit 0), bukan error.
 // Kode permission yang tidak ada di DB -> error; jalankan `pnpm prisma:seed`
 // lebih dulu (seeder ini tidak membuat Permission).
@@ -15,10 +17,10 @@ import { DEFAULT_PERMISSIONS } from './seed-data';
 
 const prisma = new PrismaClient();
 
-// Daftar permission API key — sumber: FILE, sesuaikan bila perlu.
-// `admin:access` sengaja TIDAK disertakan (gerbang manajemen user/role); tambahkan manual bila memang perlu.
+// Daftar permission API key — sumber: FILE. Hanya permission read (`*:read`),
+// kecuali `apikey:*`.
 const API_KEY_PERMISSIONS: string[] = DEFAULT_PERMISSIONS.map((p) => p.code).filter(
-  (code) => code !== 'admin:access',
+  (code) => code.endsWith(':read') && !code.startsWith('apikey:'),
 );
 
 async function main(): Promise<void> {

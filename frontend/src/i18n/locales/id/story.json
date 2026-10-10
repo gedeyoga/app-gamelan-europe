@@ -10,6 +10,12 @@
     "card": "Tampilan kartu",
     "list": "Tampilan daftar"
   },
+  "filter": {
+    "status": "Filter berdasarkan status",
+    "allStatuses": "Semua status",
+    "category": "Filter berdasarkan kategori",
+    "allCategories": "Semua kategori"
+  },
   "errors": {
     "loadData": "Gagal memuat data story. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data story.",
@@ -101,6 +107,11 @@
   "delete": {
     "title": "Hapus Story",
     "description": "Yakin ingin menghapus \"{{name}}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "deleteCategory": {
+    "title": "Hapus Kategori",
+    "description": "Hapus kategori \"{{name}}\"? Story yang memakainya akan kehilangan kategori ini. Tindakan ini tidak dapat dibatalkan.",
+    "optionLabel": "Hapus kategori {{name}}"
   },
   "editor": {
     "placeholder": "Tulis cerita di sini...",
@@ -201,6 +212,8 @@
     "approved": "Story berhasil disetujui",
     "rejected": "Story berhasil ditolak",
     "approveFailed": "Gagal menyetujui story",
-    "rejectFailed": "Gagal menolak story"
+    "rejectFailed": "Gagal menolak story",
+    "categoryDeleted": "Kategori berhasil dihapus",
+    "categoryDeleteFailed": "Gagal menghapus kategori"
   }
 }

@@ -38,4 +38,8 @@ export class EventTypeService {
   create(dto: CreateEventTypeDto): Promise<EventTypeEntity> {
     return this.eventTypeRepository.createIdempotent({ name: dto.name });
   }
+
+  remove(id: string): Promise<EventTypeEntity> {
+    return this.eventTypeRepository.remove(id);
+  }
 }

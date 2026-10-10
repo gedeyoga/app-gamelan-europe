@@ -20,6 +20,11 @@ describe('redactMemberOnly', () => {
     expect(redactMemberOnly(member, true)).toEqual(member);
   });
 
+  it('MEMBER + active member (caller passes canViewPrivate || isMember = true) → unchanged', () => {
+    const accessibleAsMember = false || true; // non-moderator + membership aktif
+    expect(redactMemberOnly(member, accessibleAsMember)).toEqual(member);
+  });
+
   it('PUBLIC + canViewPrivate=false → unchanged', () => {
     const publicArchive = { ...member, type: ArchiveType.PUBLIC };
     expect(redactMemberOnly(publicArchive, false)).toEqual(publicArchive);

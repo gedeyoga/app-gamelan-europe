@@ -1,17 +1,32 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import { ArchiveStatus, ArchiveType, CategoryType, Prisma } from '@prisma/client';
+import { ArchiveMaterialType, ArchiveStatus, ArchiveType, CategoryType, ContentSource, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListArchivesQueryDto } from './dto/list-archives-query.dto';
 import { CategoryRepository } from '@app/libs/modules/category/category.repository';
+import { CategoryService } from '@app/libs/modules/category/category.service';
+import { CountryRepository } from '@app/libs/modules/country/country.repository';
+import { StateRepository } from '@app/libs/modules/state/state.repository';
+import { ImageService } from '@app/libs/modules/image/image.service';
 import { UserRepository } from '@app/libs/modules/user/user.repository';
+import { UserService } from '@app/libs/modules/user/user.service';
 import { DocumentRepository } from '@app/libs/modules/document/document.repository';
 import { DocumentService } from '@app/libs/modules/document/document.service';
 import { ArchiveRepository, CreateArchiveData, UpdateArchiveData } from './archive.repository';
 import { ArchiveCreatorRef, ArchiveEntity, ArchiveListItem, ArchiveResponse, redactMemberOnly } from './entities/archive.entity';
 import { CreateArchiveDto } from './dto/create-archive.dto';
+import { CreatePublicArchiveDto } from './dto/create-public-archive.dto';
 import { UpdateArchiveDto } from './dto/update-archive.dto';
+
+// ponytail: enum→label map hardcoded; ganti ke taxonomy/seed nyata bila perlu.
+const ARCHIVE_MATERIAL_CATEGORY_LABELS: Record<ArchiveMaterialType, string> = {
+  TUTORIALS: 'Tutorials',
+  DOCUMENTARIES: 'Documentaries',
+  RESEARCH: 'Research',
+  DOCUMENTS: 'Documents',
+  HISTORY: 'History',
+};
 
 export const ARCHIVE_SEARCHABLE_FIELDS = ['name', 'description'];
 export const ARCHIVE_SORT_FIELDS = ['name', 'type', 'status', 'publishedAt', 'createdAt', 'updatedAt'];
@@ -36,7 +51,12 @@ export class ArchiveService {
   constructor(
     private readonly archiveRepository: ArchiveRepository,
     private readonly categoryRepository: CategoryRepository,
+    private readonly categoryService: CategoryService,
+    private readonly countryRepository: CountryRepository,
+    private readonly stateRepository: StateRepository,
+    private readonly imageService: ImageService,
     private readonly userRepository: UserRepository,
+    private readonly userService: UserService,
     private readonly documentRepository: DocumentRepository,
     private readonly documentService: DocumentService,
     private readonly storage: StorageService,
@@ -160,6 +180,7 @@ export class ArchiveService {
     documentIds?: string[],
     archiveId: string | null = null,
     tx?: Prisma.TransactionClient,
+    fieldPrefix = 'documentIds',
   ): Promise<void> {
     if (!documentIds || documentIds.length === 0) return;
     const documents = await this.documentRepository.findByIds(documentIds, tx);
@@ -171,16 +192,13 @@ export class ArchiveService {
         document.entityType !== 'archive' ||
         (document.entityId !== null && document.entityId !== archiveId)
       ) {
-        throw this.validationError(
-          `documentIds.${i}`,
-          'documentId not found or already bound to another entity',
-        );
+        throw this.validationError(`${fieldPrefix}.${i}`, 'documentId not found or already bound to another entity');
       }
     }
   }
 
   // Resolve `documentIds` → `documents: DocumentResponse[]` berurut; `documentIds` mentah tidak dibocorkan ke FE.
-  // `canViewPrivate=false` + `type=MEMBER` → `externalLinks`/`documents` di-null-kan (`redactMemberOnly`).
+  // Akses member = `canViewPrivate || isMember`; bila `false` + `type=MEMBER` → `externalLinks`/`documents` di-null-kan.
   private async hydrate(archives: ArchiveEntity[], canViewPrivate: boolean): Promise<ArchiveResponse[]> {
     const ids = [...new Set(archives.flatMap((archive) => archive.documentIds))];
     const documents = await this.documentRepository.findByIds(ids);
@@ -229,7 +247,7 @@ export class ArchiveService {
       take,
       orderBy: buildOrderBy<Prisma.ArchiveOrderByWithRelationInput>(query.sortBy, query.sortOrder),
     });
-    return { items: items.map((archive) => this.toListItem(archive, scope.canViewPrivate)), total };
+    return { items: items.map((archive) => this.toListItem(archive, scope.canViewPrivate || scope.isMember)), total };
   }
 
   async findOne(id: string, userId: string): Promise<ArchiveResponse> {
@@ -238,10 +256,10 @@ export class ArchiveService {
       this.accessScope.resolve(userId, 'archive'),
     ]);
     this.assertReadable(archive, scope); // cek scope pakai entity mentah (punya networkId)
-    return (await this.hydrate([archive], scope.canViewPrivate))[0];
+    return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
   }
 
-  // `tx` opsional: diteruskan dari pemanggil yang sudah membuka transaksi (approve archive-submission).
+  // `tx` opsional: diteruskan dari pemanggil yang sudah membuka transaksi.
   async create(dto: CreateArchiveDto, userId: string, tx?: Prisma.TransactionClient): Promise<ArchiveResponse> {
     await this.assertArchiveCategories(dto.categoryIds);
     await this.assertAuthors(dto.authorIds);
@@ -279,7 +297,80 @@ export class ArchiveService {
       authorIds: scoped.authorIds,
     };
     const archive = await this.archiveRepository.create(data, tx);
-    return (await this.hydrate([archive], scope?.canViewPrivate ?? false))[0];
+    return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
+  }
+
+  // Submit publik (tanpa JWT): tulis langsung `Archive` status REQUEST, source PUBLIC, type PUBLIC.
+  // Respons hanya { id, status } (tanpa echo row/PII). Bypass `create()` (menolak user publik).
+  async createPublicSubmission(dto: CreatePublicArchiveDto): Promise<{ id: string; status: ArchiveStatus }> {
+    // (1) geo archive
+    if (dto.countryId != null) {
+      const country = await this.countryRepository.findByIdOrNull(dto.countryId);
+      if (!country) throw this.validationError('countryId', 'countryId does not exist');
+    }
+    if (dto.stateId != null) {
+      const state = await this.stateRepository.findByIdOrNull(dto.stateId);
+      if (!state || state.countryId !== dto.countryId) {
+        throw this.validationError('stateId', 'stateId must belong to countryId');
+      }
+    }
+    // (2) geo submitter
+    const submitterCountry = await this.countryRepository.findByIdOrNull(dto.submitter.countryId);
+    if (!submitterCountry) {
+      throw this.validationError('submitter.countryId', 'submitter.countryId does not exist');
+    }
+    if (dto.submitter.stateId != null) {
+      const submitterState = await this.stateRepository.findByIdOrNull(dto.submitter.stateId);
+      if (!submitterState || submitterState.countryId !== dto.submitter.countryId) {
+        throw this.validationError('submitter.stateId', 'submitter.stateId must belong to submitter.countryId');
+      }
+    }
+    // (3) attachments (Document entityType='archive', entityId=null)
+    await this.assertDocuments(dto.attachments, null, undefined, 'attachments');
+    // (4) thumbnail trust
+    if (dto.thumbnail) {
+      const trusted = await this.imageService.isTrustedUnboundUrl(dto.thumbnail, 'archive');
+      if (!trusted) {
+        throw this.validationError('thumbnail', 'thumbnail must reference an uploaded EGS image');
+      }
+    }
+    // (5) submitter → User login-less
+    const user = await this.userService.findOrCreatePublicUser({
+      fullName: dto.submitter.fullName,
+      email: dto.submitter.email,
+      countryId: submitterCountry.iso2,
+      stateId: dto.submitter.stateId ?? null,
+    });
+    // (6) materialType → kategori idempoten (name+type)
+    let categoryIds: string[] | undefined;
+    if (dto.materialType) {
+      const category = await this.categoryService.create({
+        name: ARCHIVE_MATERIAL_CATEGORY_LABELS[dto.materialType],
+        type: CategoryType.ARCHIVE,
+      });
+      categoryIds = [category.id];
+    }
+    // (7) tulis langsung
+    const archive = await this.archiveRepository.create({
+      name: dto.name,
+      description: dto.description,
+      thumbnail: dto.thumbnail,
+      externalLinks: dto.externalLinks ?? [],
+      documentIds: dto.attachments ?? [],
+      type: ArchiveType.PUBLIC,
+      status: ArchiveStatus.REQUEST,
+      source: ContentSource.PUBLIC,
+      createdBy: user.id,
+      authorIds: [user.id],
+      categoryIds,
+      date: dto.date ? new Date(dto.date) : undefined,
+      author: dto.author,
+      organisation: dto.organisation,
+      countryId: dto.countryId,
+      stateId: dto.stateId,
+      materialType: dto.materialType,
+    });
+    return { id: archive.id, status: archive.status };
   }
 
   async update(id: string, dto: UpdateArchiveDto, userId: string): Promise<ArchiveResponse> {
@@ -326,7 +417,7 @@ export class ArchiveService {
     }
 
     const archive = await this.archiveRepository.update(id, data);
-    return (await this.hydrate([archive], scope.canViewPrivate))[0];
+    return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
   }
 
   // Transisi status terkontrol; `PATCH /archives/:id` tetap untuk update konten.
@@ -363,7 +454,7 @@ export class ArchiveService {
 
   // DB dulu (sumber kebenaran) dalam satu transaksi; objek S3 dihapus best-effort setelah commit.
   // `skipScopeCheck` hanya untuk purge cascade hapus user (pemanggil sudah otorisasi `admin:access`);
-  // `scope` tetap di-resolve karena `hydrate` butuh `canViewPrivate`.
+  // `scope` tetap di-resolve karena `hydrate` butuh akses member (`canViewPrivate || isMember`).
   async remove(
     id: string,
     userId: string,
@@ -372,7 +463,7 @@ export class ArchiveService {
     const archive = await this.archiveRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'archive');
     if (!options?.skipScopeCheck) this.assertWritable(archive, scope);
-    const response = (await this.hydrate([archive], scope.canViewPrivate))[0];
+    const response = (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
     const documents = await this.documentRepository.findByEntity('archive', id);
     const keys = documents.map((document) => document.key);
     await this.archiveRepository.delete(id);

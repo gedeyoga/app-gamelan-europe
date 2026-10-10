@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ArchiveStatus, ArchiveType, Prisma } from '@prisma/client';
+import { ArchiveMaterialType, ArchiveStatus, ArchiveType, ContentSource, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { DocumentRepository } from '@app/libs/modules/document/document.repository';
 import { mapArchive, archiveSelect, ArchiveEntity } from './entities/archive.entity';
@@ -10,6 +10,7 @@ export interface CreateArchiveData {
   thumbnail?: string;
   type: ArchiveType;
   status: ArchiveStatus;
+  source?: ContentSource;
   publishedAt?: Date;
   approvedAt?: Date;
   externalLinks: string[];
@@ -17,6 +18,12 @@ export interface CreateArchiveData {
   createdBy?: string;
   categoryIds?: string[];
   authorIds?: string[];
+  date?: Date;
+  author?: string;
+  organisation?: string;
+  countryId?: number;
+  stateId?: number;
+  materialType?: ArchiveMaterialType;
 }
 
 export interface UpdateArchiveData {
@@ -96,8 +103,8 @@ export class ArchiveRepository {
     return { items: items.map(mapArchive), total };
   }
 
-  // `tx` opsional: bila diberikan (pemanggil sudah membuka transaksi, mis. approve archive-submission),
-  // pakai client itu tanpa membuka `$transaction` bersarang. Tanpa `tx` perilaku lama dipertahankan.
+  // `tx` opsional: bila diberikan (pemanggil sudah membuka transaksi), pakai client itu tanpa
+  // membuka `$transaction` bersarang. Tanpa `tx` perilaku lama dipertahankan.
   async create(data: CreateArchiveData, tx?: Prisma.TransactionClient): Promise<ArchiveEntity> {
     const run = async (client: Prisma.TransactionClient): Promise<ArchiveEntity> => {
       const archive = await client.archive.create({
@@ -107,11 +114,18 @@ export class ArchiveRepository {
           thumbnail: data.thumbnail,
           type: data.type,
           status: data.status,
+          source: data.source,
           publishedAt: data.publishedAt,
           approvedAt: data.approvedAt,
           externalLinks: data.externalLinks,
           documentIds: data.documentIds,
           createdBy: data.createdBy,
+          date: data.date,
+          author: data.author,
+          organisation: data.organisation,
+          countryId: data.countryId,
+          stateId: data.stateId,
+          materialType: data.materialType,
         },
         select: { id: true },
       });

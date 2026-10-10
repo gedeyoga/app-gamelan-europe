@@ -3,7 +3,7 @@
 // - Tambah resource baru: tambah { code, description } di DEFAULT_PERMISSIONS
 //   (format lowercase `resource:action`) + cantumkan code-nya di permissions
 //   role yang relevan (seed.ts), lalu `pnpm prisma:seed`.
-// - Dipakai juga oleh seed-api-key.ts (hanya subset `apikey:*`).
+// - Dipakai juga oleh seed-api-key.ts (hanya permission read, `*:read`).
 // ---------------------------------------------------------------------------
 export type DefaultPermission = { code: string; description: string };
 
@@ -44,11 +44,14 @@ export const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'event:unpublish', description: 'Menarik event dari publikasi (PUBLISHED -> DRAFT)' },
   { code: 'event-type:create', description: 'Membuat tipe event baru' },
   { code: 'event-type:read', description: 'Melihat daftar/detail tipe event' },
+  { code: 'event-type:delete', description: 'Menghapus tipe event' },
   { code: 'city:create', description: 'Membuat kota baru' },
   { code: 'network:create', description: 'Membuat network baru' },
   { code: 'network:read', description: 'Melihat daftar/detail network' },
   { code: 'network:update', description: 'Mengubah network' },
   { code: 'network:delete', description: 'Menghapus network' },
+  { code: 'network:approve', description: 'Menyetujui usulan/network (REQUEST -> PUBLISHED)' },
+  { code: 'network:reject', description: 'Menolak usulan/network (REQUEST -> DRAFT)' },
   { code: 'subscription:create', description: 'Membuat subscription baru' },
   { code: 'subscription:read', description: 'Melihat daftar/detail subscription' },
   { code: 'subscription:update', description: 'Mengubah subscription' },
@@ -57,6 +60,9 @@ export const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'billing:read', description: 'Melihat daftar/detail billing' },
   { code: 'billing:update', description: 'Mengubah billing' },
   { code: 'billing:delete', description: 'Menghapus billing' },
+  { code: 'subscription-request:read', description: 'Melihat daftar/detail permintaan langganan' },
+  { code: 'subscription-request:approve', description: 'Menyetujui permintaan langganan' },
+  { code: 'subscription-request:reject', description: 'Menolak permintaan langganan' },
   { code: 'apikey:create', description: 'Membuat API key baru' },
   { code: 'apikey:read', description: 'Melihat daftar/detail API key' },
   { code: 'apikey:update', description: 'Mengubah nama/permission API key' },
@@ -70,9 +76,6 @@ export const DEFAULT_PERMISSIONS: DefaultPermission[] = [
   { code: 'archive:reject', description: 'Menolak archive (REQUEST -> DRAFT)' },
   { code: 'archive:publish', description: 'Menerbitkan archive (APPROVED -> PUBLISHED)' },
   { code: 'archive:unpublish', description: 'Menarik archive dari publikasi (PUBLISHED -> DRAFT)' },
-  { code: 'archive-submission:read', description: 'Melihat daftar/detail usulan archive' },
-  { code: 'archive-submission:approve', description: 'Menyetujui usulan archive + recreate ke tabel archives (DRAFT)' },
-  { code: 'archive-submission:reject', description: 'Menolak usulan archive' },
   // Gerbang manajemen user/role — HANYA role `admin` (dipetakan otomatis dari DEFAULT_PERMISSIONS).
   { code: 'admin:access', description: 'Akses penuh manajemen user/role (admin)' },
 ];

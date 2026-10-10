@@ -10,6 +10,12 @@
     "card": "Card view",
     "list": "List view"
   },
+  "filter": {
+    "status": "Filter by status",
+    "allStatuses": "All statuses",
+    "category": "Filter by category",
+    "allCategories": "All categories"
+  },
   "errors": {
     "loadData": "Failed to load story data. Please try again.",
     "forbidden": "You don't have access to view story data.",
@@ -101,6 +107,11 @@
   "delete": {
     "title": "Delete Story",
     "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+  "deleteCategory": {
+    "title": "Delete Category",
+    "description": "Delete category \"{{name}}\"? Stories using it will lose this category. This action cannot be undone.",
+    "optionLabel": "Delete category {{name}}"
   },
   "editor": {
     "placeholder": "Write your story here...",
@@ -201,6 +212,8 @@
     "approved": "Story approved successfully",
     "rejected": "Story rejected successfully",
     "approveFailed": "Failed to approve story",
-    "rejectFailed": "Failed to reject story"
+    "rejectFailed": "Failed to reject story",
+    "categoryDeleted": "Category deleted successfully",
+    "categoryDeleteFailed": "Failed to delete category"
   }
 }

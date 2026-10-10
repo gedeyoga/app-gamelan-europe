@@ -6,16 +6,20 @@ export const subscriptionSelect = {
   name: true,
   slug: true,
   subscriptionType: true,
+  status: true,
   currency: true,
+  price: true,
+  durationInDays: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.SubscriptionSelect;
 
 export type SubscriptionPayload = Prisma.SubscriptionGetPayload<{ select: typeof subscriptionSelect }>;
 
-// Tidak ada kolom Decimal di model ini → mapping passthrough.
-export type SubscriptionEntity = SubscriptionPayload;
+// Decimal → number (aman untuk JSON); tidak ada kolom sensitif.
+// `subscriberCount` = jumlah user UNIK dengan Billing status PAID (computed, bukan kolom DB).
+export type SubscriptionEntity = Omit<SubscriptionPayload, 'price'> & { price: number; subscriberCount: number };
 
-export function mapSubscription(row: SubscriptionPayload): SubscriptionEntity {
-  return row;
+export function mapSubscription(row: SubscriptionPayload, subscriberCount = 0): SubscriptionEntity {
+  return { ...row, price: Number(row.price), subscriberCount };
 }

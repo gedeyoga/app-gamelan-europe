@@ -3,6 +3,9 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { MemberGate } from '@/components/shared/member-gate'
+import { useMembership } from '@/features/auth/hooks/use-membership'
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { formatDateTime } from '@/lib/datetime'
 import { sanitizeHtml } from '@/lib/sanitize-html'
 import { cn } from '@/lib/utils'
@@ -33,6 +36,11 @@ const CONTENT_CLASS = cn(
 
 export function EventDetail({ event, className }: EventDetailProps) {
   const { t } = useTranslation()
+  const isMember = useMembership()
+  const { canViewPrivate } = useAuthPermissions()
+  // Header/thumbnail tetap tampil sebagai teaser; hanya body yang dikunci. Unlock = member
+  // ATAU `canViewPrivate` (mirror otorisasi backend `canViewPrivate || isMember`).
+  const isLocked = event.visibility === 'PRIVATE' && !isMember && !canViewPrivate
   const creditName = getEventCreditName(event) ?? t('event:detail.creatorFallback')
   const hasContent = Boolean(event.content && event.content.trim().length > 0)
   const safeContent = useMemo(() => sanitizeHtml(event.content ?? ''), [event.content])
@@ -107,26 +115,31 @@ export function EventDetail({ event, className }: EventDetailProps) {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          {hasContent ? (
-            // `content` = HTML dari API/editor kaya teks; disanitasi via DOMPurify sebelum render.
-            <div className={CONTENT_CLASS} dangerouslySetInnerHTML={{ __html: safeContent }} />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('event:detail.noContent')}</p>
-          )}
-        </div>
+      <MemberGate
+        unlocked={!isLocked}
+        className="mx-auto my-10 w-full max-w-5xl"
+      >
+        <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            {hasContent ? (
+              // `content` = HTML dari API/editor kaya teks; disanitasi via DOMPurify sebelum render.
+              <div className={CONTENT_CLASS} dangerouslySetInnerHTML={{ __html: safeContent }} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('event:detail.noContent')}</p>
+            )}
+          </div>
 
-        <aside className="lg:col-span-1">
-          <EventInfoCard
-            dates={event.dates}
-            location={event.location}
-            eventTypes={event.eventTypes}
-            entry={event.entry}
-            className="lg:sticky lg:top-8"
-          />
-        </aside>
-      </div>
+          <aside className="lg:col-span-1">
+            <EventInfoCard
+              dates={event.dates}
+              location={event.location}
+              eventTypes={event.eventTypes}
+              entry={event.entry}
+              className="lg:sticky lg:top-8"
+            />
+          </aside>
+        </div>
+      </MemberGate>
     </article>
   )
 }

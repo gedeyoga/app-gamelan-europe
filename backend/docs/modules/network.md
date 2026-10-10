@@ -72,22 +72,25 @@ model Network {
   socialMedia Json?     @map("social_media")
   lat         Decimal?  @db.Decimal(10, 7)
   lng         Decimal?  @db.Decimal(10, 7)
+  embedUrl    String?   @map("embed_url")
+  mapsUrl     String?   @map("maps_url")
   users       User[]
-  billings    Billing[]
   events      Event[]
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 }
 ```
 
-- Tabel DB = `networks` dicapai lewat `@@map("networks")` pada model `Network`. Relasi `User`/`Billing`/`Event` memakai `networkId` di kode **dan** kolom `network_id` di DB lewat `@map("network_id")`. Nama lama `organizations`/`organization_id` sudah di-rename migration `20260929150000_rename_organization_to_network`.
+- Tabel DB = `networks` dicapai lewat `@@map("networks")` pada model `Network`. Relasi `User`/`Event` memakai `networkId` di kode **dan** kolom `network_id` di DB lewat `@map("network_id")`. Nama lama `organizations`/`organization_id` sudah di-rename migration `20260929150000_rename_organization_to_network`.
 - `name` **tidak unik** → boleh ada nama network sama (tidak ada `P2002`). Implikasi: `findByNameInsensitive` (case-insensitive) bisa cocok ke lebih dari satu row → `findFirst` (ambil yang pertama); typo/varian nama membuat network duplikat (merge/dedupe = backlog).
 - `events Event[]` — back-relation dari `Event.networkId` (nullable, `onDelete: SetNull`; event.md §2). Menghapus network tidak menghapus event, hanya melepas `networkId`.
 - `content` `String?` (`@db.Text`) — rich HTML profil/deskripsi network, nullable. Disimpan **sudah disanitasi** (`sanitizeStoryContent`, [§5](#5-repository--service)); TIDAK di-resolve ke gambar/`Image` (beda dari story) — URL gambar di dalam HTML sudah absolut ke S3/CDN.
 - `website`/`contact` `String?` nullable (bebas teks; URL/telepon disimpan apa adanya).
 - `socialMedia` `Json?` (`@map("social_media")`) nullable — array `[{ platform, url }]`, maksimum **10** entri. `null` = belum diisi.
-- `lat`/`lng` `Decimal(10, 7)` nullable; dikonversi ke `number | null` saat mapping (Decimal tidak bisa di-`JSON.stringify` dengan bentuk yang diinginkan FE).
-- `User.networkId` dan `Billing.networkId` memakai `onDelete: SetNull` → menghapus network tidak menghapus user/billing, hanya melepas relasinya.
+- `mapsUrl` `String?` nullable (`@map("maps_url")`) — link Google Maps opsional. Divalidasi `@IsUrl()` (URL invalid → 422). Bila diisi, server **me-resolve** link (mengikuti shortlink) menjadi `lat`/`lng` + `embedUrl`; link yang tidak dapat di-resolve → 422 `mapsUrl`. `null` eksplisit = kosongkan saat update (koordinat lama dipertahankan).
+- `embedUrl` `String?` nullable (`@map("embed_url")`) — URL embed Google Maps keyless yang dibuat server dari koordinat hasil resolve (`https://www.google.com/maps?q=<lat>,<lng>&z=15&hl=en&output=embed`). Migration `20261010120000_network_embed_url` menambah kolom ini, mem-backfill `lat`/`lng` dari `mapsUrl` pada row lama (pin `!3d!4d` → viewport `@lat,lng`), lalu mem-backfill `embed_url` dari koordinat.
+- `lat`/`lng` `Decimal(10, 7)` nullable; dikonversi ke `number | null` saat mapping (Decimal tidak bisa di-`JSON.stringify` dengan bentuk yang diinginkan FE). Diisi server-side dari `mapsUrl` bila ada (**menimpa** `lat`/`lng` klien); tanpa `mapsUrl` nilainya dari `lat`/`lng` klien (opsional).
+- `User.networkId` memakai `onDelete: SetNull` → menghapus network tidak menghapus user, hanya melepas relasinya.
 
 ---
 
@@ -111,6 +114,7 @@ export const networkSelect = {
   socialMedia: true,
   lat: true,
   lng: true,
+  embedUrl: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.NetworkSelect;
@@ -143,7 +147,8 @@ Status validasi gagal = **422** (RULES bab 7). Kontrak 422: `{ statusCode: 422, 
 ```typescript
 // libs/src/modules/network/dto/create-network.dto.ts
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { NetworkOrganisationType } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -175,8 +180,22 @@ export class CreateNetworkDto {
   @Transform(trim) @IsOptional() @IsString() @MaxLength(500)
   website?: string | null;
 
+  // Link Google Maps; server me-resolve ke lat/lng (invalid/unresolvable → 422); `null` eksplisit = kosongkan (update).
+  @IsOptional() @Transform(trim) @IsUrl({}, { message: 'mapsUrl must be a URL' }) @MaxLength(2048)
+  mapsUrl?: string | null;
+
   @Transform(trim) @IsOptional() @IsString() @MaxLength(200)
   contact?: string | null;
+
+  // `null` eksplisit = kosongkan (update).
+  @IsOptional() @IsEnum(NetworkOrganisationType)
+  organisationType?: NetworkOrganisationType | null;
+
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(200)
+  ledBy?: string | null;
+
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(100)
+  activityType?: string | null;
 
   // `null` eksplisit = kosongkan (update) → `Prisma.DbNull`. Max 10 entri.
   @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => NetworkSocialMediaDto)
@@ -215,7 +234,11 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `address` | trim opsional, `@IsString()`, `@MaxLength(500)` | 422 `{ field: 'address', message }` |
 | `content` | opsional, `@IsString()`, `@MaxLength(100000)`; disanitasi server-side sebelum simpan | 422 `{ field: 'content', message }` |
 | `website` | trim opsional, `@IsString()`, `@MaxLength(500)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'website', message }` |
+| `mapsUrl` | trim opsional, `@IsUrl()`, `@MaxLength(2048)`, nullable (`null` = kosongkan saat update); URL invalid → 422; server me-resolve ke `lat`/`lng` (gagal resolve → 422 `mapsUrl`) | 422 `{ field: 'mapsUrl', message }` |
 | `contact` | trim opsional, `@IsString()`, `@MaxLength(200)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'contact', message }` |
+| `organisationType` | opsional, `@IsEnum(NetworkOrganisationType)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'organisationType', message }` |
+| `ledBy` | trim opsional, `@IsString()`, `@MaxLength(200)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'ledBy', message }` |
+| `activityType` | trim opsional, `@IsString()`, `@MaxLength(100)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'activityType', message }` |
 | `socialMedia` | opsional, `@IsArray()`, `@ArrayMaxSize(10)`, `@ValidateNested({ each: true })` `NetworkSocialMediaDto`; nullable (`null` = kosongkan saat update) | 422 `{ field: 'socialMedia', message }` (atau `socialMedia.0.platform` dst.) |
 | `socialMedia[].platform` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(50)` | 422 `{ field: 'socialMedia.0.platform', message }` |
 | `socialMedia[].url` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(500)` | 422 `{ field: 'socialMedia.0.url', message }` |
@@ -263,7 +286,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `findMany({ where, skip, take, orderBy })` | List paginated (`$transaction`: `findMany` + `count`); map `mapNetwork`. |
 | `create(data)` | Insert; `data` = `Prisma.NetworkCreateInput`. |
 | `update(id, data)` | Pre-check `findUnique({ select: { id: true } })` → tidak ada = 404; lalu update. |
-| `remove(id)` | Pre-check id → 404; lalu delete. Relasi user/billing `onDelete: SetNull` (tidak ikut terhapus). |
+| `remove(id)` | Pre-check id → 404; lalu delete. Relasi user/event `onDelete: SetNull` (tidak ikut terhapus). |
 
 ### Service (`network.service.ts`)
 
@@ -272,11 +295,13 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `list(query)` | `buildWhere` (filter + date) + `buildSearch` + `combineWhere` + `buildOrderBy`; delegasi ke repo. |
 | `findOne(id)` | `repository.findById`. |
 | `findOrCreateByName(name, { state?, country? })` | Find-or-create untuk submit event publik (`POST /event-submissions`): `findByNameInsensitive(name)` → bila ada kembalikan; bila tidak → `repository.create({ name, state: state ?? null, country: country ?? null })`. Dipanggil di dalam transaksi submit. `name` tidak unik → bisa duplikat (typo); dedupe/merge = backlog. |
-| `create(dto)` | Petakan field DTO → `repository.create`. Bila `dto.content !== undefined` → simpan hasil `sanitizeStoryContent(dto.content)`. `website`/`contact` → `?? null`; `socialMedia` → `dto.socialMedia ?? undefined` (biarkan DB default NULL bila tidak dikirim). |
-| `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; `content` disanitasi via `sanitizeStoryContent` bila dikirim; `website`/`contact` ditulis apa adanya (termasuk `null`); `socialMedia`: `null` → `Prisma.DbNull`, selain itu array `[{ platform, url }]` apa adanya; body kosong → kembalikan `findOne(id)` tanpa update. |
+| `create(dto)` | Petakan field DTO → `repository.create`. Bila `dto.content !== undefined` → simpan hasil `sanitizeStoryContent(dto.content)`. `website`/`contact`/`organisationType`/`ledBy`/`activityType` → `?? null`; `socialMedia` → `dto.socialMedia ?? undefined` (biarkan DB default NULL bila tidak dikirim). Bila `dto.mapsUrl` ada → resolve server-side (`resolveGoogleMapsLink`, follow shortlink) → tulis `lat`/`lng`/`embedUrl` (**menimpa** `lat`/`lng` klien); gagal resolve → 422 `mapsUrl`. |
+| `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; `content` disanitasi via `sanitizeStoryContent` bila dikirim; `website`/`contact`/`organisationType`/`ledBy`/`activityType` ditulis apa adanya (termasuk `null` = kosongkan); `socialMedia`: `null` → `Prisma.DbNull`, selain itu array `[{ platform, url }]` apa adanya; body kosong → kembalikan `findOne(id)` tanpa update. `mapsUrl`: kosong → `null` (koordinat lama dipertahankan); berbeda dari nilai lama **atau** `lat`/`lng` masih null (row lama) → resolve → set `mapsUrl` + `lat`/`lng`/`embedUrl` (gagal → 422); tidak berubah (sudah berkoordinat) → set `mapsUrl` saja (tanpa jaringan). `mapsUrl` ter-resolve menang atas `lat`/`lng` eksplisit. |
 | `remove(id)` | `repository.remove`. |
 
 > **Handling `socialMedia` (Json nullable).** Create: `dto.socialMedia ?? undefined` (tidak mengirim → kolom dibiarkan `NULL` default; tanpa sentinel). Update: hanya bila `dto.socialMedia !== undefined`; `null` → `Prisma.DbNull` (set kolom `NULL`), array → disimpan apa adanya. Array di-map ke plain `{ platform, url }` agar assignable ke `Prisma.InputJsonValue`.
+
+> **Resolusi `mapsUrl` → `lat`/`lng`/`embed_url` (server-side, mirror event).** Helper privat `resolveLocationMaps(mapsUrl)` memakai `resolveGoogleMapsLink` dari `@app/libs/common/utils/google-maps.util` (keyless, mengikuti shortlink, tak pernah throw; `null` → 422 `mapsUrl`). `create` selalu resolve bila `mapsUrl` ada; `update` resolve bila link berubah **atau** row lama masih tanpa koordinat (`lat`/`lng` null → regenerasi saat re-save); `createPublicSubmission` resolve sebelum membuat User/Network (cegah orphan). Koordinat hasil resolve **menimpa** `lat`/`lng` klien dan `embedUrl` diisi dari hasil resolve.
 
 > Tidak ada row-level scoping di modul ini — CRUD network murni admin-only lewat permission. Scoping berbasis `networkId` diterapkan di modul `post`/`event`/`user` (lihat [rbac.md §10](./rbac.md#10-row-level-scoping)).
 
@@ -288,7 +313,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 
 Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta: { page, limit, total }, message }`; error `{ statusCode, message, errors }`.
 
-> Dekorator permission: `network:create|read|update|delete` (rename RBAC v2; role bawaan `organization` dihapus — [rbac.md §7](./rbac.md#7-seed-default)).
+> Dekorator permission: `network:create|read|update|delete|approve|reject` (rename RBAC v2; role bawaan `organization` dihapus — [rbac.md §7](./rbac.md#7-seed-default)). Usulan network publik (`POST /api/v1/network-submissions`) menulis langsung ke tabel `networks` (`status=REQUEST`, `source=PUBLIC`); review admin lewat filter `filter[status]=REQUEST` + endpoint `approve`/`reject`.
 
 | Method | Path | Akses | Request | Response sukses | Error |
 | --- | --- | --- | --- | --- | --- |
@@ -297,6 +322,8 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta:
 | GET | `/api/v1/networks/:id` | PERMISSION `network:read` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 422 UUID invalid, 401/403 |
 | PATCH | `/api/v1/networks/:id` | PERMISSION `network:update` | path `id`, body `UpdateNetworkDto` | 200 `{ data: <network>, message }` | 404, 422, 401/403 |
 | DELETE | `/api/v1/networks/:id` | PERMISSION `network:delete` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/networks/:id/approve` | PERMISSION `network:approve` | path `id`, body `PublishContentDto` (`{ publishedAt? }`) | 200 `{ data: <network>, message }` | 404, 409 (status ≠ REQUEST), 422, 401/403 |
+| POST | `/api/v1/networks/:id/reject` | PERMISSION `network:reject` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 409 (status ≠ REQUEST), 422 UUID invalid, 401/403 |
 
 ### Contoh query
 
@@ -316,6 +343,7 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta:
     "address": "Kerkstraat 1",
     "content": "<p>Perhimpunan gamelan...</p>",
     "website": "https://gamelan-nusantara.org",
+    "mapsUrl": "https://maps.google.com/?q=-8.4095,115.1889",
     "contact": "+31612345678",
     "socialMedia": [
       { "platform": "instagram", "url": "https://instagram.com/gamelannusantara" }

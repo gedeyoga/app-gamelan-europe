@@ -1,7 +1,27 @@
+import { randomBytes } from 'crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, SubscriptionType } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
-import { BillingEntity, billingSelect, mapBilling } from './entities/billing.entity';
+import { BillingEntity, MemberPayload, billingSelect, mapBilling, memberSelect } from './entities/billing.entity';
+
+// `INV-<yyyyMMdd>-<6 hex acak>`; unik ditegakkan unique constraint + retry.
+function generateBillingCode(now: Date): string {
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  return `INV-${date}-${randomBytes(3).toString('hex').toUpperCase()}`;
+}
+
+export interface SubscribeInput {
+  userId: string;
+  subscriptionId: string;
+  subscriptionType: SubscriptionType;
+  currency: string;
+  total: number;
+  startDate: Date;
+  expiryDate: Date;
+  now: Date;
+  paymentProofUrl?: string;
+  paymentProofName?: string;
+}
 
 @Injectable()
 export class BillingRepository {
@@ -75,5 +95,80 @@ export class BillingRepository {
     if (!existing) throw new NotFoundException('Billing not found');
     await this.prisma.billing.delete({ where: { id } });
     return mapBilling(existing);
+  }
+
+  // Cross-table read (user + role + billing terbaru). Sort/paginasi di service (status komputasi).
+  findMembers(where: Prisma.UserWhereInput): Promise<MemberPayload[]> {
+    return this.prisma.user.findMany({ where, select: memberSelect });
+  }
+
+  async findUser(id: string): Promise<{ id: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  // Membership aktif = billing PAID belum kedaluwarsa (mirror mapMemberSubscription ACTIVE).
+  async hasActiveByUser(userId: string, now: Date): Promise<boolean> {
+    const billing = await this.prisma.billing.findFirst({
+      where: { userId, status: 'PAID', expiryDate: { gt: now } },
+      select: { id: true },
+    });
+    return billing !== null;
+  }
+
+  async findSubscription(id: string) {
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, subscriptionType: true, currency: true, price: true, durationInDays: true },
+    });
+    if (!subscription) throw new NotFoundException('Subscription not found');
+    return subscription;
+  }
+
+  // Transaksi: batalkan billing PAID lama (→ CANCELED), buat billing baru PAID.
+  // `code` unik → P2002 di-retry sekali dengan code baru (jangan 409 ke user).
+  async subscribe(input: SubscribeInput): Promise<BillingEntity> {
+    const data = {
+      userId: input.userId,
+      subscriptionId: input.subscriptionId,
+      status: 'PAID' as const,
+      subscriptionType: input.subscriptionType,
+      currency: input.currency,
+      total: input.total,
+      paidAt: input.now,
+      startDate: input.startDate,
+      expiryDate: input.expiryDate,
+      ...(input.paymentProofUrl !== undefined ? { paymentProofUrl: input.paymentProofUrl } : {}),
+      ...(input.paymentProofName !== undefined ? { paymentProofName: input.paymentProofName } : {}),
+    };
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const created = await this.prisma.$transaction(async (tx) => {
+          await tx.billing.updateMany({
+            where: { userId: input.userId, status: 'PAID' },
+            data: { status: 'CANCELED', canceledAt: input.now, expiryDate: null },
+          });
+          return tx.billing.create({ data: { ...data, code: generateBillingCode(input.now) }, select: billingSelect });
+        });
+        return mapBilling(created);
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt === 0) continue;
+        this.mapUnique(e); // percobaan kedua tetap bentrok → 409, bukan 500 mentah
+        throw e;
+      }
+    }
+  }
+
+  async cancel(id: string): Promise<BillingEntity> {
+    const existing = await this.prisma.billing.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Billing not found');
+    return mapBilling(
+      await this.prisma.billing.update({
+        where: { id },
+        data: { status: 'CANCELED', canceledAt: new Date(), expiryDate: null },
+        select: billingSelect,
+      }),
+    );
   }
 }

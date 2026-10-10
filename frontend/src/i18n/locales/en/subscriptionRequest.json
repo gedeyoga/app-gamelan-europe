@@ -1,0 +1,115 @@
+{
+  "title": "Subscription Requests",
+  "subtitle": "Review subscription requests from members and the public.",
+  "search": {
+    "placeholder": "Search name, email, or organisation...",
+    "ariaLabel": "Search subscription requests"
+  },
+  "filter": {
+    "all": "All",
+    "statusLabel": "Status"
+  },
+  "table": {
+    "requester": "Requester",
+    "email": "Email",
+    "plan": "Subscription",
+    "type": "Type",
+    "status": "Status",
+    "created": "Created",
+    "empty": "No subscription requests yet",
+    "notFound": "No results for \"{{term}}\".",
+    "reset": "Reset search"
+  },
+  "requestTypeOptions": {
+    "NEW": "New",
+    "RENEWAL": "Renewal"
+  },
+  "statusOptions": {
+    "PENDING": "Pending",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected"
+  },
+  "actions": {
+    "view": "View",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "approveDialog": {
+    "title": "Approve request",
+    "description": "Approve the subscription request from {{name}}? A billing record will be created.",
+    "confirm": "Approve",
+    "proofLabel": "Payment proof",
+    "proofOptional": "(optional)",
+    "proofUpload": "Upload file",
+    "proofEmpty": "Drag a file here or click to choose.",
+    "proofUploading": "Uploading...",
+    "proofFormats": "JPG, PNG, WebP, or PDF up to 10 MB.",
+    "proofRemove": "Remove proof",
+    "proofInvalid": "File must be a JPG, PNG, WebP, or PDF.",
+    "proofTooLarge": "File size must not exceed 10 MB.",
+    "proofFailed": "Failed to upload payment proof."
+  },
+  "rejectDialog": {
+    "title": "Reject request",
+    "description": "Reject the subscription request from {{name}}?",
+    "noteLabel": "Note",
+    "notePlaceholder": "Reason for rejection (optional)",
+    "confirm": "Reject"
+  },
+  "detail": {
+    "back": "Back",
+    "requester": "Requester",
+    "organisation": "Organisation",
+    "phone": "Phone",
+    "country": "Country",
+    "website": "Website",
+    "address": "Address",
+    "reason": "Reason",
+    "plan": "Subscription",
+    "type": "Request type",
+    "planType": "Billing cycle",
+    "price": "Price",
+    "duration": "Duration",
+    "createdAt": "Submitted",
+    "review": "Review",
+    "reviewedBy": "Reviewed by",
+    "reviewedAt": "Reviewed at",
+    "reviewNote": "Review note",
+    "notReviewed": "Not reviewed yet.",
+    "viewBilling": "View billing",
+    "notFound": "Subscription request not found."
+  },
+  "form": {
+    "title": "Request subscription",
+    "description": "Choose a plan and tell us why you'd like to subscribe.",
+    "planLabel": "Subscription plan",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "Explain your request...",
+    "contactSection": "Contact (optional)",
+    "phone": "Phone",
+    "website": "Website",
+    "country": "Country",
+    "organisation": "Organisation",
+    "address": "Address",
+    "submit": "Submit request",
+    "noSubscriptions": "No subscription plans available."
+  },
+  "myRequests": {
+    "title": "Subscription Requests",
+    "empty": "You have no subscription requests yet.",
+    "requestButton": "Request subscription"
+  },
+  "toast": {
+    "created": "Subscription request submitted",
+    "approved": "Subscription request approved",
+    "rejected": "Subscription request rejected",
+    "createFailed": "Failed to submit subscription request",
+    "approveFailed": "Failed to approve subscription request",
+    "rejectFailed": "Failed to reject subscription request"
+  },
+  "errors": {
+    "forbidden": "You don't have access to view subscription requests.",
+    "load": "Failed to load subscription requests.",
+    "empty": "No subscription requests yet."
+  }
+}
