@@ -24,6 +24,10 @@ export function getArchive(id: string): Promise<Archive> {
   return request<Archive>(`/archives/${id}`)
 }
 
+export function getArchiveBySlug(slug: string): Promise<Archive> {
+  return request<Archive>(`/archives/slug/${encodeURIComponent(slug)}`)
+}
+
 export function createArchive(payload: CreateArchiveInput): Promise<Archive> {
   return request<Archive>('/archives', {
     method: 'POST',
@@ -48,14 +52,22 @@ export function submitArchive(id: string): Promise<Archive> {
   return request<Archive>(`/archives/${id}/submit`, { method: 'POST' })
 }
 
-export function approveArchive(id: string, publishedAt?: string): Promise<Archive> {
-  if (publishedAt === undefined) {
+export function approveArchive(
+  id: string,
+  publishedAt?: string,
+  notify?: boolean,
+): Promise<Archive> {
+  const body = {
+    ...(publishedAt === undefined ? {} : { publishedAt }),
+    ...(notify === undefined ? {} : { notify }),
+  }
+  if (Object.keys(body).length === 0) {
     return request<Archive>(`/archives/${id}/approve`, { method: 'POST' })
   }
   return request<Archive>(`/archives/${id}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ publishedAt }),
+    body: JSON.stringify(body),
   })
 }
 

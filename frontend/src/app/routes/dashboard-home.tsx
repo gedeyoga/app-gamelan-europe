@@ -170,6 +170,7 @@ export function DashboardHomePage() {
   const [approveTargetId, setApproveTargetId] = useState<string | null>(null)
   const [archiveApproveTargetId, setArchiveApproveTargetId] = useState<string | null>(null)
   const [storyApproveTargetId, setStoryApproveTargetId] = useState<string | null>(null)
+  const [networkApproveTargetId, setNetworkApproveTargetId] = useState<string | null>(null)
   const [subscriptionRequestApproveTarget, setSubscriptionRequestApproveTarget] =
     useState<SubscriptionRequest | null>(null)
   const [subscriptionRequestRejectTarget, setSubscriptionRequestRejectTarget] =
@@ -285,6 +286,7 @@ export function DashboardHomePage() {
         locationName: event.location?.name ?? null,
         dateLabel: event.dates[0] ? formatEventDate(event.dates[0]) : null,
         source: event.source,
+        publishedAt: event.publishedAt,
       })),
     [pendingQuery.data],
   )
@@ -298,6 +300,7 @@ export function DashboardHomePage() {
         creatorName: archive.creator?.fullName ?? null,
         description: archive.description ?? null,
         categories: archive.categories.map((category) => category.name),
+        publishedAt: archive.publishedAt,
       })),
     [pendingArchivesQuery.data],
   )
@@ -311,6 +314,7 @@ export function DashboardHomePage() {
         creatorName: story.creator?.fullName ?? null,
         categories: story.categories.map((category) => category.name),
         source: story.source,
+        publishedAt: story.publishedAt,
       })),
     [pendingStoriesQuery.data],
   )
@@ -402,23 +406,34 @@ export function DashboardHomePage() {
     }
   }, [pendingSubscriptionRequestsPage, pendingSubscriptionRequestsPages])
 
-  function handleConfirmApprove(publishedAt: string) {
-    if (!approveTargetId) return
+  // Satu jalur approve per entitas: dipakai dialog jadwal maupun approve langsung
+  // (record sudah punya `publishedAt`) supaya toast/error tidak terduplikasi.
+  function approveEventNow(id: string, publishedAt: string, notify?: boolean) {
     approveEvent.mutate(
-      { id: approveTargetId, publishedAt },
+      { id, publishedAt, notify },
       {
-        onSuccess: () => {
-          setApproveTargetId(null)
-          toastSuccess(t('event:toast.approved'))
+        onSuccess: () => toastSuccess(t('event:toast.approved')),
+        onError: (err: unknown) => {
+          void queryClient.invalidateQueries({ queryKey: ['event'] })
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('event:toast.approveFailed')))
         },
-      onError: (err: unknown) => {
-        setApproveTargetId(null)
-        void queryClient.invalidateQueries({ queryKey: ['event'] })
-        if (isValidationError(err)) return
-        toastError(getApiErrorMessage(err, t('event:toast.approveFailed')))
-      },
       },
     )
+  }
+
+  function handleApproveEvent(id: string, publishedAt: string | null) {
+    if (publishedAt) {
+      approveEventNow(id, publishedAt)
+      return
+    }
+    setApproveTargetId(id)
+  }
+
+  function handleConfirmApprove(publishedAt: string, notify: boolean) {
+    if (!approveTargetId) return
+    setApproveTargetId(null)
+    approveEventNow(approveTargetId, publishedAt, notify)
   }
 
   function handleReject(id: string) {
@@ -431,23 +446,32 @@ export function DashboardHomePage() {
     })
   }
 
-  function handleConfirmArchiveApprove(publishedAt: string) {
-    if (!archiveApproveTargetId) return
+  function approveArchiveNow(id: string, publishedAt: string, notify?: boolean) {
     approveArchive.mutate(
-      { id: archiveApproveTargetId, publishedAt },
+      { id, publishedAt, notify },
       {
-        onSuccess: () => {
-          setArchiveApproveTargetId(null)
-          toastSuccess(t('archive:toast.approved'))
-        },
+        onSuccess: () => toastSuccess(t('archive:toast.approved')),
         onError: (err: unknown) => {
-          setArchiveApproveTargetId(null)
           void queryClient.invalidateQueries({ queryKey: ['archive'] })
           if (isValidationError(err)) return
           toastError(getApiErrorMessage(err, t('archive:toast.approveFailed')))
         },
       },
     )
+  }
+
+  function handleApproveArchive(id: string, publishedAt: string | null) {
+    if (publishedAt) {
+      approveArchiveNow(id, publishedAt)
+      return
+    }
+    setArchiveApproveTargetId(id)
+  }
+
+  function handleConfirmArchiveApprove(publishedAt: string, notify: boolean) {
+    if (!archiveApproveTargetId) return
+    setArchiveApproveTargetId(null)
+    approveArchiveNow(archiveApproveTargetId, publishedAt, notify)
   }
 
   function handleRejectArchive(id: string) {
@@ -460,23 +484,32 @@ export function DashboardHomePage() {
     })
   }
 
-  function handleConfirmStoryApprove(publishedAt: string) {
-    if (!storyApproveTargetId) return
+  function approveStoryNow(id: string, publishedAt: string, notify?: boolean) {
     approveStory.mutate(
-      { id: storyApproveTargetId, publishedAt },
+      { id, publishedAt, notify },
       {
-        onSuccess: () => {
-          setStoryApproveTargetId(null)
-          toastSuccess(t('story:toast.approved'))
-        },
+        onSuccess: () => toastSuccess(t('story:toast.approved')),
         onError: (err: unknown) => {
-          setStoryApproveTargetId(null)
           void queryClient.invalidateQueries({ queryKey: ['story'] })
           if (isValidationError(err)) return
           toastError(getApiErrorMessage(err, t('story:toast.approveFailed')))
         },
       },
     )
+  }
+
+  function handleApproveStory(id: string, publishedAt: string | null) {
+    if (publishedAt) {
+      approveStoryNow(id, publishedAt)
+      return
+    }
+    setStoryApproveTargetId(id)
+  }
+
+  function handleConfirmStoryApprove(publishedAt: string, notify: boolean) {
+    if (!storyApproveTargetId) return
+    setStoryApproveTargetId(null)
+    approveStoryNow(storyApproveTargetId, publishedAt, notify)
   }
 
   function handleRejectStory(id: string) {
@@ -490,8 +523,14 @@ export function DashboardHomePage() {
   }
 
   function handleApproveNetwork(id: string) {
+    setNetworkApproveTargetId(id)
+  }
+
+  function handleConfirmNetworkApprove(publishedAt: string) {
+    if (!networkApproveTargetId) return
+    setNetworkApproveTargetId(null)
     approveNetwork.mutate(
-      { id },
+      { id: networkApproveTargetId, publishedAt },
       {
         onSuccess: () => toastSuccess(t('network:toast.approved')),
         onError: (err: unknown) => {
@@ -631,7 +670,7 @@ export function DashboardHomePage() {
                 canUpdate={can('event:update')}
                 isRefreshing={pendingQuery.isFetching}
                 onEdit={(id) => navigate(`/events/${id}/edit`)}
-                onApprove={setApproveTargetId}
+                onApprove={handleApproveEvent}
                 onReject={handleReject}
                 busyId={busyId}
               />
@@ -665,7 +704,7 @@ export function DashboardHomePage() {
                 canUpdate={can('story:update')}
                 isRefreshing={pendingStoriesQuery.isFetching}
                 onEdit={(id) => navigate(`/stories/${id}/edit`)}
-                onApprove={setStoryApproveTargetId}
+                onApprove={handleApproveStory}
                 onReject={handleRejectStory}
                 busyId={storyBusyId}
               />
@@ -702,7 +741,7 @@ export function DashboardHomePage() {
               canUpdate={can('archive:update')}
               isRefreshing={pendingArchivesQuery.isFetching}
               onEdit={(id) => navigate(`/archives/${id}/edit`)}
-              onApprove={setArchiveApproveTargetId}
+              onApprove={handleApproveArchive}
               onReject={handleRejectArchive}
               busyId={archiveBusyId}
             />
@@ -922,11 +961,9 @@ export function DashboardHomePage() {
         description={t('event:publishDialog.description')}
         dateLabel={t('event:publishDialog.dateLabel')}
         datePlaceholder={t('event:publishDialog.datePlaceholder')}
-        nextLabel={t('event:confirm.submit')}
-        confirmTitle={t('event:confirm.title')}
-        confirmDescription={t('event:publishDialog.confirmDescription')}
         confirmLabel={t('event:workflow.approve')}
         cancelLabel={t('common:actions.cancel')}
+        notifyLabel={t('event:publishDialog.notifyLabel')}
       />
 
       <PublishScheduleDialog
@@ -940,11 +977,9 @@ export function DashboardHomePage() {
         description={t('archive:publishDialog.description')}
         dateLabel={t('archive:publishDialog.dateLabel')}
         datePlaceholder={t('archive:publishDialog.datePlaceholder')}
-        nextLabel={t('archive:confirm.submit')}
-        confirmTitle={t('archive:confirm.title')}
-        confirmDescription={t('archive:publishDialog.confirmDescription')}
         confirmLabel={t('archive:workflow.approve')}
         cancelLabel={t('common:actions.cancel')}
+        notifyLabel={t('archive:publishDialog.notifyLabel')}
       />
 
       <PublishScheduleDialog
@@ -958,10 +993,23 @@ export function DashboardHomePage() {
         description={t('story:publishDialog.description')}
         dateLabel={t('story:publishDialog.dateLabel')}
         datePlaceholder={t('story:publishDialog.datePlaceholder')}
-        nextLabel={t('story:confirm.submit')}
-        confirmTitle={t('story:confirm.title')}
-        confirmDescription={t('story:publishDialog.confirmDescription')}
         confirmLabel={t('story:workflow.approve')}
+        cancelLabel={t('common:actions.cancel')}
+        notifyLabel={t('story:publishDialog.notifyLabel')}
+      />
+
+      <PublishScheduleDialog
+        open={networkApproveTargetId !== null}
+        onOpenChange={(open) => {
+          if (!open) setNetworkApproveTargetId(null)
+        }}
+        onConfirm={handleConfirmNetworkApprove}
+        isPending={approveNetwork.isPending}
+        title={t('network:publishDialog.title')}
+        description={t('network:publishDialog.description')}
+        dateLabel={t('network:publishDialog.dateLabel')}
+        datePlaceholder={t('network:publishDialog.datePlaceholder')}
+        confirmLabel={t('network:publishDialog.confirm')}
         cancelLabel={t('common:actions.cancel')}
       />
 

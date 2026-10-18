@@ -25,6 +25,8 @@ export interface DashboardPendingEventItem {
   dateLabel: string | null
   /** Asal pengajuan (`PUBLIC` = publik, `REGISTERED` = member). */
   source: 'PUBLIC' | 'REGISTERED'
+  /** Jadwal tayang yang sudah ada; bila terisi, approve tanpa dialog jadwal. */
+  publishedAt: string | null
 }
 
 export interface DashboardPendingArchiveItem {
@@ -35,6 +37,8 @@ export interface DashboardPendingArchiveItem {
   creatorName: string | null
   description: string | null
   categories: string[]
+  /** Jadwal tayang yang sudah ada; bila terisi, approve tanpa dialog jadwal. */
+  publishedAt: string | null
 }
 
 export interface DashboardPendingStoryItem {
@@ -46,6 +50,8 @@ export interface DashboardPendingStoryItem {
   categories: string[]
   /** Asal pengajuan (`PUBLIC` = publik, `REGISTERED` = member). */
   source: 'PUBLIC' | 'REGISTERED'
+  /** Jadwal tayang yang sudah ada; bila terisi, approve tanpa dialog jadwal. */
+  publishedAt: string | null
 }
 
 /** Usulan organisasi Network (submission publik) menunggu review admin. */

@@ -7,9 +7,10 @@ import { UserModule } from '@app/libs/modules/user/user.module';
 import { StorageModule } from '@app/libs/integrations/storage/storage.module';
 import { PostRepository } from './post.repository';
 import { PostService } from './post.service';
+import { NotificationModule } from '@app/libs/modules/notification/notification.module';
 
 @Module({
-  imports: [CategoryModule, CountryModule, StateModule, ImageModule, UserModule, StorageModule],
+  imports: [CategoryModule, CountryModule, StateModule, ImageModule, UserModule, StorageModule, NotificationModule],
   providers: [PostRepository, PostService],
   exports: [PostRepository, PostService],
 })

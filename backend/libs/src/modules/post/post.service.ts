@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import { CategoryType, ContentSource, ContentStatus, ContentVisibility, Prisma } from '@prisma/client';
+import { CategoryType, ContentSource, ContentStatus, ContentVisibility, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
@@ -19,6 +19,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { CreatePublicPostDto } from './dto/create-public-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { slugify } from './utils/slug.util';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 
 export const POST_SEARCHABLE_FIELDS = ['name', 'slug'];
 export const POST_SORT_FIELDS = ['name', 'slug', 'status', 'visibility', 'publishedAt', 'createdAt', 'updatedAt'];
@@ -51,6 +52,7 @@ export class PostService {
     private readonly stateRepository: StateRepository,
     private readonly storage: StorageService,
     private readonly accessScope: AccessScopeService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private validationError(field: string, message: string): UnprocessableEntityException {
@@ -215,6 +217,22 @@ export class PostService {
     return slug;
   }
 
+  // Hanya konten publik yang terbit yang dikirim ke member (D10). Unique key = idempoten.
+  private async notifyPublished(post: PostEntity, actorId: string, notify?: boolean): Promise<void> {
+    if (post.status !== ContentStatus.PUBLISHED || post.visibility !== ContentVisibility.PUBLIC) return;
+    await this.notificationService.publishAfterCommit({
+      entityType: NotificationEntityType.POST,
+      entityId: post.id,
+      title: post.name,
+      body: post.content,
+      imageUrl: post.thumbnail,
+      slug: post.slug,
+      publishedAt: post.publishedAt,
+      notify: notify !== false,
+      actorId,
+    });
+  }
+
   async list(query: ListPostsQueryDto, userId: string): Promise<{ items: PostResponse[]; total: number }> {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
@@ -247,10 +265,16 @@ export class PostService {
   }
 
   async findOne(id: string, userId: string): Promise<PostResponse> {
-    const [post, scope] = await Promise.all([
-      this.postRepository.findById(id),
-      this.accessScope.resolve(userId, 'story'),
-    ]);
+    return this.toReadable(await this.postRepository.findById(id), userId);
+  }
+
+  // Lookup via slug (tautan email `/stories/{slug}`) — aturan scope identik `findOne`.
+  async findOneBySlug(slug: string, userId: string): Promise<PostResponse> {
+    return this.toReadable(await this.postRepository.findBySlug(slug), userId);
+  }
+
+  private async toReadable(post: PostEntity, userId: string): Promise<PostResponse> {
+    const scope = await this.accessScope.resolve(userId, 'story');
     this.assertReadable(post, scope);
     return (await this.hydrate([post]))[0];
   }
@@ -299,6 +323,7 @@ export class PostService {
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (prepared.slug) {
       const post = await this.postRepository.create(this.buildCreateData(prepared, prepared.slug, status, userId));
+      await this.notifyPublished(post, userId, dto.notify);
       return (await this.hydrate([post]))[0];
     }
 
@@ -308,6 +333,7 @@ export class PostService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const post = await this.postRepository.create(this.buildCreateData(prepared, slug, status, userId));
+        await this.notifyPublished(post, userId, dto.notify);
         return (await this.hydrate([post]))[0];
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
@@ -388,6 +414,14 @@ export class PostService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const post = await this.postRepository.create(data);
+        await this.notificationService.notifyAdmins({
+          type: NotificationType.CONTENT_SUBMITTED,
+          entityType: NotificationEntityType.POST,
+          entityId: post.id,
+          title: dto.name,
+          imageUrl: thumbnail ?? null,
+          linkPath: '/dashboard',
+        });
         return { id: post.id, status: post.status };
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
@@ -482,6 +516,9 @@ export class PostService {
     }
 
     const post = await this.postRepository.update(id, data);
+    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ContentStatus.PUBLISHED)) {
+      await this.notifyPublished(post, userId, dto.notify);
+    }
     return (await this.hydrate([post]))[0];
   }
 
@@ -491,7 +528,7 @@ export class PostService {
     id: string,
     action: PostAction,
     userId: string,
-    options?: { publishedAt?: string },
+    options?: { publishedAt?: string; notify?: boolean },
   ): Promise<PostResponse> {
     const existing = await this.postRepository.findById(id); // 404 bila tak ada
     const scope = await this.accessScope.resolve(userId, 'story');
@@ -509,11 +546,31 @@ export class PostService {
         : (existing.publishedAt ?? new Date());
       extra.approvedAt = existing.approvedAt ?? new Date();
     }
-    const updated = await this.postRepository.updateStatusIf(id, rule.from, rule.to, extra);
+    const publishing = action === 'approve' || action === 'publish';
+    // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    const updated = await this.postRepository.transaction(async (tx) => {
+      const ok = await this.postRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      if (!ok) return false;
+      if (publishing && existing.visibility === ContentVisibility.PUBLIC) {
+        await this.notificationService.enqueueContentPublished(tx, {
+          entityType: NotificationEntityType.POST,
+          entityId: id,
+          title: existing.name,
+          body: existing.content,
+          imageUrl: existing.thumbnail,
+          slug: existing.slug,
+          publishedAt: extra.publishedAt,
+          notify: options?.notify !== false,
+          actorId: userId,
+        });
+      }
+      return true;
+    });
     if (!updated) {
       const current = await this.postRepository.findById(id); // 404 bila post terhapus
       throw new ConflictException(`Cannot ${action} post in status ${current.status}`);
     }
+    if (publishing) await this.notificationService.enqueuePending(NotificationEntityType.POST, id);
     return this.findOne(id, userId);
   }
 

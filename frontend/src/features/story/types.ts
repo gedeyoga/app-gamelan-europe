@@ -73,6 +73,8 @@ export interface CreateStoryInput {
   flyerItems?: FlyerItemInput[]
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
+  /** Kirim email notifikasi ke penerima (default backend `true`). */
+  notify?: boolean
 }
 
 // `thumbnail: null` menghapus thumbnail; field di-omit bila tidak diubah.

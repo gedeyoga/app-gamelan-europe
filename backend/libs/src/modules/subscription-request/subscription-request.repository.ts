@@ -126,11 +126,11 @@ export class SubscriptionRequestRepository {
     });
   }
 
-  // Cross-table: subscription aktif & belum soft-deleted → { id } | null.
-  findActiveSubscription(id: string): Promise<{ id: string } | null> {
+  // Cross-table: subscription aktif & belum soft-deleted → { id, name } | null.
+  findActiveSubscription(id: string): Promise<{ id: string; name: string } | null> {
     return this.prisma.subscription.findFirst({
       where: { id, deletedAt: null, status: 'ACTIVE' },
-      select: { id: true },
+      select: { id: true, name: true },
     });
   }
 

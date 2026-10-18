@@ -26,9 +26,29 @@ const storageBase = {
   IMAGE_THUMB_HEIGHT: Joi.number().integer().min(1).default(720),
 };
 
+// SMTP. Semua opsional agar dev tanpa mail server tetap boot (SmtpService lazy-init
+// + guard saat send). SMTP_FROM wajib diisi bila benar-benar mau kirim email.
+const smtpBase = {
+  SMTP_HOST: Joi.string().optional(),
+  SMTP_PORT: Joi.number().integer().min(1).max(65535).default(587),
+  SMTP_SECURE: Joi.boolean().truthy('true').falsy('false').default(false),
+  SMTP_USER: Joi.string().optional(),
+  SMTP_PASSWORD: Joi.string().optional(),
+  SMTP_FROM: Joi.string().optional(),
+  SMTP_FROM_NAME: Joi.string().optional(),
+};
+
+// Email notifikasi: `APP_WEB_URL` merakit link absolut; worker concurrency milik BullMQ.
+const notificationBase = {
+  APP_WEB_URL: Joi.string().uri().optional(),
+  NOTIFICATION_WORKER_CONCURRENCY: Joi.number().integer().min(1).default(5),
+};
+
 export const appEnvValidationSchema = Joi.object({
   ...internalBase,
   ...storageBase,
+  ...smtpBase,
+  ...notificationBase,
   CORS_ORIGINS: Joi.string().allow('').optional(),
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRES_IN: Joi.string()
@@ -39,4 +59,8 @@ export const appEnvValidationSchema = Joi.object({
     .required(),
 }).unknown(true);
 
-export const workerEnvValidationSchema = Joi.object(internalBase).unknown(true);
+export const workerEnvValidationSchema = Joi.object({
+  ...internalBase,
+  ...smtpBase,
+  ...notificationBase,
+}).unknown(true);

@@ -78,7 +78,7 @@ Prefix global `/api/v1`. Envelope: sukses `{ data, message }`; error `{ statusCo
 | --- | --- | --- | --- |
 | POST | `/network-submissions` | `CreateNetworkSubmissionDto` (lihat bawah) | **Publik** (`@Public()`); **201**; respons `{ data: { id, status }, message }`; menulis **langsung ke tabel `networks`** dengan `status = REQUEST` + `source = PUBLIC` (id = id network). Rate-limit **5 req/menit per IP** → **429**. Body whitelist (`additionalProperties:false`) → field tak dikenal **422**. Error yang mungkin: **422** `{ statusCode, message: 'Validation failed', errors: [{ field, message }] }` (validasi per-field), **429** (rate-limit), **500/network** (generik). **Tidak ada** duplikat 409. |
 
-`CreateNetworkSubmissionDto` (mirror DTO backend `backend/libs/src/modules/network-submission/dto/create-network-submission.dto.ts`):
+`CreateNetworkSubmissionDto` (mirror DTO backend `backend/libs/src/modules/network/dto/create-public-network.dto.ts`):
 
 | Field | Tipe | Aturan |
 | --- | --- | --- |
@@ -265,7 +265,7 @@ Hasil aktual:
 
 ## 12. Catatan
 
-- **Backend SUDAH ADA — jangan diubah.** `POST /network-submissions` publik, 201, `REQUEST`, rate-limit 5/menit, whitelist body; error **422** per-field / **429** rate-limit / **500/network** — tanpa duplikat 409. Rujuk `backend/apps/app/src/controllers/network-submissions.controller.ts`, `backend/libs/src/modules/network-submission/network-submission.service.ts`, `.../dto/create-network-submission.dto.ts`.
+- **Backend SUDAH ADA — jangan diubah.** `POST /network-submissions` publik, 201, `REQUEST`, rate-limit 5/menit, whitelist body; error **422** per-field / **429** rate-limit / **500/network** — tanpa duplikat 409. Rujuk `backend/apps/app/src/controllers/network-submissions.controller.ts` dan `backend/libs/src/modules/network/network.service.ts` (`createPublicSubmission`).
 - **Beda dari referensi**: referensi memakai `ENABLE_SUBMISSION = false` (menahan submit); repo ini **tidak** — submit selalu `POST` karena endpoint sudah final.
 - **Route publik tidak muncul di sidebar**: `/network/join` di luar `DashboardLayout`; tanpa menu, tanpa gate permission.
 - **`submitter` audit-only**: tidak membuat `User`/akun; hanya data kontak pelapor.

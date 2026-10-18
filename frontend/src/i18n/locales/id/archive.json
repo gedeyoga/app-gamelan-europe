@@ -78,7 +78,8 @@
     "next": "Lanjutkan",
     "confirmTitle": "Konfirmasi",
     "confirmDescription": "Arsip akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?",
-    "confirm": "Terbitkan"
+    "confirm": "Terbitkan",
+    "notifyLabel": "Kirim notifikasi email ke member saat dipublikasikan"
   },
   "workflow": {
     "requested": "Menunggu persetujuan",

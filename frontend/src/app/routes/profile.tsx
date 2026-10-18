@@ -14,6 +14,10 @@ import {
 import { useChangePassword } from '@/features/profile/hooks/use-change-password'
 import { useUpdateProfile } from '@/features/profile/hooks/use-update-profile'
 import { useUploadImage } from '@/features/profile/hooks/use-upload-image'
+import { NotificationPreferencesCard } from '@/features/notification/components/notification-preferences-card'
+import { useNotificationPreferences } from '@/features/notification/hooks/use-notification-preferences'
+import { useUpdateNotificationPreference } from '@/features/notification/hooks/use-update-notification-preference'
+import type { NotificationType } from '@/features/notification/types'
 import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from '@/lib/toast'
 
 export function ProfilePage() {
@@ -24,6 +28,8 @@ export function ProfilePage() {
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
   const uploadImage = useUploadImage()
+  const notificationPreferences = useNotificationPreferences()
+  const updateNotificationPreference = useUpdateNotificationPreference()
 
   // Counter increment → trigger ProfileCard reset form.
   const [resetSignal, setResetSignal] = useState(0)
@@ -108,6 +114,19 @@ export function ProfilePage() {
     saveAvatar(null)
   }
 
+  function handleNotificationToggle(type: NotificationType, emailEnabled: boolean) {
+    updateNotificationPreference.mutate(
+      { type, emailEnabled },
+      {
+        onSuccess: () => toastSuccess(t('notification:toast.preferenceUpdated')),
+        onError: (err: unknown) => {
+          if (isValidationError(err)) return
+          toastError(getApiErrorMessage(err, t('notification:toast.preferenceUpdateFailed')))
+        },
+      },
+    )
+  }
+
   const user = session.data ?? auth.user
 
   return (
@@ -141,19 +160,33 @@ export function ProfilePage() {
           </div>
         )
       ) : user ? (
-        <ProfileCard
-          user={user}
-          isLoading={session.isPending && !session.data}
-          isPending={isPending}
-          submissionError={submissionError}
-          onSubmit={handleSubmit}
-          resetSignal={resetSignal}
-          avatar={user.avatar ?? null}
-          isUploadingAvatar={uploadImage.isPending}
-          avatarError={avatarError}
-          onAvatarUpload={(file) => void handleAvatarUpload(file)}
-          onAvatarRemove={handleAvatarRemove}
-        />
+        <div className="flex flex-col gap-4">
+          <ProfileCard
+            user={user}
+            isLoading={session.isPending && !session.data}
+            isPending={isPending}
+            submissionError={submissionError}
+            onSubmit={handleSubmit}
+            resetSignal={resetSignal}
+            avatar={user.avatar ?? null}
+            isUploadingAvatar={uploadImage.isPending}
+            avatarError={avatarError}
+            onAvatarUpload={(file) => void handleAvatarUpload(file)}
+            onAvatarRemove={handleAvatarRemove}
+          />
+          <NotificationPreferencesCard
+            items={notificationPreferences.data ?? []}
+            isLoading={notificationPreferences.isPending}
+            isError={notificationPreferences.isError}
+            pendingType={
+              updateNotificationPreference.isPending
+                ? (updateNotificationPreference.variables?.type ?? null)
+                : null
+            }
+            onToggle={handleNotificationToggle}
+            onRetry={() => void notificationPreferences.refetch()}
+          />
+        </div>
       ) : null}
     </div>
   )

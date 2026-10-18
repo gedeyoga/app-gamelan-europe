@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ArchiveMaterialType, ArchiveStatus, ArchiveType, ContentSource, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
 import { DocumentRepository } from '@app/libs/modules/document/document.repository';
@@ -6,6 +6,7 @@ import { mapArchive, archiveSelect, ArchiveEntity } from './entities/archive.ent
 
 export interface CreateArchiveData {
   name: string;
+  slug: string;
   description?: string;
   thumbnail?: string;
   type: ArchiveType;
@@ -47,6 +48,16 @@ export class ArchiveRepository {
     private readonly documentRepository: DocumentRepository,
   ) {}
 
+  private client(tx?: Prisma.TransactionClient): Prisma.TransactionClient | PrismaService {
+    return tx ?? this.prisma;
+  }
+
+  private mapUnique(e: unknown): void {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      throw new ConflictException('Slug already exists');
+    }
+  }
+
   private async setCategories(
     tx: Prisma.TransactionClient,
     archiveId: string,
@@ -75,10 +86,26 @@ export class ArchiveRepository {
     }
   }
 
-  async findById(id: string): Promise<ArchiveEntity> {
-    const archive = await this.prisma.archive.findUnique({ where: { id }, select: archiveSelect });
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<ArchiveEntity> {
+    const archive = await this.client(tx).archive.findUnique({ where: { id }, select: archiveSelect });
     if (!archive) throw new NotFoundException('Archive not found');
     return mapArchive(archive);
+  }
+
+  // Lookup untuk tautan email (`/archives/{slug}`).
+  async findBySlug(slug: string): Promise<ArchiveEntity> {
+    const archive = await this.prisma.archive.findUnique({ where: { slug }, select: archiveSelect });
+    if (!archive) throw new NotFoundException('Archive not found');
+    return mapArchive(archive);
+  }
+
+  transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(fn);
+  }
+
+  async existsBySlug(slug: string): Promise<boolean> {
+    const found = await this.prisma.archive.findUnique({ where: { slug }, select: { id: true } });
+    return Boolean(found);
   }
 
   // Id-only (tanpa hydrate) untuk purge cascade hapus user; cleanup dokumen/S3 diurus `ArchiveService.remove` per id.
@@ -110,6 +137,7 @@ export class ArchiveRepository {
       const archive = await client.archive.create({
         data: {
           name: data.name,
+          slug: data.slug,
           description: data.description,
           thumbnail: data.thumbnail,
           type: data.type,
@@ -136,7 +164,12 @@ export class ArchiveRepository {
         await client.archive.findUniqueOrThrow({ where: { id: archive.id }, select: archiveSelect }),
       );
     };
-    return tx ? run(tx) : this.prisma.$transaction(run);
+    try {
+      return tx ? await run(tx) : await this.prisma.$transaction(run);
+    } catch (e) {
+      this.mapUnique(e);
+      throw e;
+    }
   }
 
   // Update status atomik (conditional). Non-null = tepat 1 row berubah → guard anti-TOCTOU.
@@ -145,13 +178,14 @@ export class ArchiveRepository {
     from: ArchiveStatus,
     to: ArchiveStatus,
     extra: { approvedAt?: Date; publishedAt?: Date } = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<ArchiveEntity | null> {
-    const res = await this.prisma.archive.updateMany({
+    const res = await this.client(tx).archive.updateMany({
       where: { id, status: from },
       data: { status: to, ...extra },
     });
     if (res.count !== 1) return null;
-    return this.findById(id);
+    return this.findById(id, tx);
   }
 
   async update(id: string, data: UpdateArchiveData): Promise<ArchiveEntity> {

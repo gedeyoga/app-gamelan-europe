@@ -22,6 +22,7 @@ import { NetworkEditPage } from './network-edit'
 import { NetworkJoinPage } from './network-join'
 import { NetworkNewPage } from './network-new'
 import { NetworksPage } from './networks'
+import { NotificationsPage } from './notifications'
 import { ProfilePage } from './profile'
 import { RegisterPage } from './register'
 import { RolesPage } from './roles'
@@ -137,6 +138,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
       { path: 'my-billings', element: <MyBillingsPage /> },
       { path: '403', element: <ForbiddenPage /> },
     ],

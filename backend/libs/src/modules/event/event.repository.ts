@@ -138,6 +138,17 @@ export class EventRepository {
     return mapEvent(event);
   }
 
+  // Lookup untuk tautan email (`/events/{slug}`).
+  async findBySlug(slug: string): Promise<EventEntity> {
+    const event = await this.prisma.event.findUnique({ where: { slug }, select: eventSelect });
+    if (!event) throw new NotFoundException('Event not found');
+    return mapEvent(event);
+  }
+
+  transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(fn);
+  }
+
   async existsBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<boolean> {
     const found = await this.client(tx).event.findUnique({ where: { slug }, select: { id: true } });
     return Boolean(found);
@@ -207,9 +218,10 @@ export class EventRepository {
     from: ContentStatus | ContentStatus[],
     to: ContentStatus,
     extra: { approvedAt?: Date; publishedAt?: Date } = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const statuses = Array.isArray(from) ? from : [from];
-    const res = await this.prisma.event.updateMany({
+    const res = await this.client(tx).event.updateMany({
       where: { id, status: { in: statuses } },
       data: { status: to, ...extra },
     });

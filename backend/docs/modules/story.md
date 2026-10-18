@@ -547,6 +547,7 @@ export class ListCategoriesQueryDto extends ListQueryDto {}
 | `status` | opsional, `@IsEnum(ContentStatus)` | 422 `{ field: 'status', message }` |
 | `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `network` | 422 `{ field: 'visibility', message }` |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` ([§6](#6-aturan-status)) | 422 `{ field: 'publishedAt', message }` |
+| `notify` | opsional, `@IsBoolean()`; default `true`. `false` → tidak enqueue notifikasi saat auto-publish (`create`/`update`) atau `approve`/`publish`; tidak disimpan | 422 `{ field: 'notify', message }` |
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })` | 422 `{ field: 'categoryIds.0', message }` |
 | `imageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)` | 422 `{ field: 'imageIds.0', message }` |
 | `galleryImageIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(100)`; urutan = urutan galeri; update = replace seluruh array | 422 `{ field: 'galleryImageIds.0', message }` |
@@ -1126,6 +1127,7 @@ Tambahkan baris ringkas ke tabel endpoint `rbac.md §8` (jangan edit file ini se
 | POST | `/api/v1/posts` | Buat story | PERMISSION: `story:create` |
 | GET | `/api/v1/posts` | List story | PERMISSION: `story:read` |
 | GET | `/api/v1/posts/:id` | Detail story | PERMISSION: `story:read` |
+| GET | `/api/v1/posts/slug/:slug` | Detail story via slug (tautan email `/stories/{slug}`) | PERMISSION: `story:read` |
 | PATCH | `/api/v1/posts/:id` | Update story | PERMISSION: `story:update` |
 | DELETE | `/api/v1/posts/:id` | Hapus story | PERMISSION: `story:delete` |
 | POST | `/api/v1/categories` | Buat kategori | PERMISSION: `category:create` |
@@ -1143,15 +1145,16 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 
 | Method | Path | Akses / Permission | Request | Response sukses | Error |
 | --- | --- | --- | --- | --- | --- |
-| POST | `/api/v1/posts` | PERMISSION `story:create` | body `CreatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → paksa `PUBLISHED`) | 201 `{ data: <post + gallery>, message }` | 422 validasi, 409 slug duplikat, 401/403 |
+| POST | `/api/v1/posts` | PERMISSION `story:create` | body `CreatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → paksa `PUBLISHED`; `notify?: boolean` default `true`) | 201 `{ data: <post + gallery>, message }` | 422 validasi, 409 slug duplikat, 401/403 |
 | GET | `/api/v1/posts` | PERMISSION `story:read` | query `ListPostsQueryDto` | 200 `{ data: [post + gallery], meta, message }` | 422 sortBy/filter tak dikenal, 401/403 |
 | GET | `/api/v1/posts/:id` | PERMISSION `story:read` | path `id` UUID | 200 `{ data: <post + gallery>, message }` | 404, 422 UUID invalid, 401/403 |
-| PATCH | `/api/v1/posts/:id` | PERMISSION `story:update` | path `id`, body `UpdatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → timpa + paksa `PUBLISHED`) | 200 `{ data: <post + gallery>, message }` | 404, 409 slug duplikat, 422, 401/403 |
+| GET | `/api/v1/posts/slug/:slug` | PERMISSION `story:read` | path `slug` (regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`, max 200) — dipakai tautan email `/stories/{slug}`; scope baca identik `GET /posts/:id` | 200 `{ data: <post + gallery>, message }` | 404, 422 slug invalid, 401/403 |
+| PATCH | `/api/v1/posts/:id` | PERMISSION `story:update` | path `id`, body `UpdatePostDto` (termasuk `imageIds`, `galleryImageIds`; `publishedAt` opsional ISO 8601 → timpa + paksa `PUBLISHED`; `notify?: boolean` default `true`) | 200 `{ data: <post + gallery>, message }` | 404, 409 slug duplikat, 422, 401/403 |
 | DELETE | `/api/v1/posts/:id` | PERMISSION `story:delete` | path `id` (ikut hapus row `images` + objek S3) | 200 `{ data: <post + gallery>, message }` | 404, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/submit` | PERMISSION `story:submit` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
-| POST | `/api/v1/posts/:id/approve` | PERMISSION `story:approve` | path `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/approve` | PERMISSION `story:approve` | path `id` UUID + body opsional `{ publishedAt?, notify? }` (default `notify = true`) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/reject` | PERMISSION `story:reject` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
-| POST | `/api/v1/posts/:id/publish` | PERMISSION `story:publish` | path `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
+| POST | `/api/v1/posts/:id/publish` | PERMISSION `story:publish` | path `id` UUID + body opsional `{ publishedAt?, notify? }` (default `notify = true`) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/posts/:id/unpublish` | PERMISSION `story:unpublish` | path `id` UUID (tanpa body) | 200 `{ data: <post + gallery>, message }` | 404, 409 transisi tak valid, 422 UUID invalid, 401/403 |
 | POST | `/api/v1/categories` | PERMISSION `category:create` | body `CreateCategoryDto` | 201 `{ data: <category>, message }` | 422, 401/403 |
 | GET | `/api/v1/categories` | PERMISSION `category:read` | query `ListCategoriesQueryDto` | 200 `{ data: [category], meta, message }` | 422, 401/403 |

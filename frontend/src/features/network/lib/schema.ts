@@ -76,6 +76,17 @@ export function createNetworkSchema(t: TFunction) {
       .trim()
       .max(100, t('validation:activityTypeMax', { count: 100 })),
     content: z.string().max(100000, t('validation:contentMax', { count: 100000 })),
+    submitterFullName: z.string().trim().max(200, t('validation:fullNameMax', { count: 200 })),
+    submitterEmail: z
+      .string()
+      .trim()
+      .max(200, t('validation:emailMax', { count: 200 }))
+      .refine(
+        (value) => value === '' || z.email().safeParse(value).success,
+        t('validation:emailInvalid'),
+      ),
+    submitterCountry: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
+    submitterState: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
   }).superRefine((values, ctx) => {
     if (values.activityType === ACTIVITY_TYPE_OTHER && values.activityTypeOther.trim() === '') {
       ctx.addIssue({
@@ -103,4 +114,8 @@ export const EMPTY_NETWORK_VALUES: NetworkFormValues = {
   activityType: '',
   activityTypeOther: '',
   content: '',
+  submitterFullName: '',
+  submitterEmail: '',
+  submitterCountry: '',
+  submitterState: '',
 }

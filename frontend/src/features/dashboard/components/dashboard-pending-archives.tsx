@@ -19,7 +19,8 @@ export interface DashboardPendingArchivesProps {
   /** Query list sedang refetch (mis. setelah mutation); tombol aksi ditahan. */
   isRefreshing?: boolean
   onEdit: (id: string) => void
-  onApprove: (id: string) => void
+  /** `publishedAt` non-null → approve langsung tanpa dialog jadwal. */
+  onApprove: (id: string, publishedAt: string | null) => void
   onReject: (id: string) => void
   /** Id arsip yang sedang diproses; tombol aksi baris tsb dinonaktifkan. */
   busyId?: string
@@ -115,7 +116,7 @@ export function DashboardPendingArchives({
                     size="sm"
                     disabled={actionsDisabled}
                     aria-busy={busy}
-                    onClick={() => onApprove(item.id)}
+                    onClick={() => onApprove(item.id, item.publishedAt)}
                   >
                     <Check className="size-4" data-icon="inline-start" />
                     {t('pending.approve')}

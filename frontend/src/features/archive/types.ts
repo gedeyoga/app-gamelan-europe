@@ -66,6 +66,8 @@ export interface CreateArchiveInput {
   type?: ArchiveType
   status?: ArchiveStatus
   publishedAt?: string
+  /** Kirim email notifikasi ke penerima (default backend `true`). */
+  notify?: boolean
   categoryIds?: string[]
   authorIds?: string[]
   /** Berurut; bila dikirim = replace seluruh array. */

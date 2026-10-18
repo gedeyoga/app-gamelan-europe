@@ -34,7 +34,8 @@ export class PublicNetworkSocialMediaDto {
   url: string;
 }
 
-// Section `submitter` ("data pengirim") — audit-only, tidak pernah disalin ke Network.
+// Section `submitter` ("data pengirim") — disimpan pada kolom `submitter*` di row `networks`
+// (tanpa membuat `User`), dipakai review admin.
 // Cross-field `submitter.stateId` milik `submitter.countryId` dicek di service → 422.
 export class PublicNetworkSubmitterDto {
   @Transform(trim)

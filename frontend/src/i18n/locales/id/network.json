@@ -79,6 +79,15 @@
         "other": "Lainnya"
       }
     },
+    "submitter": {
+      "title": "Data Pengirim",
+      "fullName": "Nama lengkap pengirim",
+      "fullNamePlaceholder": "Nama lengkap",
+      "email": "Email pengirim",
+      "emailPlaceholder": "nama@contoh.com",
+      "country": "Negara pengirim",
+      "state": "Negara Bagian pengirim"
+    },
     "settingsTitle": "Pengaturan",
     "hideSettings": "Sembunyikan pengaturan",
     "showSettings": "Tampilkan pengaturan",
@@ -93,6 +102,14 @@
   "delete": {
     "title": "Hapus Network",
     "description": "Yakin ingin menghapus network {{name}}? Tindakan ini tidak dapat dibatalkan."
+  },
+  "publishDialog": {
+    "title": "Terbitkan Network",
+    "description": "Pilih tanggal dan waktu terbit.",
+    "dateLabel": "Tanggal & waktu terbit",
+    "datePlaceholder": "Pilih tanggal & waktu",
+    "confirmDescription": "Network akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?",
+    "confirm": "Terbitkan"
   },
   "toast": {
     "created": "Network berhasil dibuat",

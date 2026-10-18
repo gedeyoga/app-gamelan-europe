@@ -8,9 +8,10 @@ import { NetworkModule } from '@app/libs/modules/network/network.module';
 import { UserModule } from '@app/libs/modules/user/user.module';
 import { EventRepository } from './event.repository';
 import { EventService } from './event.service';
+import { NotificationModule } from '@app/libs/modules/notification/notification.module';
 
 @Module({
-  imports: [CountryModule, StateModule, CityModule, EventTypeModule, ImageModule, NetworkModule, UserModule],
+  imports: [CountryModule, StateModule, CityModule, EventTypeModule, ImageModule, NetworkModule, UserModule, NotificationModule],
   providers: [EventRepository, EventService],
   exports: [EventRepository, EventService],
 })

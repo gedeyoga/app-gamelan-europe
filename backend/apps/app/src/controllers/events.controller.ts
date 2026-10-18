@@ -7,6 +7,7 @@ import {
   ListEventsQueryDto,
   Permissions,
   PublishContentDto,
+  SlugParamDto,
   UpdateEventDto,
 } from '@app/libs';
 
@@ -29,6 +30,12 @@ export class EventsController {
       data: items,
       meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },
     };
+  }
+
+  @Get('slug/:slug')
+  @Permissions('event:read')
+  findOneBySlug(@Param() params: SlugParamDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.eventService.findOneBySlug(params.slug, user.id);
   }
 
   @Get(':id')
@@ -64,7 +71,7 @@ export class EventsController {
     @Body() dto: PublishContentDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.eventService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt });
+    return this.eventService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt, notify: dto?.notify });
   }
 
   @Post(':id/reject')
@@ -82,7 +89,7 @@ export class EventsController {
     @Body() dto: PublishContentDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.eventService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt });
+    return this.eventService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt, notify: dto?.notify });
   }
 
   @Post(':id/unpublish')

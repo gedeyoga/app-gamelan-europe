@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -16,6 +17,11 @@ import {
 import { NetworkOrganisationType } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+// Whitespace-only → null (bukan `''`) agar kolom nullable benar-benar kosong.
+const trimNullable = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() || null : value;
+const trimNullableLower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() || null : value;
 
 export class NetworkSocialMediaDto {
   @Transform(trim)
@@ -106,6 +112,31 @@ export class CreateNetworkDto {
   @IsString()
   @MaxLength(100)
   activityType?: string | null;
+
+  // Identitas pengirim usulan publik (kolom `submitter_*`); `null` eksplisit = kosongkan (update).
+  @Transform(trimNullable)
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  submitterFullName?: string | null;
+
+  @Transform(trimNullableLower)
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(200)
+  submitterEmail?: string | null;
+
+  @Transform(trimNullable)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  submitterCountry?: string | null;
+
+  @Transform(trimNullable)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  submitterState?: string | null;
 
   @IsOptional()
   @IsNumber()

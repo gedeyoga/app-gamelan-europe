@@ -1,12 +1,14 @@
 import { ConflictException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { ContentSource, NetworkStatus, Prisma } from '@prisma/client';
+import { ContentSource, NetworkStatus, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
 import { resolveGoogleMapsLink } from '@app/libs/common/utils/google-maps.util';
 import { CountryRepository } from '@app/libs/modules/country/country.repository';
 import { StateRepository } from '@app/libs/modules/state/state.repository';
-import { UserService } from '@app/libs/modules/user/user.service';
+import { CountryEntity } from '@app/libs/modules/country/entities/country.entity';
+import { StateWithCountryEntity } from '@app/libs/modules/state/entities/state.entity';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 import { NetworkRepository } from './network.repository';
 import { NetworkEntity } from './entities/network.entity';
 import { CreateNetworkDto } from './dto/create-network.dto';
@@ -32,7 +34,7 @@ export class NetworkService {
     private readonly networkRepository: NetworkRepository,
     private readonly countryRepository: CountryRepository,
     private readonly stateRepository: StateRepository,
-    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private validationError(field: string, message: string): UnprocessableEntityException {
@@ -53,6 +55,10 @@ export class NetworkService {
       },
       dateFields: NETWORK_DATE_FIELDS,
     });
+    // PUBLISHED publik = sudah terbit (mirror archive.scopeWhere); jadwal masa depan disembunyikan.
+    if (query.filter?.status === NetworkStatus.PUBLISHED) {
+      filterWhere.publishedAt = { not: null, lte: new Date() };
+    }
     const searchWhere = buildSearch<Prisma.NetworkWhereInput>(query.search, NETWORK_SEARCHABLE_FIELDS);
     const where = combineWhere<Prisma.NetworkWhereInput>(
       filterWhere as unknown as Record<string, unknown>,
@@ -119,6 +125,10 @@ export class NetworkService {
         organisationType: dto.organisationType ?? null,
         ledBy: dto.ledBy ?? null,
         activityType: dto.activityType ?? null,
+        submitterFullName: dto.submitterFullName ?? null,
+        submitterEmail: dto.submitterEmail ?? null,
+        submitterCountry: dto.submitterCountry ?? null,
+        submitterState: dto.submitterState ?? null,
         socialMedia: this.socialMediaJson(dto.socialMedia),
         lat: coords?.lat ?? dto.lat,
         lng: coords?.lng ?? dto.lng,
@@ -140,6 +150,10 @@ export class NetworkService {
     if (dto.organisationType !== undefined) data.organisationType = dto.organisationType;
     if (dto.ledBy !== undefined) data.ledBy = dto.ledBy;
     if (dto.activityType !== undefined) data.activityType = dto.activityType;
+    if (dto.submitterFullName !== undefined) data.submitterFullName = dto.submitterFullName;
+    if (dto.submitterEmail !== undefined) data.submitterEmail = dto.submitterEmail;
+    if (dto.submitterCountry !== undefined) data.submitterCountry = dto.submitterCountry;
+    if (dto.submitterState !== undefined) data.submitterState = dto.submitterState;
     if (dto.socialMedia !== undefined) {
       data.socialMedia = dto.socialMedia === null ? Prisma.DbNull : this.socialMediaJson(dto.socialMedia);
     }
@@ -173,27 +187,29 @@ export class NetworkService {
   }
 
   // `countryId` harus ada; `stateId` bila dikirim harus milik `countryId` → 422 per-field.
+  // Mengembalikan row hasil lookup agar pemanggil tak query ulang (butuh `name`).
   private async assertGeography(
     countryId: number,
     stateId: number | undefined,
     countryField: string,
     stateField: string,
-  ): Promise<void> {
+  ): Promise<{ country: CountryEntity; state: StateWithCountryEntity | null }> {
     const country = await this.countryRepository.findByIdOrNull(countryId);
     if (!country) throw this.validationError(countryField, `${countryField} does not exist`);
-    if (stateId != null) {
-      const state = await this.stateRepository.findByIdOrNull(stateId);
-      if (!state || state.countryId !== countryId) {
-        throw this.validationError(stateField, `${stateField} must belong to ${countryField}`);
-      }
+    if (stateId == null) return { country, state: null };
+    const state = await this.stateRepository.findByIdOrNull(stateId);
+    if (!state || state.countryId !== countryId) {
+      throw this.validationError(stateField, `${stateField} must belong to ${countryField}`);
     }
+    return { country, state };
   }
 
   // Submit publik (tanpa JWT): tulis langsung `Network` status REQUEST, source PUBLIC.
+  // Identitas pengirim disimpan di kolom `submitter*` (tanpa membuat `User`); `createdBy` = null.
   // Respons hanya { id, status } (tanpa echo row/PII). Resolve country/state id → nama display.
   async createPublicSubmission(dto: CreatePublicNetworkDto): Promise<{ id: string; status: NetworkStatus }> {
-    await this.assertGeography(dto.countryId, dto.stateId, 'countryId', 'stateId');
-    await this.assertGeography(
+    const { country, state } = await this.assertGeography(dto.countryId, dto.stateId, 'countryId', 'stateId');
+    const submitter = await this.assertGeography(
       dto.submitter.countryId,
       dto.submitter.stateId,
       'submitter.countryId',
@@ -205,28 +221,13 @@ export class NetworkService {
       throw this.validationError('content', 'content is empty after sanitization');
     }
 
-    // Resolve link Maps sebelum membuat User/Network agar link invalid tak meninggalkan orphan record.
+    // Resolve link Maps sebelum insert agar link invalid tak meninggalkan row tersimpan.
     const coords = await this.resolveLocationMaps(dto.mapsUrl);
-
-    const country = await this.countryRepository.findByIdOrNull(dto.countryId);
-    const state = dto.stateId == null ? null : await this.stateRepository.findByIdOrNull(dto.stateId);
-    // Negara submitter (bukan negara organisasi) → cegah User lintas-negara.
-    const submitterCountry = await this.countryRepository.findByIdOrNull(dto.submitter.countryId);
-    if (!submitterCountry) {
-      throw this.validationError('submitter.countryId', 'submitter.countryId does not exist');
-    }
-
-    const user = await this.userService.findOrCreatePublicUser({
-      fullName: dto.submitter.fullName,
-      email: dto.submitter.email,
-      countryId: submitterCountry.iso2,
-      stateId: dto.submitter.stateId ?? null,
-    });
 
     const network = await this.networkRepository.create({
       name: dto.name,
       state: state?.name ?? null,
-      country: country!.name,
+      country: country.name,
       address: dto.address ?? null,
       content,
       website: dto.website ?? null,
@@ -243,7 +244,19 @@ export class NetworkService {
       embedUrl: coords?.embedUrl ?? null,
       countryId: dto.countryId,
       stateId: dto.stateId ?? null,
-      createdBy: user.id,
+      submitterFullName: dto.submitter.fullName,
+      submitterEmail: dto.submitter.email,
+      submitterCountry: submitter.country.name,
+      submitterState: submitter.state?.name ?? null,
+      createdBy: null,
+    });
+    await this.notificationService.notifyAdmins({
+      type: NotificationType.CONTENT_SUBMITTED,
+      entityType: NotificationEntityType.NETWORK,
+      entityId: network.id,
+      title: dto.name,
+      imageUrl: null,
+      linkPath: '/dashboard',
     });
     return { id: network.id, status: network.status };
   }

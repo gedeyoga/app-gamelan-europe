@@ -94,6 +94,8 @@ export interface CreateEventInput {
   entry?: EventEntry
   // Bila dikirim: backend menetapkan tanggal ini dan memaksa `status = PUBLISHED`.
   publishedAt?: string
+  /** Kirim email notifikasi ke penerima (default backend `true`). */
+  notify?: boolean
   eventTypeIds?: string[]
   authorIds?: string[]
   /** `null` = clear (edit); `undefined` = biarkan. */

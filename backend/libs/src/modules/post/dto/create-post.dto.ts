@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { ContentStatus, ContentVisibility } from '@prisma/client';
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -54,6 +54,11 @@ export class CreatePostDto {
   @IsOptional()
   @IsISO8601()
   publishedAt?: string;
+
+  // Checkbox FE "kirim notifikasi". false → tidak enqueue; default true.
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 
   @IsOptional()
   @IsArray()

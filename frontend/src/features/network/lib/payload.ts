@@ -30,5 +30,9 @@ export function buildNetworkPayload(values: NetworkFormValues): CreateNetworkInp
     socialMedia: socialMedia.length > 0 ? socialMedia : null,
     activityType: activityType || null,
     content: values.content ? values.content : null,
+    submitterFullName: values.submitterFullName.trim() || null,
+    submitterEmail: values.submitterEmail.trim() || null,
+    submitterCountry: values.submitterCountry.trim() || null,
+    submitterState: values.submitterState.trim() || null,
   }
 }

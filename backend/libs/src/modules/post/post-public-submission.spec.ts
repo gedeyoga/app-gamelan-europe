@@ -19,6 +19,12 @@ describe('PostService.createPublicSubmission', () => {
     const countryRepository = {
       findByIdOrNull: jest.fn().mockResolvedValue({ id: COUNTRY_ID, iso2: 'ID', name: 'Indonesia' }),
     };
+    const notificationService = {
+      publishAfterCommit: jest.fn(),
+      enqueueContentPublished: jest.fn(),
+      enqueuePending: jest.fn(),
+      notifyAdmins: jest.fn().mockResolvedValue(undefined),
+    };
     const service = new PostService(
       postRepository as unknown as PostRepository,
       imageRepository as never,
@@ -30,12 +36,13 @@ describe('PostService.createPublicSubmission', () => {
       {} as never,
       {} as never,
       {} as never,
+      notificationService as never,
     );
-    return { service, postRepository, userService };
+    return { service, postRepository, userService, notificationService };
   }
 
   it('menyimpan status REQUEST + source PUBLIC + author user publik', async () => {
-    const { service, postRepository, userService } = makeService();
+    const { service, postRepository, userService, notificationService } = makeService();
 
     const result = await service.createPublicSubmission({
       name: 'Kisah Gamelan',
@@ -59,6 +66,9 @@ describe('PostService.createPublicSubmission', () => {
         authorIds: ['u1'],
         categoryIds: [CATEGORY_ID],
       }),
+    );
+    expect(notificationService.notifyAdmins).toHaveBeenCalledWith(
+      expect.objectContaining({ entityType: 'POST', entityId: 'p1', title: 'Kisah Gamelan' }),
     );
   });
 });

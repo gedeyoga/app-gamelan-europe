@@ -72,6 +72,7 @@ describe('PostService author validation', () => {
       {} as never,
       {} as never,
       allScope() as never,
+      { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
     );
   }
 
@@ -128,6 +129,7 @@ describe('EventService author validation', () => {
       {} as never,
       {} as never,
       allScope() as never,
+      { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
     );
 
     await expect(service.create({ name: 'Event', authorIds: [UNKNOWN_USER] } as never, 'admin')).rejects.toMatchObject({

@@ -379,6 +379,7 @@ export class UploadDocumentDto {
 | `type` | opsional, `@IsEnum(ArchiveType)`; default `PUBLIC` | 422 `{ field: 'type', message }` |
 | `status` | opsional, `@IsEnum(ArchiveStatus)`; default `DRAFT` | 422 `{ field: 'status', message }` |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` ([§5](#5-aturan-status)) | 422 `{ field: 'publishedAt', message }` |
+| `notify` | opsional, `@IsBoolean()`; default `true`. `false` → tidak enqueue notifikasi saat auto-publish (`create`/`update`) atau `approve`/`publish`; tidak disimpan | 422 `{ field: 'notify', message }` |
 | `categoryIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`; service wajibkan semua `Category.type = 'ARCHIVE'` ([§7](#7-repository--service)) | 422 `{ field: 'categoryIds.0', message }` |
 | `externalLinks` | opsional, `@IsArray()`, `@IsUrl({}, { each: true })`, `@ArrayMaxSize(50)` | 422 `{ field: 'externalLinks.0', message }` |
 | `documentIds` | opsional, `@IsArray()`, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)`; urutan = urutan dokumen; service wajibkan id ada & belum ter-bind archive lain ([§7](#7-repository--service)) | 422 `{ field: 'documentIds.0', message }` |
@@ -414,7 +415,7 @@ export class UploadDocumentDto {
 
 - Status saat ini tidak cocok dengan `from` → **409** `Cannot <action> archive in status <STATUS>`.
 - Update atomik via `archiveRepository.updateStatusIf(id, from, to, extra)` (`updateMany` conditional); kalah balapan → 409 (status di-fetch ulang).
-- `approve`/`publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }`: `publishedAt = body ? new Date(body) : (existing ?? now)`; `approvedAt` diisi `existing ?? now` (server-managed).
+- `approve`/`publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }`: `publishedAt = body ? new Date(body) : (existing ?? now)`; `approvedAt` diisi `existing ?? now` (server-managed). `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish).
 - `submit`/`reject`/`unpublish` tidak menerima body.
 
 ### Create
@@ -680,6 +681,7 @@ Controller `archives.controller.ts` (`@Controller('archives')`, prefix global `/
 | POST | `/archives` | `archive:create` |
 | GET | `/archives` | `archive:read` |
 | GET | `/archives/:id` | `archive:read` |
+| GET | `/archives/slug/:slug` | `archive:read` — lookup via slug untuk tautan email `/archives/{slug}`; scope baca identik `GET /archives/:id` |
 | PATCH | `/archives/:id` | `archive:update` |
 | DELETE | `/archives/:id` | `archive:delete` |
 | POST | `/archives/:id/submit` | `archive:submit` |
@@ -688,7 +690,7 @@ Controller `archives.controller.ts` (`@Controller('archives')`, prefix global `/
 | POST | `/archives/:id/publish` | `archive:publish` |
 | POST | `/archives/:id/unpublish` | `archive:unpublish` |
 
-Semua action `POST /archives/:id/<action>` `@HttpCode(200)`; `approve`/`publish` menerima body opsional `PublishContentDto`.
+Semua action `POST /archives/:id/<action>` `@HttpCode(200)`; `approve`/`publish` menerima body opsional `PublishContentDto` (`publishedAt?`, `notify?` default `true`).
 
 Controller `documents.controller.ts` (`@Controller('documents')`, prefix global `/api/v1`):
 
@@ -868,7 +870,7 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 - Sibling brief FE: **`frontend/docs/module/archive.md`** (belum ada).
 - Kontrak penting: `documentIds`/`externalLinks` = array penuh, update **replace** seluruh array. `documents` (= `DocumentResponse[]`) **hanya** di detail `GET /archives/:id`, berurut sesuai `documentIds`; item list **tanpa** `documents`. `documentIds` mentah tidak dikembalikan. `creator.networkId` internal tidak dikembalikan (`creator = { id, fullName }`).
 - `PATCH /archives/:id` dengan `"thumbnail": null` menghapus thumbnail.
-- **Workflow:** tombol submit (pemilik → `REQUEST`), approve/reject (moderator), publish (`APPROVED → PUBLISHED`), unpublish (`PUBLISHED → DRAFT`). `approve`/`publish` body opsional `{ publishedAt?: ISO8601 }`. Transisi tidak valid → **409**.
+- **Workflow:** tombol submit (pemilik → `REQUEST`), approve/reject (moderator), publish (`APPROVED → PUBLISHED`), unpublish (`PUBLISHED → DRAFT`). `approve`/`publish` body opsional `{ publishedAt?: ISO8601, notify?: boolean }` (default `notify = true`; `false` → tanpa notifikasi). Transisi tidak valid → **409**.
 - `publishedAt` opsional (ISO 8601) → menimpa + paksa `PUBLISHED`; `null` mengosongkan tanggal (hanya scope `all`).
 - Upload dokumen PDF lewat **`POST /documents`** (field `file`, mime `application/pdf`, max 10 MB) → kirim `id` di `documentIds` saat create/update archive (bind + urutan); render link dari `url`. Response `DocumentResponse = { id, url, key, filename, mimeType, size }` (tanpa `width`/`height`/`variants`).
 - Thumbnail: upload gambar lewat `POST /images` (**tak berubah**), lalu set `thumbnail` = **URL** hasil upload (string). **Tidak ada `imageIds`**. Upload membutuhkan permission image existing (`story:*`/`event:*`; admin memegang semua).

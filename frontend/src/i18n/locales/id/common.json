@@ -12,7 +12,8 @@
     "previous": "Sebelumnya",
     "next": "Berikutnya",
     "saving": "Menyimpan...",
-    "deleting": "Menghapus..."
+    "deleting": "Menghapus...",
+    "clear": "Kosongkan"
   },
   "pagination": {
     "total_one": "Total {{count}} {{entity}} · halaman {{page}}",

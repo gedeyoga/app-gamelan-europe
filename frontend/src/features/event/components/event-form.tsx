@@ -223,7 +223,12 @@ export function EventForm({
     form.setValue('thumbnail', null)
   }
 
-  function handleSubmit(values: EventFormValues, action: EventFormAction, publishedAt?: string) {
+  function handleSubmit(
+    values: EventFormValues,
+    action: EventFormAction,
+    publishedAt?: string,
+    notify?: boolean,
+  ) {
     const name = values.name.trim()
     const slug = values.slug.trim()
     const dates = values.dates
@@ -249,6 +254,9 @@ export function EventForm({
       ...(publishedAt ? { publishedAt: new Date(publishedAt).toISOString() } : {}),
       ...(slug ? { slug } : {}),
       ...(values.content ? { content: values.content } : {}),
+      ...((action === 'approve' || action === 'publish') && notify !== undefined
+        ? { notify }
+        : {}),
     }
     // Edit selalu kirim `dates` (termasuk `[]`) agar bisa dikosongkan; create hanya bila ada isi.
     if (mode === 'edit' || dates.length > 0) payload.dates = dates
@@ -257,13 +265,18 @@ export function EventForm({
     onSubmit(payload, action)
   }
 
-  function runSubmit(action: EventFormAction, publishedAt?: string) {
-    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt))()
+  function runSubmit(action: EventFormAction, publishedAt?: string, notify?: boolean) {
+    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt, notify))()
   }
 
   async function openPublishDialog(action: 'publish' | 'approve') {
     const valid = await form.trigger()
     if (!valid) return
+    // Sudah punya jadwal tayang → langsung submit tanpa dialog.
+    if (initialPublishedAt) {
+      runSubmit(action, initialPublishedAt)
+      return
+    }
     setPublishAction(action)
     setPublishOpen(true)
   }
@@ -512,8 +525,8 @@ export function EventForm({
       <PublishScheduleDialog
         open={publishOpen}
         onOpenChange={setPublishOpen}
-        onConfirm={(publishedAt) =>
-          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt)
+        onConfirm={(publishedAt, notify) =>
+          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt, notify)
         }
         isPending={isPending}
         defaultValue={initialPublishedAt ?? new Date().toISOString()}
@@ -530,6 +543,7 @@ export function EventForm({
             : t('event:publishDialog.confirm')
         }
         cancelLabel={t('event:form.cancel')}
+        notifyLabel={t('event:publishDialog.notifyLabel')}
       />
     </Form>
   )

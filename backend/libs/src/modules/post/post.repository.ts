@@ -117,6 +117,18 @@ export class PostRepository {
     return mapPost(post);
   }
 
+  // Lookup untuk tautan email (`/stories/{slug}`).
+  async findBySlug(slug: string): Promise<PostEntity> {
+    const post = await this.prisma.post.findUnique({ where: { slug }, select: postSelect });
+    if (!post) throw new NotFoundException('Post not found');
+    return mapPost(post);
+  }
+
+  // Orkestrasi transaksi lintas-repository (status update + insert notifikasi).
+  transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(fn);
+  }
+
   async existsBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<boolean> {
     const found = await this.client(tx).post.findUnique({ where: { slug }, select: { id: true } });
     return Boolean(found);
@@ -193,8 +205,9 @@ export class PostRepository {
     from: ContentStatus,
     to: ContentStatus,
     extra: { approvedAt?: Date; publishedAt?: Date } = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
-    const res = await this.prisma.post.updateMany({
+    const res = await this.client(tx).post.updateMany({
       where: { id, status: from },
       data: { status: to, ...extra },
     });

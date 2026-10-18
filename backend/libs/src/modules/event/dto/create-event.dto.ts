@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -123,6 +124,11 @@ export class CreateEventDto {
   @IsOptional()
   @IsISO8601()
   publishedAt?: string;
+
+  // Checkbox FE "kirim notifikasi". false → tidak enqueue; default true.
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 
   @IsOptional()
   @IsArray()

@@ -167,8 +167,8 @@ Status validasi gagal = **422** (RULES bab 7). `@Param('id')` selalu `ParseUUIDP
 
 | Method | Fungsi |
 | --- | --- |
-| `createPublic(dto)` | validasi subscription aktif (422 per-field bila tidak) → simpan `PENDING`, `userId=null`; return `{ id, status }`. |
-| `createMine(userId, dto)` | user wajib ada (404); `requestType` = `RENEWAL` bila `BillingService.hasActiveMembership` else `NEW`; identitas dari user, kontak fallback ke `user.phone`/`user.address`. |
+| `createPublic(dto)` | validasi subscription aktif (422 per-field bila tidak) → simpan `PENDING`, `userId=null`; `notifyAdmins` (`SUBSCRIPTION_REQUEST_SUBMITTED`, title `fullName - subscription.name`, link `/subscription-requests/{id}`) setelah row dibuat; return `{ id, status }`. |
+| `createMine(userId, dto)` | user wajib ada (404); `requestType` = `RENEWAL` bila `BillingService.hasActiveMembership` else `NEW`; identitas dari user, kontak fallback ke `user.phone`/`user.address`; setelah row dibuat → `notifyAdmins` yang sama. |
 | `listMine(userId, query)` | `list` dengan `filter[userId]` ditimpa; default sort `createdAt desc`. |
 | `list(query)` | `buildWhere` + `buildSearch` + `combineWhere` + `buildOrderBy` (pola `BillingService.list`). |
 | `findOne(id)` | `repository.findById`. |

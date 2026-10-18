@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import { ArchiveMaterialType, ArchiveStatus, ArchiveType, CategoryType, ContentSource, Prisma } from '@prisma/client';
+import { ArchiveMaterialType, ArchiveStatus, ArchiveType, CategoryType, ContentSource, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
@@ -18,6 +18,8 @@ import { ArchiveCreatorRef, ArchiveEntity, ArchiveListItem, ArchiveResponse, red
 import { CreateArchiveDto } from './dto/create-archive.dto';
 import { CreatePublicArchiveDto } from './dto/create-public-archive.dto';
 import { UpdateArchiveDto } from './dto/update-archive.dto';
+import { slugify } from './utils/slug.util';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 
 // ponytail: enum→label map hardcoded; ganti ke taxonomy/seed nyata bila perlu.
 const ARCHIVE_MATERIAL_CATEGORY_LABELS: Record<ArchiveMaterialType, string> = {
@@ -28,8 +30,8 @@ const ARCHIVE_MATERIAL_CATEGORY_LABELS: Record<ArchiveMaterialType, string> = {
   HISTORY: 'History',
 };
 
-export const ARCHIVE_SEARCHABLE_FIELDS = ['name', 'description'];
-export const ARCHIVE_SORT_FIELDS = ['name', 'type', 'status', 'publishedAt', 'createdAt', 'updatedAt'];
+export const ARCHIVE_SEARCHABLE_FIELDS = ['name', 'slug', 'description'];
+export const ARCHIVE_SORT_FIELDS = ['name', 'slug', 'type', 'status', 'publishedAt', 'createdAt', 'updatedAt'];
 export const ARCHIVE_FILTER_FIELDS = ['type', 'status', 'publishedAt', 'createdAt', 'updatedAt'];
 export const ARCHIVE_DATE_FIELDS = ['publishedAt', 'createdAt', 'updatedAt'];
 
@@ -61,6 +63,7 @@ export class ArchiveService {
     private readonly documentService: DocumentService,
     private readonly storage: StorageService,
     private readonly accessScope: AccessScopeService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Predikat "terbit publik" archive (TANPA kolom `visibility`): PUBLISHED + publishedAt terisi + <= now.
@@ -216,6 +219,31 @@ export class ArchiveService {
     });
   }
 
+  private async uniqueSlug(base: string): Promise<string> {
+    let slug = base;
+    for (let i = 2; await this.archiveRepository.existsBySlug(slug); i++) {
+      slug = `${base}-${i}`;
+    }
+    return slug;
+  }
+
+  // Semua Archive (PUBLIC & MEMBER) dikirim; MEMBER dibatasi membership aktif (Q4).
+  private async notifyPublished(archive: ArchiveEntity, actorId: string, notify?: boolean): Promise<void> {
+    if (archive.status !== ArchiveStatus.PUBLISHED) return;
+    await this.notificationService.publishAfterCommit({
+      entityType: NotificationEntityType.ARCHIVE,
+      entityId: archive.id,
+      title: archive.name,
+      body: archive.description,
+      imageUrl: archive.thumbnail,
+      slug: archive.slug,
+      publishedAt: archive.publishedAt,
+      notify: notify !== false,
+      actorId,
+      archiveType: archive.type,
+    });
+  }
+
   // Item list: buang `documentIds` mentah + `creator.networkId` tanpa lookup dokumen (hindari N+1).
   private toListItem(archive: ArchiveEntity, canViewPrivate: boolean): ArchiveListItem {
     const { documentIds: _documentIds, creator, ...item } = archive;
@@ -251,10 +279,16 @@ export class ArchiveService {
   }
 
   async findOne(id: string, userId: string): Promise<ArchiveResponse> {
-    const [archive, scope] = await Promise.all([
-      this.archiveRepository.findById(id),
-      this.accessScope.resolve(userId, 'archive'),
-    ]);
+    return this.toReadable(await this.archiveRepository.findById(id), userId);
+  }
+
+  // Lookup via slug (tautan email `/archives/{slug}`) — aturan scope identik `findOne`.
+  async findOneBySlug(slug: string, userId: string): Promise<ArchiveResponse> {
+    return this.toReadable(await this.archiveRepository.findBySlug(slug), userId);
+  }
+
+  private async toReadable(archive: ArchiveEntity, userId: string): Promise<ArchiveResponse> {
+    const scope = await this.accessScope.resolve(userId, 'archive');
     this.assertReadable(archive, scope); // cek scope pakai entity mentah (punya networkId)
     return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
   }
@@ -277,7 +311,7 @@ export class ArchiveService {
     const autoPublish = scoped.publishedAt !== undefined;
     const status = autoPublish ? ArchiveStatus.PUBLISHED : scoped.status ?? ArchiveStatus.DRAFT;
     const now = new Date();
-    const data: CreateArchiveData = {
+    const data: Omit<CreateArchiveData, 'slug'> = {
       name: scoped.name,
       description: scoped.description,
       thumbnail: scoped.thumbnail,
@@ -296,8 +330,21 @@ export class ArchiveService {
       categoryIds: scoped.categoryIds,
       authorIds: scoped.authorIds,
     };
-    const archive = await this.archiveRepository.create(data, tx);
-    return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
+    // Slug auto: retry singkat bila kalah race cek-lalu-insert (P2002 → ConflictException).
+    // Di dalam `tx` pemanggil, retry tidak aman (transaksi bisa sudah abort) → lempar apa adanya.
+    const base = slugify(scoped.name);
+    let slug = await this.uniqueSlug(base);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const archive = await this.archiveRepository.create({ ...data, slug }, tx);
+        await this.notifyPublished(archive, userId, dto.notify);
+        return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
+      } catch (e) {
+        if (!(e instanceof ConflictException) || tx) throw e;
+        slug = await this.uniqueSlug(base);
+      }
+    }
+    throw new ConflictException('Slug already exists');
   }
 
   // Submit publik (tanpa JWT): tulis langsung `Archive` status REQUEST, source PUBLIC, type PUBLIC.
@@ -350,8 +397,9 @@ export class ArchiveService {
       });
       categoryIds = [category.id];
     }
-    // (7) tulis langsung
-    const archive = await this.archiveRepository.create({
+    // (7) tulis langsung (slug auto: retry singkat bila kalah race cek-lalu-insert)
+    const base = slugify(dto.name);
+    const data: Omit<CreateArchiveData, 'slug'> = {
       name: dto.name,
       description: dto.description,
       thumbnail: dto.thumbnail,
@@ -369,8 +417,26 @@ export class ArchiveService {
       countryId: dto.countryId,
       stateId: dto.stateId,
       materialType: dto.materialType,
-    });
-    return { id: archive.id, status: archive.status };
+    };
+    let slug = await this.uniqueSlug(base);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const archive = await this.archiveRepository.create({ ...data, slug });
+        await this.notificationService.notifyAdmins({
+          type: NotificationType.CONTENT_SUBMITTED,
+          entityType: NotificationEntityType.ARCHIVE,
+          entityId: archive.id,
+          title: dto.name,
+          imageUrl: dto.thumbnail ?? null,
+          linkPath: '/dashboard',
+        });
+        return { id: archive.id, status: archive.status };
+      } catch (e) {
+        if (!(e instanceof ConflictException)) throw e;
+        slug = await this.uniqueSlug(base);
+      }
+    }
+    throw new ConflictException('Slug already exists');
   }
 
   async update(id: string, dto: UpdateArchiveDto, userId: string): Promise<ArchiveResponse> {
@@ -417,6 +483,10 @@ export class ArchiveService {
     }
 
     const archive = await this.archiveRepository.update(id, data);
+    // Hanya update scope-all yang boleh menerbitkan; non-admin status/publishedAt diabaikan.
+    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ArchiveStatus.PUBLISHED)) {
+      await this.notifyPublished(archive, userId, dto.notify);
+    }
     return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
   }
 
@@ -426,7 +496,7 @@ export class ArchiveService {
     id: string,
     action: ArchiveAction,
     userId: string,
-    options?: { publishedAt?: string },
+    options?: { publishedAt?: string; notify?: boolean },
   ): Promise<ArchiveResponse> {
     const existing = await this.archiveRepository.findById(id); // 404 bila tak ada
     const scope = await this.accessScope.resolve(userId, 'archive');
@@ -444,11 +514,32 @@ export class ArchiveService {
         : (existing.publishedAt ?? new Date());
       extra.approvedAt = existing.approvedAt ?? new Date();
     }
-    const updated = await this.archiveRepository.updateStatusIf(id, rule.from, rule.to, extra);
+    const publishing = action === 'approve' || action === 'publish';
+    // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    const updated = await this.archiveRepository.transaction(async (tx) => {
+      const row = await this.archiveRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      if (!row) return false;
+      if (publishing) {
+        await this.notificationService.enqueueContentPublished(tx, {
+          entityType: NotificationEntityType.ARCHIVE,
+          entityId: id,
+          title: existing.name,
+          body: existing.description,
+          imageUrl: existing.thumbnail,
+          slug: existing.slug,
+          publishedAt: extra.publishedAt,
+          notify: options?.notify !== false,
+          actorId: userId,
+          archiveType: existing.type,
+        });
+      }
+      return true;
+    });
     if (!updated) {
       const current = await this.archiveRepository.findById(id); // 404 bila archive terhapus
       throw new ConflictException(`Cannot ${action} archive in status ${current.status}`);
     }
+    if (publishing) await this.notificationService.enqueuePending(NotificationEntityType.ARCHIVE, id);
     return this.findOne(id, userId);
   }
 

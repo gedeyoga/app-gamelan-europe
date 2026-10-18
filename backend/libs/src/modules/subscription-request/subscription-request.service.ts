@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { Prisma, SubscriptionRequestType } from '@prisma/client';
+import { Prisma, SubscriptionRequestType, NotificationEntityType, NotificationType } from '@prisma/client';
 import {
   assertAllowedSort,
   buildOrderBy,
@@ -10,6 +10,7 @@ import {
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 import { BillingService } from '@app/libs/modules/billing/billing.service';
 import { UserService } from '@app/libs/modules/user/user.service';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 import { SubscriptionRequestRepository, SubscriptionRequestReviewRow } from './subscription-request.repository';
 import { SubscriptionRequestEntity } from './entities/subscription-request.entity';
 import { CreatePublicSubscriptionRequestDto } from './dto/create-public-subscription-request.dto';
@@ -45,11 +46,12 @@ export class SubscriptionRequestService {
     private readonly subscriptionRequestRepository: SubscriptionRequestRepository,
     private readonly billingService: BillingService,
     private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Publik (tanpa akun): paket wajib ada & ACTIVE; field tidak valid → 422 per-field.
   async createPublic(dto: CreatePublicSubscriptionRequestDto): Promise<{ id: string; status: string }> {
-    await this.assertActiveSubscription(dto.subscriptionId);
+    const subscription = await this.assertActiveSubscription(dto.subscriptionId);
     const created = await this.subscriptionRequestRepository.create({
       userId: null,
       fullName: dto.fullName,
@@ -63,6 +65,14 @@ export class SubscriptionRequestService {
       subscriptionId: dto.subscriptionId,
       requestType: dto.requestType ?? 'NEW',
     });
+    await this.notificationService.notifyAdmins({
+      type: NotificationType.SUBSCRIPTION_REQUEST_SUBMITTED,
+      entityType: NotificationEntityType.SUBSCRIPTION_REQUEST,
+      entityId: created.id,
+      title: `${created.fullName} - ${subscription.name}`,
+      imageUrl: null,
+      linkPath: `/subscription-requests/${created.id}`,
+    });
     return { id: created.id, status: created.status };
   }
 
@@ -70,11 +80,11 @@ export class SubscriptionRequestService {
   async createMine(userId: string, dto: CreateMySubscriptionRequestDto): Promise<SubscriptionRequestEntity> {
     const user = await this.subscriptionRequestRepository.findUserContact(userId);
     if (!user) throw new NotFoundException('User not found');
-    await this.assertActiveSubscription(dto.subscriptionId);
+    const subscription = await this.assertActiveSubscription(dto.subscriptionId);
     const requestType: SubscriptionRequestType = (await this.billingService.hasActiveMembership(userId))
       ? 'RENEWAL'
       : 'NEW';
-    return this.subscriptionRequestRepository.create({
+    const created = await this.subscriptionRequestRepository.create({
       userId,
       fullName: user.fullName,
       email: user.email,
@@ -87,6 +97,15 @@ export class SubscriptionRequestService {
       subscriptionId: dto.subscriptionId,
       requestType,
     });
+    await this.notificationService.notifyAdmins({
+      type: NotificationType.SUBSCRIPTION_REQUEST_SUBMITTED,
+      entityType: NotificationEntityType.SUBSCRIPTION_REQUEST,
+      entityId: created.id,
+      title: `${created.fullName} - ${subscription.name}`,
+      imageUrl: null,
+      linkPath: `/subscription-requests/${created.id}`,
+    });
+    return created;
   }
 
   // Self-service: scoping dikunci ke user pemanggil; filter[userId] dari klien ditimpa.
@@ -203,7 +222,7 @@ export class SubscriptionRequestService {
     return user.id;
   }
 
-  private async assertActiveSubscription(subscriptionId: string): Promise<void> {
+  private async assertActiveSubscription(subscriptionId: string): Promise<{ id: string; name: string }> {
     const subscription = await this.subscriptionRequestRepository.findActiveSubscription(subscriptionId);
     if (!subscription) {
       throw new UnprocessableEntityException({
@@ -211,5 +230,6 @@ export class SubscriptionRequestService {
         errors: [{ field: 'subscriptionId', message: 'subscription not found or inactive' }],
       });
     }
+    return subscription;
   }
 }

@@ -40,12 +40,14 @@ function makeService(overrides: Record<string, unknown> = {}) {
   };
   const billing = { subscribe: jest.fn().mockResolvedValue({ id: 'b1' }) };
   const user = { findOrCreatePublicUser: jest.fn() };
+  const notification = { notifyAdmins: jest.fn().mockResolvedValue(undefined) };
   const service = new SubscriptionRequestService(
     repo as unknown as SubscriptionRequestRepository,
     billing as unknown as BillingService,
     user as unknown as UserService,
+    notification as never,
   );
-  return { service, repo, billing, user };
+  return { service, repo, billing, user, notification };
 }
 
 describe('SubscriptionRequestService.approve', () => {

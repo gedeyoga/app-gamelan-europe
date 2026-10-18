@@ -84,6 +84,31 @@ enum ArchiveMaterialType {
   HISTORY
 }
 
+enum NotificationType {
+  CONTENT_PUBLISHED
+  CONTENT_SUBMITTED
+  SUBSCRIPTION_REQUEST_SUBMITTED
+}
+
+enum NotificationEntityType {
+  POST
+  EVENT
+  ARCHIVE
+  NETWORK
+  SUBSCRIPTION_REQUEST
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationChannel {
+  EMAIL
+}
+
 // Diskriminator asal konten: REGISTERED (dibuat user login) vs PUBLIC (submit anonim).
 enum ContentSource {
   PUBLIC
@@ -126,6 +151,8 @@ model User {
   archiveAuthors ArchiveAuthor[] @relation("ArchiveAuthor")
   subscriptionRequests         SubscriptionRequest[] @relation("SubscriptionRequester")
   reviewedSubscriptionRequests SubscriptionRequest[] @relation("SubscriptionRequestReviewer")
+  notifications                Notification[]
+  notificationPreferences      NotificationPreference[]
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
@@ -218,6 +245,10 @@ model Network {
   activityType     String?                  @map("activity_type")
   countryId        Int?                     @map("country_id")
   stateId          Int?                     @map("state_id")
+  submitterFullName String?                 @map("submitter_full_name")
+  submitterEmail   String?                  @map("submitter_email")
+  submitterCountry String?                  @map("submitter_country")
+  submitterState   String?                  @map("submitter_state")
   createdBy        String?                  @map("created_by")
   creator          User?                    @relation("NetworkCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   users            User[]
@@ -508,6 +539,7 @@ model PostCategory {
 model Archive {
   id            String             @id @default(uuid())
   name          String
+  slug          String             @unique
   description   String?
   thumbnail     String?
   type          ArchiveType        @default(PUBLIC)
@@ -725,5 +757,44 @@ enum NetworkOrganisationType {
   GAMELAN_GROUP
   ASSOCIATION
   INSTITUTION
+}
+
+model Notification {
+  id          String                 @id @default(uuid())
+  userId      String                 @map("user_id")
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  entityType  NotificationEntityType @map("entity_type")
+  entityId    String                 @map("entity_id")
+  title       String
+  body        String?                @db.Text
+  imageUrl    String?                @map("image_url")
+  linkPath    String?                @map("link_path")
+  status      NotificationStatus     @default(PENDING)
+  lastError   String?                @map("last_error")
+  scheduledAt DateTime               @default(now()) @map("scheduled_at")
+  sentAt      DateTime?              @map("sent_at")
+  readAt      DateTime?              @map("read_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+
+  @@unique([userId, type, entityType, entityId])
+  @@index([status, scheduledAt])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id           String              @id @default(uuid())
+  userId       String              @map("user_id")
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         NotificationType
+  channel      NotificationChannel @default(EMAIL)
+  emailEnabled Boolean             @map("email_enabled") @default(true)
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@unique([userId, type, channel])
+  @@map("notification_preferences")
 }
 

@@ -12,7 +12,8 @@
     "previous": "Previous",
     "next": "Next",
     "saving": "Saving...",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "clear": "Clear"
   },
   "pagination": {
     "total_one": "Total {{count}} {{entity}} · page {{page}}",

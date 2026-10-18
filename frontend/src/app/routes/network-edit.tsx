@@ -38,6 +38,10 @@ function toFormValues(network: Network): NetworkFormValues {
       activityType === '' || isKnownActivityType ? activityType : ACTIVITY_TYPE_OTHER,
     activityTypeOther: activityType === '' || isKnownActivityType ? '' : activityType,
     content: network.content ?? '',
+    submitterFullName: network.submitterFullName ?? '',
+    submitterEmail: network.submitterEmail ?? '',
+    submitterCountry: network.submitterCountry ?? '',
+    submitterState: network.submitterState ?? '',
   }
 }
 

@@ -8,9 +8,10 @@ import { UserModule } from '@app/libs/modules/user/user.module';
 import { StorageModule } from '@app/libs/integrations/storage/storage.module';
 import { ArchiveRepository } from './archive.repository';
 import { ArchiveService } from './archive.service';
+import { NotificationModule } from '@app/libs/modules/notification/notification.module';
 
 @Module({
-  imports: [CategoryModule, CountryModule, DocumentModule, ImageModule, StateModule, UserModule, StorageModule],
+  imports: [CategoryModule, CountryModule, DocumentModule, ImageModule, StateModule, UserModule, StorageModule, NotificationModule],
   providers: [ArchiveRepository, ArchiveService],
   exports: [ArchiveRepository, ArchiveService],
 })

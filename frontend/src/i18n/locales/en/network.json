@@ -79,6 +79,15 @@
         "other": "Other"
       }
     },
+    "submitter": {
+      "title": "Submitted by",
+      "fullName": "Submitter full name",
+      "fullNamePlaceholder": "Full name",
+      "email": "Submitter email",
+      "emailPlaceholder": "name@example.com",
+      "country": "Submitter country",
+      "state": "Submitter state"
+    },
     "settingsTitle": "Settings",
     "hideSettings": "Hide settings",
     "showSettings": "Show settings",
@@ -93,6 +102,14 @@
   "delete": {
     "title": "Delete Network",
     "description": "Are you sure you want to delete network {{name}}? This action cannot be undone."
+  },
+  "publishDialog": {
+    "title": "Publish network",
+    "description": "Choose publish date and time.",
+    "dateLabel": "Publish date & time",
+    "datePlaceholder": "Choose date & time",
+    "confirmDescription": "The network will be published at the selected date and time. Continue?",
+    "confirm": "Publish"
   },
   "toast": {
     "created": "Network created successfully",

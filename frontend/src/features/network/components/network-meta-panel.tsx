@@ -35,6 +35,8 @@ export interface NetworkMetaPanelProps {
   form: UseFormReturn<NetworkFormValues>
   disabled?: boolean
   className?: string
+  /** Section "Submitted by" (admin-only edit); dialog create menyembunyikannya. */
+  showSubmitter?: boolean
 }
 
 // Query geo di panel: `iso2` diturunkan dari country terpilih (state tidak bisa di-fetch dari route).
@@ -42,12 +44,15 @@ export function NetworkMetaPanel({
   form,
   disabled = false,
   className,
+  showSubmitter = true,
 }: NetworkMetaPanelProps) {
   const { t } = useTranslation()
 
   const countryValue = form.watch('country')
   const stateValue = form.watch('state')
   const activityType = form.watch('activityType')
+  const submitterCountryValue = form.watch('submitterCountry')
+  const submitterStateValue = form.watch('submitterState')
 
   const countriesQuery = useCountries()
   const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
@@ -72,6 +77,35 @@ export function NetworkMetaPanel({
     return options
   }, [states, stateValue])
 
+  const submitterCountryOptions = useMemo<SearchSelectOption[]>(() => {
+    const options = countries.map((country) => ({ value: country.name, label: country.name }))
+    if (
+      submitterCountryValue &&
+      !options.some((option) => option.value === submitterCountryValue)
+    ) {
+      options.push({ value: submitterCountryValue, label: submitterCountryValue })
+    }
+    return options
+  }, [countries, submitterCountryValue])
+
+  const submitterIso2 =
+    countries.find((country) => country.name === submitterCountryValue)?.iso2 ?? ''
+  const submitterStatesQuery = useStates(submitterIso2)
+  const submitterStates = useMemo(
+    () => submitterStatesQuery.data ?? [],
+    [submitterStatesQuery.data],
+  )
+  const submitterStateOptions = useMemo<SearchSelectOption[]>(() => {
+    const options = submitterStates.map((state) => ({ value: state.name, label: state.name }))
+    if (
+      submitterStateValue &&
+      !options.some((option) => option.value === submitterStateValue)
+    ) {
+      options.push({ value: submitterStateValue, label: submitterStateValue })
+    }
+    return options
+  }, [submitterStates, submitterStateValue])
+
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'socialMedia' })
 
   // Ganti country -> reset state (nama state tidak berlaku lintas negara).
@@ -79,6 +113,12 @@ export function NetworkMetaPanel({
     if (next === form.getValues('country')) return
     onChange(next)
     form.setValue('state', '', { shouldDirty: true, shouldValidate: true })
+  }
+
+  function handleSubmitterCountryChange(next: string, onChange: (value: string) => void) {
+    if (next === form.getValues('submitterCountry')) return
+    onChange(next)
+    form.setValue('submitterState', '', { shouldDirty: true, shouldValidate: true })
   }
 
   return (
@@ -397,6 +437,105 @@ export function NetworkMetaPanel({
             </FormItem>
           )}
         />
+      )}
+
+      {showSubmitter && (
+        <div className="flex flex-col gap-4 border-t pt-4">
+          <p className="text-sm font-medium">{t('network:form.submitter.title')}</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="submitterFullName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('network:form.submitter.fullName')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder={t('network:form.submitter.fullNamePlaceholder')}
+                      disabled={disabled}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="submitterEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('network:form.submitter.email')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder={t('network:form.submitter.emailPlaceholder')}
+                      disabled={disabled}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="submitterCountry"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('network:form.submitter.country')}</FormLabel>
+                  <FormControl>
+                    <SearchSelect
+                      options={submitterCountryOptions}
+                      value={field.value}
+                      onChange={(value) => handleSubmitterCountryChange(value, field.onChange)}
+                      placeholder={t('network:form.countryPlaceholder')}
+                      searchPlaceholder={t('network:form.countrySearch')}
+                      emptyLabel={t('network:form.countryEmpty')}
+                      isLoading={countriesQuery.isLoading}
+                      disabled={disabled}
+                      clearable
+                      clearLabel={t('common:actions.clear')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="submitterState"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('network:form.submitter.state')}</FormLabel>
+                  <FormControl>
+                    <SearchSelect
+                      options={submitterStateOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder={
+                        submitterIso2
+                          ? t('network:form.statePlaceholder')
+                          : t('network:form.stateSelectCountry')
+                      }
+                      searchPlaceholder={t('network:form.stateSearch')}
+                      emptyLabel={t('network:form.stateEmpty')}
+                      disabled={disabled || !submitterIso2 || submitterStatesQuery.isLoading}
+                      isLoading={submitterStatesQuery.isLoading}
+                      clearable
+                      clearLabel={t('common:actions.clear')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

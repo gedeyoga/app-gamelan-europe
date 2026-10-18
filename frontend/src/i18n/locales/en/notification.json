@@ -1,0 +1,33 @@
+{
+  "title": "Notifications",
+  "subtitle": "Updates about published content.",
+  "markAllRead": "Mark all as read",
+  "markRead": "Mark as read",
+  "open": "Open",
+  "unread": "Unread",
+  "read": "Read",
+  "empty": "No notifications yet.",
+  "errors": {
+    "forbidden": "You don't have access to notifications.",
+    "loadData": "Failed to load notifications. Please try again."
+  },
+  "toast": {
+    "read": "Notification marked as read.",
+    "readFailed": "Failed to mark notification as read.",
+    "allRead": "All notifications marked as read.",
+    "allReadFailed": "Failed to mark all notifications as read.",
+    "preferenceUpdated": "Notification preference updated.",
+    "preferenceUpdateFailed": "Failed to update notification preference."
+  },
+  "type": {
+    "CONTENT_PUBLISHED": "Content published",
+    "CONTENT_SUBMITTED": "New content submission",
+    "SUBSCRIPTION_REQUEST_SUBMITTED": "New subscription request"
+  },
+  "preferences": {
+    "title": "Email notifications",
+    "description": "Choose which email notifications you want to receive.",
+    "emailHint": "Send an email when this happens",
+    "loadFailed": "Failed to load notification preferences."
+  }
+}

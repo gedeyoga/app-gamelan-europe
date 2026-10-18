@@ -243,7 +243,12 @@ export function StoryForm({
     }
   }
 
-  function handleSubmit(values: StoryFormValues, action: StoryFormAction, publishedAt?: string) {
+  function handleSubmit(
+    values: StoryFormValues,
+    action: StoryFormAction,
+    publishedAt?: string,
+    notify?: boolean,
+  ) {
     const name = values.name.trim()
     const slug = values.slug.trim()
     const imageIds = Array.from(
@@ -259,6 +264,9 @@ export function StoryForm({
       ...(slug ? { slug } : {}),
       ...(values.content ? { content: values.content } : {}),
       ...(imageIds.length > 0 ? { imageIds } : {}),
+      ...((action === 'approve' || action === 'publish') && notify !== undefined
+        ? { notify }
+        : {}),
     }
     // Galeri terpisah dari `imageIds` (hindari dobel); edit selalu kirim agar bisa dikosongkan.
     const galleryImageIds = galleryImages.map((image) => image.id)
@@ -273,13 +281,18 @@ export function StoryForm({
     onSubmit(payload, action)
   }
 
-  function runSubmit(action: StoryFormAction, publishedAt?: string) {
-    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt))()
+  function runSubmit(action: StoryFormAction, publishedAt?: string, notify?: boolean) {
+    void form.handleSubmit((values) => handleSubmit(values, action, publishedAt, notify))()
   }
 
   async function openPublishDialog(action: 'publish' | 'approve') {
     const valid = await form.trigger()
     if (!valid) return
+    // Sudah punya jadwal tayang → langsung submit tanpa dialog.
+    if (initialPublishedAt) {
+      runSubmit(action, initialPublishedAt)
+      return
+    }
     setPublishAction(action)
     setPublishOpen(true)
   }
@@ -532,8 +545,8 @@ export function StoryForm({
       <PublishScheduleDialog
         open={publishOpen}
         onOpenChange={setPublishOpen}
-        onConfirm={(publishedAt) =>
-          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt)
+        onConfirm={(publishedAt, notify) =>
+          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt, notify)
         }
         isPending={isPending}
         defaultValue={initialPublishedAt ?? new Date().toISOString()}
@@ -550,6 +563,7 @@ export function StoryForm({
             : t('story:publishDialog.confirm')
         }
         cancelLabel={t('story:form.cancel')}
+        notifyLabel={t('story:publishDialog.notifyLabel')}
       />
     </Form>
   )

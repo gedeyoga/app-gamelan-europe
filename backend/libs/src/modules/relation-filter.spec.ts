@@ -24,6 +24,7 @@ function makePostService(scope: unknown) {
     {} as never,
     {} as never,
     { resolve: jest.fn().mockResolvedValue(scope) } as unknown as AccessScopeService,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
   return { service, findMany };
 }
@@ -42,6 +43,7 @@ function makeEventService(scope: unknown) {
     {} as never,
     {} as never,
     { resolve: jest.fn().mockResolvedValue(scope) } as unknown as AccessScopeService,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
   return { service, findMany };
 }

@@ -89,11 +89,13 @@ export function StoryEditPage() {
     // (PATCH `publishedAt` memaksa PUBLISHED → approve 409). `status` juga dibuang
     // untuk approve/reject — transisi yang memiliki status (cegah PATCH regresi).
     const publishedAt = payload.publishedAt
+    const notify = payload.notify
     let body: CreateStoryInput = payload
     if (action === 'approve' || action === 'reject') {
       body = { ...payload }
       delete body.publishedAt
       delete body.status
+      delete body.notify
     }
     // Simpan perubahan field dulu. Backend mengabaikan `status` PATCH bagi non-admin.
     let updated: Story
@@ -107,7 +109,11 @@ export function StoryEditPage() {
     }
     try {
       if (action === 'approve') {
-        await approveStory.mutateAsync({ id, publishedAt: publishedAt ?? new Date().toISOString() })
+        await approveStory.mutateAsync({
+          id,
+          publishedAt: publishedAt ?? new Date().toISOString(),
+          notify,
+        })
         toastSuccess(t('story:toast.approved'))
       } else if (action === 'reject') {
         await rejectStory.mutateAsync(id)

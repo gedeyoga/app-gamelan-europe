@@ -92,7 +92,8 @@
     "dateLabel": "Publish date & time",
     "datePlaceholder": "Choose date & time",
     "confirm": "Publish",
-    "confirmDescription": "The story will be published at the selected date and time. Continue?"
+    "confirmDescription": "The story will be published at the selected date and time. Continue?",
+    "notifyLabel": "Notify members by email when published"
   },
   "workflow": {
     "requested": "Awaiting approval",

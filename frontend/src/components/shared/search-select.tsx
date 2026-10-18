@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,10 @@ export interface SearchSelectProps {
   disabled?: boolean
   isLoading?: boolean
   className?: string
+  /** Tampilkan item "kosongkan pilihan" di atas daftar bila ada nilai terpilih. */
+  clearable?: boolean
+  /** Label item clear (wajib bila `clearable`). */
+  clearLabel?: string
 }
 
 /**
@@ -45,6 +49,8 @@ export function SearchSelect({
   disabled = false,
   isLoading = false,
   className,
+  clearable = false,
+  clearLabel = '',
 }: SearchSelectProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -75,6 +81,20 @@ export function SearchSelect({
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyLabel}</CommandEmpty>
+            {clearable && value && (
+              <CommandGroup>
+                <CommandItem
+                  value={clearLabel}
+                  onSelect={() => {
+                    onChange('')
+                    setOpen(false)
+                  }}
+                >
+                  <X className="size-4" />
+                  <span className="truncate">{clearLabel}</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem

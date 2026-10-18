@@ -7,6 +7,7 @@ import {
   Permissions,
   PostService,
   PublishContentDto,
+  SlugParamDto,
   UpdatePostDto,
 } from '@app/libs';
 
@@ -29,6 +30,12 @@ export class PostsController {
       data: items,
       meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },
     };
+  }
+
+  @Get('slug/:slug')
+  @Permissions('story:read')
+  findOneBySlug(@Param() params: SlugParamDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.postService.findOneBySlug(params.slug, user.id);
   }
 
   @Get(':id')
@@ -64,7 +71,7 @@ export class PostsController {
     @Body() dto: PublishContentDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.postService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt });
+    return this.postService.transition(id, 'approve', user.id, { publishedAt: dto?.publishedAt, notify: dto?.notify });
   }
 
   @Post(':id/reject')
@@ -82,7 +89,7 @@ export class PostsController {
     @Body() dto: PublishContentDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.postService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt });
+    return this.postService.transition(id, 'publish', user.id, { publishedAt: dto?.publishedAt, notify: dto?.notify });
   }
 
   @Post(':id/unpublish')

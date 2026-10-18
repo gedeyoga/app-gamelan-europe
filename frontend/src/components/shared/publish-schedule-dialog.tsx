@@ -1,17 +1,8 @@
 import { useId, useState } from 'react'
 
 import { DateTimePicker } from '@/components/shared/date-time-picker'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -24,19 +15,20 @@ import {
 export interface PublishScheduleDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Dipanggil dengan ISO 8601 (UTC) setelah konfirmasi. */
-  onConfirm: (publishedAt: string) => void
+  /** Dipanggil dengan ISO 8601 (UTC) + pilihan notifikasi email setelah konfirmasi. */
+  onConfirm: (publishedAt: string, notify: boolean) => void
   isPending?: boolean
   title: string
   description: string
   dateLabel: string
   datePlaceholder: string
-  nextLabel: string
-  confirmTitle: string
-  confirmDescription: string
   confirmLabel: string
   cancelLabel: string
-  /** ISO 8601 (UTC); nilai awal tiap dialog dibuka. Kosong → tombol "Lanjut" nonaktif. */
+  /** Bila diisi, baris checkbox notifikasi email dirender. */
+  notifyLabel?: string
+  /** Default status checkbox notifikasi email (default `false` = tidak tercentang). */
+  notifyDefaultValue?: boolean
+  /** ISO 8601 (UTC); nilai awal tiap dialog dibuka. Kosong → tombol konfirmasi nonaktif. */
   defaultValue?: string
   className?: string
 }
@@ -47,7 +39,7 @@ type PublishScheduleDialogContentProps = Omit<
 > & { onClose: () => void }
 
 // Body dirender sebagai child `DialogContent`; Radix meng-unmount konten saat tertutup sehingga
-// state langkah/nilai otomatis reset ke langkah 1 tiap dialog dibuka.
+// state nilai otomatis reset ke `defaultValue` tiap dialog dibuka.
 function PublishScheduleDialogContent({
   defaultValue,
   isPending = false,
@@ -57,19 +49,19 @@ function PublishScheduleDialogContent({
   description,
   dateLabel,
   datePlaceholder,
-  nextLabel,
-  confirmTitle,
-  confirmDescription,
   confirmLabel,
   cancelLabel,
+  notifyLabel,
+  notifyDefaultValue = false,
 }: PublishScheduleDialogContentProps) {
   const dateId = useId()
-  const [step, setStep] = useState<'date' | 'confirm'>('date')
+  const notifyId = useId()
   const [value, setValue] = useState<string | undefined>(defaultValue)
+  const [notify, setNotify] = useState(notifyDefaultValue)
 
   function handleConfirm() {
     if (!value) return
-    onConfirm(value)
+    onConfirm(value, notify)
   }
 
   return (
@@ -92,42 +84,28 @@ function PublishScheduleDialogContent({
         />
       </div>
 
+      {notifyLabel && (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={notifyId}
+            checked={notify}
+            onCheckedChange={(checked) => setNotify(checked === true)}
+            disabled={isPending}
+          />
+          <label htmlFor={notifyId} className="text-sm font-medium">
+            {notifyLabel}
+          </label>
+        </div>
+      )}
+
       <DialogFooter>
         <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onClose}>
           {cancelLabel}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending || !value}
-          onClick={() => setStep('confirm')}
-        >
-          {nextLabel}
+        <Button type="button" size="sm" disabled={isPending || !value} onClick={handleConfirm}>
+          {confirmLabel}
         </Button>
       </DialogFooter>
-
-      <AlertDialog open={step === 'confirm'} onOpenChange={(open) => !open && setStep('date')}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-            <AlertDialogDescription>{confirmDescription}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>{cancelLabel}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isPending}
-              onClick={(event) => {
-                // Tahan dialog konfirmasi tetap terbuka selama mutation `isPending`;
-                // parent menutup dialog saat sukses (via `open`).
-                event.preventDefault()
-                handleConfirm()
-              }}
-            >
-              {confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

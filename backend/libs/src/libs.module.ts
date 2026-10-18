@@ -16,6 +16,7 @@ import { CountryModule } from './modules/country/country.module';
 import { StateModule } from './modules/state/state.module';
 import { CityModule } from './modules/city/city.module';
 import { StorageModule } from './integrations/storage/storage.module';
+import { SmtpModule } from './integrations/mail/smtp.module';
 import { CategoryModule } from './modules/category/category.module';
 import { EventModule } from './modules/event/event.module';
 import { EventTypeModule } from './modules/event-type/event-type.module';
@@ -28,6 +29,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { SubscriptionRequestModule } from './modules/subscription-request/subscription-request.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 const redisProvider = {
   provide: REDIS_CLIENT,
@@ -52,6 +54,7 @@ const redisProvider = {
     StateModule,
     CityModule,
     StorageModule,
+    SmtpModule,
     CategoryModule,
     EventModule,
     EventTypeModule,
@@ -64,6 +67,7 @@ const redisProvider = {
     BillingModule,
     SubscriptionRequestModule,
     StatsModule,
+    NotificationModule,
   ],
   providers: [redisProvider, PrismaService, CacheService, InternalAuthGuard, AccessScopeService],
   exports: [
@@ -82,6 +86,7 @@ const redisProvider = {
     StateModule,
     CityModule,
     StorageModule,
+    SmtpModule,
     CategoryModule,
     EventModule,
     EventTypeModule,
@@ -94,6 +99,7 @@ const redisProvider = {
     BillingModule,
     SubscriptionRequestModule,
     StatsModule,
+    NotificationModule,
   ],
 })
 export class LibsModule {}

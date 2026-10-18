@@ -6,6 +6,7 @@ import type { DocumentResponse } from '@app/libs/modules/document/document.servi
 export const archiveSelect = {
   id: true,
   name: true,
+  slug: true,
   description: true,
   thumbnail: true,
   type: true,

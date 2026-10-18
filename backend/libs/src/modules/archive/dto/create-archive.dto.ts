@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsNotEmpty,
@@ -43,6 +44,11 @@ export class CreateArchiveDto {
   @IsOptional()
   @IsISO8601()
   publishedAt?: string;
+
+  // Checkbox FE "kirim notifikasi". false → tidak enqueue; default true.
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 
   @IsOptional()
   @IsArray()

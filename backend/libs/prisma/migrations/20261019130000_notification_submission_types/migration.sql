@@ -1,0 +1,7 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'CONTENT_SUBMITTED';
+ALTER TYPE "NotificationType" ADD VALUE 'SUBSCRIPTION_REQUEST_SUBMITTED';
+
+-- AlterEnum
+ALTER TYPE "NotificationEntityType" ADD VALUE 'NETWORK';
+ALTER TYPE "NotificationEntityType" ADD VALUE 'SUBSCRIPTION_REQUEST';

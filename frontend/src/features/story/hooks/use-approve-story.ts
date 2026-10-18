@@ -5,8 +5,8 @@ import { approveStory } from '../api/posts'
 export function useApproveStory() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, publishedAt }: { id: string; publishedAt: string }) =>
-      approveStory(id, publishedAt),
+    mutationFn: ({ id, publishedAt, notify }: { id: string; publishedAt: string; notify?: boolean }) =>
+      approveStory(id, publishedAt, notify),
     onSuccess: (_data, { id }) => {
       void qc.invalidateQueries({ queryKey: ['story'] })
       void qc.invalidateQueries({ queryKey: ['story', { id }] })

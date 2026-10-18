@@ -136,7 +136,11 @@ function NetworkCreateDialogContent({
               </p>
             )}
 
-            <NetworkMetaPanel form={form} disabled={createNetwork.isPending} />
+            <NetworkMetaPanel
+              form={form}
+              disabled={createNetwork.isPending}
+              showSubmitter={false}
+            />
           </form>
         </Form>
 

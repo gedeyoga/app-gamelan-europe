@@ -144,7 +144,8 @@
     "dateLabel": "Tanggal & waktu terbit",
     "datePlaceholder": "Pilih tanggal & waktu",
     "confirm": "Terbitkan",
-    "confirmDescription": "Event akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?"
+    "confirmDescription": "Event akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?",
+    "notifyLabel": "Kirim notifikasi email ke member saat dipublikasikan"
   },
   "workflow": {
     "requested": "Menunggu persetujuan",

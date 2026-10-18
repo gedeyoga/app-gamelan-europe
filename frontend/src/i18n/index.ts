@@ -12,6 +12,7 @@ import myBillingEn from './locales/en/myBilling.json';
 import eventEn from './locales/en/event.json';
 import networkEn from './locales/en/network.json';
 import networkSubmissionEn from './locales/en/networkSubmission.json';
+import notificationEn from './locales/en/notification.json';
 import profileEn from './locales/en/profile.json';
 import roleEn from './locales/en/role.json';
 import storyEn from './locales/en/story.json';
@@ -29,6 +30,7 @@ import myBillingId from './locales/id/myBilling.json';
 import eventId from './locales/id/event.json';
 import networkId from './locales/id/network.json';
 import networkSubmissionId from './locales/id/networkSubmission.json';
+import notificationId from './locales/id/notification.json';
 import profileId from './locales/id/profile.json';
 import roleId from './locales/id/role.json';
 import storyId from './locales/id/story.json';
@@ -58,6 +60,7 @@ void i18n.use(initReactI18next).init({
       profile: profileEn,
       network: networkEn,
       networkSubmission: networkSubmissionEn,
+      notification: notificationEn,
       subscription: subscriptionEn,
       subscriptionRequest: subscriptionRequestEn,
       billing: billingEn,
@@ -77,6 +80,7 @@ void i18n.use(initReactI18next).init({
       profile: profileId,
       network: networkId,
       networkSubmission: networkSubmissionId,
+      notification: notificationId,
       subscription: subscriptionId,
       subscriptionRequest: subscriptionRequestId,
       billing: billingId,
@@ -100,6 +104,7 @@ void i18n.use(initReactI18next).init({
     'profile',
     'network',
     'networkSubmission',
+    'notification',
     'subscription',
     'subscriptionRequest',
     'billing',

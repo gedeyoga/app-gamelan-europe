@@ -37,6 +37,7 @@ function makePostService() {
     {} as never,
     storage as never,
     ownScope() as unknown as AccessScopeService,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
   return { service, postRepository, imageRepository, storage };
 }
@@ -59,6 +60,7 @@ function makeEventService() {
     {} as never,
     {} as never,
     ownScope() as unknown as AccessScopeService,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
   return { service, eventRepository };
 }
@@ -87,6 +89,7 @@ function makeArchiveService() {
     {} as never,
     storage as never,
     ownScope() as unknown as AccessScopeService,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
   return { service, archiveRepository, documentRepository, storage };
 }

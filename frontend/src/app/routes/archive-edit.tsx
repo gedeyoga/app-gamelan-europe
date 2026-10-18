@@ -96,11 +96,13 @@ export function ArchiveEditPage() {
     // (PATCH `publishedAt` memaksa PUBLISHED → approve 409). `status` juga dibuang
     // untuk approve/reject — transisi yang memiliki status (cegah PATCH regresi).
     const publishedAt = payload.publishedAt
+    const notify = payload.notify
     let body: UpdateArchiveInput = payload
     if (action === 'approve' || action === 'reject') {
       body = { ...payload }
       delete body.publishedAt
       delete body.status
+      delete body.notify
     }
     // Simpan perubahan field dulu. Backend mengabaikan `status` PATCH bagi non-admin.
     let updated: Archive
@@ -114,7 +116,7 @@ export function ArchiveEditPage() {
     }
     try {
       if (action === 'approve') {
-        await approveArchive.mutateAsync({ id, publishedAt: publishedAt ?? undefined })
+        await approveArchive.mutateAsync({ id, publishedAt: publishedAt ?? undefined, notify })
         toastSuccess(t('archive:toast.approved'))
       } else if (action === 'reject') {
         await rejectArchive.mutateAsync(id)

@@ -32,6 +32,10 @@ export interface Network {
   countryId: number | null
   stateId: number | null
   createdBy: string | null
+  submitterFullName: string | null
+  submitterEmail: string | null
+  submitterCountry: string | null
+  submitterState: string | null
   createdAt: string
   updatedAt: string
 }
@@ -52,6 +56,12 @@ export interface CreateNetworkInput {
   activityType?: string | null
   /** `null` = clear; `undefined` = biarkan. */
   content?: string | null
+  submitterFullName?: string | null
+  submitterEmail?: string | null
+  /** Nama country (display), bukan id. */
+  submitterCountry?: string | null
+  /** Nama state (display), bukan id. */
+  submitterState?: string | null
 }
 
 export type UpdateNetworkInput = Partial<CreateNetworkInput>

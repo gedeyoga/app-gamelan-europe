@@ -78,7 +78,8 @@
     "next": "Continue",
     "confirmTitle": "Confirm",
     "confirmDescription": "The archive will be published at the selected date and time. Continue?",
-    "confirm": "Publish"
+    "confirm": "Publish",
+    "notifyLabel": "Notify members by email when published"
   },
   "workflow": {
     "requested": "Awaiting approval",

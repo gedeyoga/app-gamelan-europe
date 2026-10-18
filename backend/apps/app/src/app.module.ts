@@ -45,6 +45,8 @@ import { BillingsController } from './controllers/billings.controller';
 import { SubscriptionRequestsController } from './controllers/subscription-requests.controller';
 import { ApiKeysController } from './controllers/api-keys.controller';
 import { StatsController } from './controllers/stats.controller';
+import { NotificationsController } from './controllers/notifications.controller';
+import { NotificationPreferencesController } from './controllers/notification-preferences.controller';
 
 @Module({
   imports: [
@@ -89,6 +91,8 @@ import { StatsController } from './controllers/stats.controller';
     SubscriptionRequestsController,
     ApiKeysController,
     StatsController,
+    NotificationsController,
+    NotificationPreferencesController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

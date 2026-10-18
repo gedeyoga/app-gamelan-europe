@@ -33,6 +33,10 @@ export function getEvent(id: string): Promise<Event> {
   return request<Event>(`/events/${id}`)
 }
 
+export function getEventBySlug(slug: string): Promise<Event> {
+  return request<Event>(`/events/slug/${encodeURIComponent(slug)}`)
+}
+
 export function createEvent(payload: CreateEventInput): Promise<Event> {
   return request<Event>('/events', {
     method: 'POST',
@@ -57,14 +61,22 @@ export function submitEvent(id: string): Promise<Event> {
   return request<Event>(`/events/${id}/submit`, { method: 'POST' })
 }
 
-export function approveEvent(id: string, publishedAt?: string): Promise<Event> {
-  if (publishedAt === undefined) {
+export function approveEvent(
+  id: string,
+  publishedAt?: string,
+  notify?: boolean,
+): Promise<Event> {
+  const body = {
+    ...(publishedAt === undefined ? {} : { publishedAt }),
+    ...(notify === undefined ? {} : { notify }),
+  }
+  if (Object.keys(body).length === 0) {
     return request<Event>(`/events/${id}/approve`, { method: 'POST' })
   }
   return request<Event>(`/events/${id}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ publishedAt }),
+    body: JSON.stringify(body),
   })
 }
 

@@ -1,4 +1,4 @@
-import { Archive, Building2, CalendarDays, CreditCard, Home, KeyRound, Newspaper, Receipt, Shield, Users } from 'lucide-react'
+import { Archive, Bell, Building2, CalendarDays, CreditCard, Home, KeyRound, Newspaper, Receipt, Shield, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -75,6 +75,7 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
       { title: t('nav.archives'), url: '/archives', icon: Archive, permission: 'archive:read' },
       { title: t('nav.event'), url: '/events', icon: CalendarDays, permission: 'event:read' },
       { title: t('nav.myBilling'), url: '/my-billings', icon: Receipt },
+      { title: t('nav.notifications'), url: '/notifications', icon: Bell },
     ],
     [t],
   )

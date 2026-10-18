@@ -219,6 +219,7 @@ event.network?.name            // 1. org event (approve submission publik / di-s
 | `visibility` | opsional, `@IsEnum(ContentVisibility)`; default `PUBLIC`. Bisa diubah scope `all` & `network` |
 | `entry` | opsional, `@IsEnum(EventEntry)` (`FREE`/`TICKET`); default `FREE` saat create |
 | `publishedAt` | opsional, `@IsISO8601()`; bila ada → paksa `status=PUBLISHED` |
+| `notify` | opsional, `@IsBoolean()`; default `true`. `false` → tidak enqueue notifikasi saat auto-publish (`create`/`update`) atau `approve`/`publish`; tidak disimpan |
 | `eventTypeIds` | opsional, `@IsUUID('4', { each: true })`, `@ArrayMaxSize(50)` |
 | `dates` | opsional, `@IsArray()`, `@ValidateNested({ each: true })` + `@Type(() => EventDateDto)`, `@ArrayMaxSize(100)`; array kosong `[]` valid → clear/replace-all relasi `event_dates` |
 | `networkId` | opsional, `@IsOptional() @IsUUID('4')`; service cek existence `Network` → tidak ada = **422** per-field (`networkId`). Tidak dikirim → `null` (perilaku lama; tampilan fallback `creator.network`/`fullName`). Tidak auto-derive dari `creator` (eksplisit & minimal). |
@@ -381,15 +382,16 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta,
 
 | Method | Path | Akses | Request | Response |
 | --- | --- | --- | --- | --- |
-| POST | `/api/v1/events` | PERMISSION `event:create` | `CreateEventDto` | 201 `{ data, message }` |
+| POST | `/api/v1/events` | PERMISSION `event:create` | `CreateEventDto` (`notify?: boolean`, default `true`) | 201 `{ data, message }` |
 | GET | `/api/v1/events` | PERMISSION `event:read` | `ListEventsQueryDto` | 200 `{ data, meta, message }` |
 | GET | `/api/v1/events/:id` | PERMISSION `event:read` | `id` UUID | 200 `{ data, message }` |
-| PATCH | `/api/v1/events/:id` | PERMISSION `event:update` | `UpdateEventDto` | 200 `{ data, message }` |
+| GET | `/api/v1/events/slug/:slug` | PERMISSION `event:read` | `slug` (regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`, max 200) — tautan email `/events/{slug}`; scope baca identik `GET /events/:id` | 200 `{ data, message }` |
+| PATCH | `/api/v1/events/:id` | PERMISSION `event:update` | `UpdateEventDto` (`notify?: boolean`, default `true`) | 200 `{ data, message }` |
 | DELETE | `/api/v1/events/:id` | PERMISSION `event:delete` | `id` UUID | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/submit` | PERMISSION `event:submit` | `id` UUID (tanpa body) | 200 `{ data, message }` |
-| POST | `/api/v1/events/:id/approve` | PERMISSION `event:approve` | `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data, message }` |
+| POST | `/api/v1/events/:id/approve` | PERMISSION `event:approve` | `id` UUID + body opsional `{ publishedAt?, notify? }` (default `notify = true`) | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/reject` | PERMISSION `event:reject` | `id` UUID (tanpa body) | 200 `{ data, message }` |
-| POST | `/api/v1/events/:id/publish` | PERMISSION `event:publish` | `id` UUID + body opsional `{ publishedAt? }` | 200 `{ data, message }` |
+| POST | `/api/v1/events/:id/publish` | PERMISSION `event:publish` | `id` UUID + body opsional `{ publishedAt?, notify? }` (default `notify = true`) | 200 `{ data, message }` |
 | POST | `/api/v1/events/:id/unpublish` | PERMISSION `event:unpublish` | `id` UUID (tanpa body) | 200 `{ data, message }` |
 | POST | `/api/v1/event-types` | PERMISSION `event-type:create` | `CreateEventTypeDto` (idempoten) | 201 `{ data, message }` |
 | GET | `/api/v1/event-types` | PERMISSION `event-type:read` | `ListQueryDto` | 200 `{ data, meta, message }` |
@@ -414,7 +416,7 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 
 - **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
 - `approvedAt` = **audit marker "pertama kali terbit"** (server-managed): di-set `existing.approvedAt ?? now` saat transisi `approve`/`publish`, atau saat `create`/`update` menghasilkan `PUBLISHED`. **Bukan** penanda status `APPROVED`.
-- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` menerima `DRAFT → PUBLISHED` (jalur utama) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }` (`@IsOptional() @IsISO8601()` / `@IsBoolean()`): bila `publishedAt` dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish). `publish` menerima `DRAFT → PUBLISHED` (jalur utama) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
 - `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).

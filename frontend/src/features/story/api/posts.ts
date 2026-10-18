@@ -24,6 +24,10 @@ export function getPost(id: string): Promise<Story> {
   return request<Story>(`/posts/${id}`)
 }
 
+export function getPostBySlug(slug: string): Promise<Story> {
+  return request<Story>(`/posts/slug/${encodeURIComponent(slug)}`)
+}
+
 export function createPost(payload: CreateStoryInput): Promise<Story> {
   return request<Story>('/posts', {
     method: 'POST',
@@ -44,11 +48,11 @@ export function deletePost(id: string): Promise<Story> {
   return request<Story>(`/posts/${id}`, { method: 'DELETE' })
 }
 
-export function approveStory(id: string, publishedAt: string): Promise<Story> {
+export function approveStory(id: string, publishedAt: string, notify?: boolean): Promise<Story> {
   return request<Story>(`/posts/${id}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ publishedAt }),
+    body: JSON.stringify({ publishedAt, ...(notify === undefined ? {} : { notify }) }),
   })
 }
 

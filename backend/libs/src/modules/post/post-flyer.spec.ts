@@ -23,6 +23,7 @@ function makeService(overrides: {
     {} as never,
     {} as never,
     allScope() as never,
+    { publishAfterCommit: jest.fn(), enqueueContentPublished: jest.fn(), enqueuePending: jest.fn() } as never,
   );
 }
 

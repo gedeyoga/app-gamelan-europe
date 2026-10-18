@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { ContentSource, ContentStatus, ContentVisibility, EventEntry, Prisma } from '@prisma/client';
+import { ContentSource, ContentStatus, ContentVisibility, EventEntry, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
 import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { escapeHtml } from '@app/libs/common/utils/html.util';
@@ -20,6 +20,7 @@ import { CreatePublicEventDto, MAX_EVENT_RANGE_DAYS } from './dto/create-public-
 import { UpdateEventDto } from './dto/update-event.dto';
 import { slugify } from './utils/slug.util';
 import { resolveGoogleMapsLink } from '@app/libs/common/utils/google-maps.util';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 
 export const EVENT_SEARCHABLE_FIELDS = ['name', 'slug'];
 export const EVENT_SORT_FIELDS = ['name', 'slug', 'status', 'visibility', 'publishedAt', 'createdAt', 'updatedAt'];
@@ -76,6 +77,7 @@ export class EventService {
     private readonly eventTypeRepository: EventTypeRepository,
     private readonly imageService: ImageService,
     private readonly accessScope: AccessScopeService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   private validationError(field: string, message: string): UnprocessableEntityException {
@@ -290,6 +292,22 @@ export class EventService {
     return slug;
   }
 
+  // Hanya konten publik yang terbit yang dikirim ke member (D10). Unique key = idempoten.
+  private async notifyPublished(event: EventEntity, actorId: string, notify?: boolean): Promise<void> {
+    if (event.status !== ContentStatus.PUBLISHED || event.visibility !== ContentVisibility.PUBLIC) return;
+    await this.notificationService.publishAfterCommit({
+      entityType: NotificationEntityType.EVENT,
+      entityId: event.id,
+      title: event.name,
+      body: event.content,
+      imageUrl: event.thumbnail,
+      slug: event.slug,
+      publishedAt: event.publishedAt,
+      notify: notify !== false,
+      actorId,
+    });
+  }
+
   async list(query: ListEventsQueryDto, userId: string): Promise<{ items: EventResponse[]; total: number }> {
     const take = Math.min(query.limit, 100);
     const skip = (query.page - 1) * take;
@@ -325,10 +343,16 @@ export class EventService {
   }
 
   async findOne(id: string, userId: string): Promise<EventResponse> {
-    const [event, scope] = await Promise.all([
-      this.eventRepository.findById(id),
-      this.accessScope.resolve(userId, 'event'),
-    ]);
+    return this.toReadable(await this.eventRepository.findById(id), userId);
+  }
+
+  // Lookup via slug (tautan email `/events/{slug}`) — aturan scope identik `findOne`.
+  async findOneBySlug(slug: string, userId: string): Promise<EventResponse> {
+    return this.toReadable(await this.eventRepository.findBySlug(slug), userId);
+  }
+
+  private async toReadable(event: EventEntity, userId: string): Promise<EventResponse> {
+    const scope = await this.accessScope.resolve(userId, 'event');
     this.assertReadable(event, scope); // cek scope pakai entity mentah (punya networkId)
     return this.toResponse(event);
   }
@@ -385,9 +409,11 @@ export class EventService {
 
     // Slug eksplisit: bentrok → 409 apa adanya (tanpa retry).
     if (scoped.slug) {
-      return this.toResponse(
-        await this.eventRepository.create(this.buildCreateData(scoped, scoped.slug, status, userId, location)),
+      const event = await this.eventRepository.create(
+        this.buildCreateData(scoped, scoped.slug, status, userId, location),
       );
+      await this.notifyPublished(event, userId, dto.notify);
+      return this.toResponse(event);
     }
 
     // Slug auto: retry singkat bila kalah race cek-lalu-insert (P2002 → ConflictException).
@@ -395,9 +421,11 @@ export class EventService {
     let slug = await this.uniqueSlug(base);
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        return this.toResponse(
-          await this.eventRepository.create(this.buildCreateData(scoped, slug, status, userId, location)),
+        const event = await this.eventRepository.create(
+          this.buildCreateData(scoped, slug, status, userId, location),
         );
+        await this.notifyPublished(event, userId, dto.notify);
+        return this.toResponse(event);
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
         slug = await this.uniqueSlug(base);
@@ -505,6 +533,14 @@ export class EventService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const event = await this.eventRepository.create(data);
+        await this.notificationService.notifyAdmins({
+          type: NotificationType.CONTENT_SUBMITTED,
+          entityType: NotificationEntityType.EVENT,
+          entityId: event.id,
+          title: dto.title,
+          imageUrl: null,
+          linkPath: '/dashboard',
+        });
         return { id: event.id, status: event.status };
       } catch (e) {
         if (!(e instanceof ConflictException)) throw e;
@@ -581,7 +617,11 @@ export class EventService {
       data.status = ContentStatus.DRAFT;
     }
 
-    return this.toResponse(await this.eventRepository.update(id, data));
+    const event = await this.eventRepository.update(id, data);
+    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ContentStatus.PUBLISHED)) {
+      await this.notifyPublished(event, userId, dto.notify);
+    }
+    return this.toResponse(event);
   }
 
   // Transisi status terkontrol; `PATCH /events/:id` tetap untuk update konten.
@@ -590,7 +630,7 @@ export class EventService {
     id: string,
     action: EventAction,
     userId: string,
-    options?: { publishedAt?: string },
+    options?: { publishedAt?: string; notify?: boolean },
   ): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id); // 404 bila tak ada
     const scope = await this.accessScope.resolve(userId, 'event');
@@ -608,11 +648,31 @@ export class EventService {
         : (existing.publishedAt ?? new Date());
       extra.approvedAt = existing.approvedAt ?? new Date();
     }
-    const updated = await this.eventRepository.updateStatusIf(id, rule.from, rule.to, extra);
+    const publishing = action === 'approve' || action === 'publish';
+    // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    const updated = await this.eventRepository.transaction(async (tx) => {
+      const ok = await this.eventRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      if (!ok) return false;
+      if (publishing && existing.visibility === ContentVisibility.PUBLIC) {
+        await this.notificationService.enqueueContentPublished(tx, {
+          entityType: NotificationEntityType.EVENT,
+          entityId: id,
+          title: existing.name,
+          body: existing.content,
+          imageUrl: existing.thumbnail,
+          slug: existing.slug,
+          publishedAt: extra.publishedAt,
+          notify: options?.notify !== false,
+          actorId: userId,
+        });
+      }
+      return true;
+    });
     if (!updated) {
       const current = await this.eventRepository.findById(id); // 404 bila event terhapus
       throw new ConflictException(`Cannot ${action} event in status ${current.status}`);
     }
+    if (publishing) await this.notificationService.enqueuePending(NotificationEntityType.EVENT, id);
     return this.findOne(id, userId);
   }
 

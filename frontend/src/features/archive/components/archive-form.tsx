@@ -254,6 +254,7 @@ export function ArchiveForm({
     values: ArchiveFormValues,
     action: ArchiveFormAction,
     publishedAtOverride?: string,
+    notify?: boolean,
   ): UpdateArchiveInput {
     const externalLinks = values.externalLinks
       .map((link) => link.trim())
@@ -268,6 +269,10 @@ export function ArchiveForm({
       categoryIds: values.categoryIds,
       authorIds: values.authorIds,
       ...(values.description.trim() ? { description: values.description.trim() } : {}),
+    }
+
+    if ((action === 'approve' || action === 'publish') && notify !== undefined) {
+      payload.notify = notify
     }
 
     // `approve`/`publish` mengirim tanggal override; `PUBLISHED` tanpa override mempertahankan
@@ -294,13 +299,20 @@ export function ArchiveForm({
     return payload
   }
 
-  function runSubmit(action: ArchiveFormAction, publishedAt?: string) {
-    void form.handleSubmit((values) => onSubmit(buildPayload(values, action, publishedAt), action))()
+  function runSubmit(action: ArchiveFormAction, publishedAt?: string, notify?: boolean) {
+    void form.handleSubmit((values) =>
+      onSubmit(buildPayload(values, action, publishedAt, notify), action),
+    )()
   }
 
   async function openPublishDialog(action: 'publish' | 'approve') {
     const valid = await form.trigger()
     if (!valid) return
+    // Sudah punya jadwal tayang → langsung submit tanpa dialog.
+    if (initialPublishedAt) {
+      runSubmit(action, initialPublishedAt)
+      return
+    }
     setPublishAction(action)
     setPublishOpen(true)
   }
@@ -627,8 +639,8 @@ export function ArchiveForm({
       <PublishScheduleDialog
         open={publishOpen}
         onOpenChange={setPublishOpen}
-        onConfirm={(publishedAt) =>
-          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt)
+        onConfirm={(publishedAt, notify) =>
+          runSubmit(publishAction === 'approve' ? 'approve' : 'publish', publishedAt, notify)
         }
         isPending={isPending}
         defaultValue={initialPublishedAt ?? new Date().toISOString()}
@@ -645,6 +657,7 @@ export function ArchiveForm({
             : t('archive:publishDialog.confirm')
         }
         cancelLabel={t('archive:form.cancel')}
+        notifyLabel={t('archive:publishDialog.notifyLabel')}
       />
 
       {canManageAuthors && (
