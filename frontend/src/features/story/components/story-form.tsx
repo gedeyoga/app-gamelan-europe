@@ -114,6 +114,7 @@ export function StoryForm({
   })
 
   const status = useWatch({ control: form.control, name: 'status' })
+  const isPublishedWithDate = status === 'PUBLISHED' && Boolean(initialPublishedAt)
 
   const initialThumbnail = initialValues.thumbnail || null
   const [slugTouched, setSlugTouched] = useState(mode === 'edit')
@@ -323,39 +324,43 @@ export function StoryForm({
         <Save className="size-4" data-icon="inline-start" />
         {status === 'DRAFT' ? t('story:form.saveAsDraft') : t('story:form.save')}
       </Button>
-      {(status === 'PUBLISHED' || (canPublishStory && status === 'APPROVED')) && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('draft', t('story:form.saveAsDraft'))}
-        >
-          <Save className="size-4" data-icon="inline-start" />
-          {t('story:form.saveAsDraft')}
-        </Button>
-      )}
-      {canPublishStory && status !== 'REQUEST' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void openPublishDialog('publish')}
-        >
-          <CalendarClock className="size-4" data-icon="inline-start" />
-          {t('story:form.publish')}
-        </Button>
-      )}
-      {!canPublishStory && canSubmitStory && status === 'DRAFT' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('request', t('story:form.requestPublish'))}
-        >
-          <Send className="size-4" data-icon="inline-start" />
-          {t('story:form.requestPublish')}
-        </Button>
+      {!isPublishedWithDate && (
+        <>
+          {(status === 'PUBLISHED' || (canPublishStory && status === 'APPROVED')) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('draft', t('story:form.saveAsDraft'))}
+            >
+              <Save className="size-4" data-icon="inline-start" />
+              {t('story:form.saveAsDraft')}
+            </Button>
+          )}
+          {canPublishStory && status !== 'REQUEST' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void openPublishDialog('publish')}
+            >
+              <CalendarClock className="size-4" data-icon="inline-start" />
+              {t('story:form.publish')}
+            </Button>
+          )}
+          {!canPublishStory && canSubmitStory && status === 'DRAFT' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('request', t('story:form.requestPublish'))}
+            >
+              <Send className="size-4" data-icon="inline-start" />
+              {t('story:form.requestPublish')}
+            </Button>
+          )}
+        </>
       )}
     </>
   )

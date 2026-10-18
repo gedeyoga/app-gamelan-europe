@@ -146,6 +146,7 @@ export function EventForm({
   })
 
   const status = useWatch({ control: form.control, name: 'status' })
+  const isPublishedWithDate = status === 'PUBLISHED' && Boolean(initialPublishedAt)
 
   const initialThumbnail = initialValues.thumbnail || null
   const [slugTouched, setSlugTouched] = useState(mode === 'edit')
@@ -307,39 +308,43 @@ export function EventForm({
         <Save className="size-4" data-icon="inline-start" />
         {status === 'DRAFT' ? t('event:form.saveAsDraft') : t('event:form.save')}
       </Button>
-      {(status === 'PUBLISHED' || (canPublishEvent && status === 'APPROVED')) && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('draft', t('event:form.saveAsDraft'))}
-        >
-          <Save className="size-4" data-icon="inline-start" />
-          {t('event:form.saveAsDraft')}
-        </Button>
-      )}
-      {canPublishEvent && status !== 'REQUEST' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void openPublishDialog('publish')}
-        >
-          <CalendarClock className="size-4" data-icon="inline-start" />
-          {t('event:form.publish')}
-        </Button>
-      )}
-      {!canPublishEvent && canSubmitEvent && status === 'DRAFT' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('request', t('event:form.requestPublish'))}
-        >
-          <Send className="size-4" data-icon="inline-start" />
-          {t('event:form.requestPublish')}
-        </Button>
+      {!isPublishedWithDate && (
+        <>
+          {(status === 'PUBLISHED' || (canPublishEvent && status === 'APPROVED')) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('draft', t('event:form.saveAsDraft'))}
+            >
+              <Save className="size-4" data-icon="inline-start" />
+              {t('event:form.saveAsDraft')}
+            </Button>
+          )}
+          {canPublishEvent && status !== 'REQUEST' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void openPublishDialog('publish')}
+            >
+              <CalendarClock className="size-4" data-icon="inline-start" />
+              {t('event:form.publish')}
+            </Button>
+          )}
+          {!canPublishEvent && canSubmitEvent && status === 'DRAFT' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('request', t('event:form.requestPublish'))}
+            >
+              <Send className="size-4" data-icon="inline-start" />
+              {t('event:form.requestPublish')}
+            </Button>
+          )}
+        </>
       )}
     </>
   )

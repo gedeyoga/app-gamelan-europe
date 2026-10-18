@@ -142,6 +142,7 @@ export function ArchiveForm({
   })
 
   const status = useWatch({ control: form.control, name: 'status' })
+  const isPublishedWithDate = status === 'PUBLISHED' && Boolean(initialPublishedAt)
 
   const initialThumbnail = initialValues.thumbnail || null
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(initialThumbnail)
@@ -336,39 +337,43 @@ export function ArchiveForm({
         <Save className="size-4" data-icon="inline-start" />
         {status === 'DRAFT' ? t('archive:form.saveAsDraft') : t('archive:form.save')}
       </Button>
-      {(status === 'PUBLISHED' || (canPublishArchive && status === 'APPROVED')) && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('draft', t('archive:form.saveAsDraft'))}
-        >
-          <Save className="size-4" data-icon="inline-start" />
-          {t('archive:form.saveAsDraft')}
-        </Button>
-      )}
-      {canPublishArchive && status !== 'REQUEST' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void openPublishDialog('publish')}
-        >
-          <CalendarClock className="size-4" data-icon="inline-start" />
-          {t('archive:form.publish')}
-        </Button>
-      )}
-      {!canPublishArchive && canSubmitArchive && status === 'DRAFT' && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={isPending}
-          onClick={() => void requestStatusChange('request', t('archive:form.requestPublish'))}
-        >
-          <Send className="size-4" data-icon="inline-start" />
-          {t('archive:form.requestPublish')}
-        </Button>
+      {!isPublishedWithDate && (
+        <>
+          {(status === 'PUBLISHED' || (canPublishArchive && status === 'APPROVED')) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('draft', t('archive:form.saveAsDraft'))}
+            >
+              <Save className="size-4" data-icon="inline-start" />
+              {t('archive:form.saveAsDraft')}
+            </Button>
+          )}
+          {canPublishArchive && status !== 'REQUEST' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void openPublishDialog('publish')}
+            >
+              <CalendarClock className="size-4" data-icon="inline-start" />
+              {t('archive:form.publish')}
+            </Button>
+          )}
+          {!canPublishArchive && canSubmitArchive && status === 'DRAFT' && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => void requestStatusChange('request', t('archive:form.requestPublish'))}
+            >
+              <Send className="size-4" data-icon="inline-start" />
+              {t('archive:form.requestPublish')}
+            </Button>
+          )}
+        </>
       )}
     </>
   )
