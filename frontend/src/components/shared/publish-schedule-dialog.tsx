@@ -22,6 +22,12 @@ export interface PublishScheduleDialogProps {
   description: string
   dateLabel: string
   datePlaceholder: string
+  /** Label tombol utama pada langkah pertama (jadwal). */
+  nextLabel: string
+  /** Judul langkah konfirmasi. */
+  confirmTitle: string
+  /** Deskripsi langkah konfirmasi. */
+  confirmDescription: string
   confirmLabel: string
   cancelLabel: string
   /** Bila diisi, baris checkbox notifikasi email dirender. */
@@ -49,6 +55,9 @@ function PublishScheduleDialogContent({
   description,
   dateLabel,
   datePlaceholder,
+  nextLabel,
+  confirmTitle,
+  confirmDescription,
   confirmLabel,
   cancelLabel,
   notifyLabel,
@@ -58,6 +67,7 @@ function PublishScheduleDialogContent({
   const notifyId = useId()
   const [value, setValue] = useState<string | undefined>(defaultValue)
   const [notify, setNotify] = useState(notifyDefaultValue)
+  const [step, setStep] = useState<'schedule' | 'confirm'>('schedule')
 
   function handleConfirm() {
     if (!value) return
@@ -67,44 +77,61 @@ function PublishScheduleDialogContent({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
+        <DialogTitle>{step === 'confirm' ? confirmTitle : title}</DialogTitle>
+        <DialogDescription>
+          {step === 'confirm' ? confirmDescription : description}
+        </DialogDescription>
       </DialogHeader>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor={dateId} className="text-sm font-medium">
-          {dateLabel}
-        </label>
-        <DateTimePicker
-          id={dateId}
-          value={value}
-          onChange={setValue}
-          placeholder={datePlaceholder}
-          disabled={isPending}
-        />
-      </div>
+      {step === 'schedule' && (
+        <>
+          <div className="flex flex-col gap-2">
+            <label htmlFor={dateId} className="text-sm font-medium">
+              {dateLabel}
+            </label>
+            <DateTimePicker
+              id={dateId}
+              value={value}
+              onChange={setValue}
+              placeholder={datePlaceholder}
+              disabled={isPending}
+            />
+          </div>
 
-      {notifyLabel && (
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={notifyId}
-            checked={notify}
-            onCheckedChange={(checked) => setNotify(checked === true)}
-            disabled={isPending}
-          />
-          <label htmlFor={notifyId} className="text-sm font-medium">
-            {notifyLabel}
-          </label>
-        </div>
+          {notifyLabel && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id={notifyId}
+                checked={notify}
+                onCheckedChange={(checked) => setNotify(checked === true)}
+                disabled={isPending}
+              />
+              <label htmlFor={notifyId} className="text-sm font-medium">
+                {notifyLabel}
+              </label>
+            </div>
+          )}
+        </>
       )}
 
       <DialogFooter>
         <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onClose}>
           {cancelLabel}
         </Button>
-        <Button type="button" size="sm" disabled={isPending || !value} onClick={handleConfirm}>
-          {confirmLabel}
-        </Button>
+        {step === 'schedule' ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={isPending || !value}
+            onClick={() => setStep('confirm')}
+          >
+            {nextLabel}
+          </Button>
+        ) : (
+          <Button type="button" size="sm" disabled={isPending} onClick={handleConfirm}>
+            {confirmLabel}
+          </Button>
+        )}
       </DialogFooter>
     </>
   )
