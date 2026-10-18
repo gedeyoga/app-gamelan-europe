@@ -22,12 +22,12 @@ export interface PublishScheduleDialogProps {
   description: string
   dateLabel: string
   datePlaceholder: string
-  /** Label tombol utama pada langkah pertama (jadwal). */
-  nextLabel: string
-  /** Judul langkah konfirmasi. */
-  confirmTitle: string
+  /** Label tombol utama pada langkah pertama (jadwal). Default: `confirmLabel`. */
+  nextLabel?: string
+  /** Judul langkah konfirmasi. Kosong → dialog satu langkah. */
+  confirmTitle?: string
   /** Deskripsi langkah konfirmasi. */
-  confirmDescription: string
+  confirmDescription?: string
   confirmLabel: string
   cancelLabel: string
   /** Bila diisi, baris checkbox notifikasi email dirender. */
@@ -74,13 +74,14 @@ function PublishScheduleDialogContent({
     onConfirm(value, notify)
   }
 
+  const isConfirmStep = step === 'confirm'
+  const activeDescription = isConfirmStep ? confirmDescription : description
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{step === 'confirm' ? confirmTitle : title}</DialogTitle>
-        <DialogDescription>
-          {step === 'confirm' ? confirmDescription : description}
-        </DialogDescription>
+        <DialogTitle>{isConfirmStep ? confirmTitle : title}</DialogTitle>
+        {activeDescription && <DialogDescription>{activeDescription}</DialogDescription>}
       </DialogHeader>
 
       {step === 'schedule' && (
@@ -118,14 +119,14 @@ function PublishScheduleDialogContent({
         <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onClose}>
           {cancelLabel}
         </Button>
-        {step === 'schedule' ? (
+        {!isConfirmStep ? (
           <Button
             type="button"
             size="sm"
             disabled={isPending || !value}
-            onClick={() => setStep('confirm')}
+            onClick={() => (confirmTitle ? setStep('confirm') : handleConfirm())}
           >
-            {nextLabel}
+            {nextLabel ?? confirmLabel}
           </Button>
         ) : (
           <Button type="button" size="sm" disabled={isPending} onClick={handleConfirm}>
