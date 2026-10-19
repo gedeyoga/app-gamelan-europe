@@ -22,6 +22,7 @@ import {
 import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
 import { cn } from '@/lib/utils'
 
+import { useCities } from '@/features/geo/hooks/use-cities'
 import { useCountries } from '@/features/geo/hooks/use-countries'
 import { useStates } from '@/features/geo/hooks/use-states'
 
@@ -39,7 +40,7 @@ export interface NetworkMetaPanelProps {
   showSubmitter?: boolean
 }
 
-// Query geo di panel: `iso2` diturunkan dari country terpilih (state tidak bisa di-fetch dari route).
+// Cascade Country -> State -> City; ganti country/state reset turunannya.
 export function NetworkMetaPanel({
   form,
   disabled = false,
@@ -48,77 +49,50 @@ export function NetworkMetaPanel({
 }: NetworkMetaPanelProps) {
   const { t } = useTranslation()
 
-  const countryValue = form.watch('country')
-  const stateValue = form.watch('state')
+  const countryIdValue = form.watch('countryId')
+  const stateIdValue = form.watch('stateId')
   const activityType = form.watch('activityType')
-  const submitterCountryValue = form.watch('submitterCountry')
-  const submitterStateValue = form.watch('submitterState')
 
   const countriesQuery = useCountries()
   const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
-  // Sisipkan nilai form yang belum ada di list agar tidak tampil placeholder kosong.
-  const countryOptions = useMemo<SearchSelectOption[]>(() => {
-    const options = countries.map((country) => ({ value: country.name, label: country.name }))
-    if (countryValue && !options.some((option) => option.value === countryValue)) {
-      options.push({ value: countryValue, label: countryValue })
-    }
-    return options
-  }, [countries, countryValue])
+  const countryOptions = useMemo<SearchSelectOption[]>(
+    () => countries.map((country) => ({ value: String(country.id), label: country.name })),
+    [countries],
+  )
 
-  // iso2 diturunkan dari nama country terpilih (field form menyimpan nama).
-  const iso2 = countries.find((country) => country.name === countryValue)?.iso2 ?? ''
+  // `/states` memfilter per countryCode; `/cities` per countryId (+ stateId).
+  const iso2 = countries.find((country) => String(country.id) === countryIdValue)?.iso2 ?? ''
   const statesQuery = useStates(iso2)
   const states = useMemo(() => statesQuery.data ?? [], [statesQuery.data])
-  const stateOptions = useMemo<SearchSelectOption[]>(() => {
-    const options = states.map((state) => ({ value: state.name, label: state.name }))
-    if (stateValue && !options.some((option) => option.value === stateValue)) {
-      options.push({ value: stateValue, label: stateValue })
-    }
-    return options
-  }, [states, stateValue])
-
-  const submitterCountryOptions = useMemo<SearchSelectOption[]>(() => {
-    const options = countries.map((country) => ({ value: country.name, label: country.name }))
-    if (
-      submitterCountryValue &&
-      !options.some((option) => option.value === submitterCountryValue)
-    ) {
-      options.push({ value: submitterCountryValue, label: submitterCountryValue })
-    }
-    return options
-  }, [countries, submitterCountryValue])
-
-  const submitterIso2 =
-    countries.find((country) => country.name === submitterCountryValue)?.iso2 ?? ''
-  const submitterStatesQuery = useStates(submitterIso2)
-  const submitterStates = useMemo(
-    () => submitterStatesQuery.data ?? [],
-    [submitterStatesQuery.data],
+  const stateOptions = useMemo<SearchSelectOption[]>(
+    () => states.map((state) => ({ value: String(state.id), label: state.name })),
+    [states],
   )
-  const submitterStateOptions = useMemo<SearchSelectOption[]>(() => {
-    const options = submitterStates.map((state) => ({ value: state.name, label: state.name }))
-    if (
-      submitterStateValue &&
-      !options.some((option) => option.value === submitterStateValue)
-    ) {
-      options.push({ value: submitterStateValue, label: submitterStateValue })
-    }
-    return options
-  }, [submitterStates, submitterStateValue])
+
+  const countryId = Number(countryIdValue) || undefined
+  const stateId = Number(stateIdValue) || undefined
+  const citiesQuery = useCities({ countryId, stateId })
+  const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data])
+  const cityOptions = useMemo<SearchSelectOption[]>(
+    () => cities.map((city) => ({ value: String(city.id), label: city.name })),
+    [cities],
+  )
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'socialMedia' })
 
-  // Ganti country -> reset state (nama state tidak berlaku lintas negara).
+  // Ganti country -> reset state & city.
   function handleCountryChange(next: string, onChange: (value: string) => void) {
-    if (next === form.getValues('country')) return
+    if (next === form.getValues('countryId')) return
     onChange(next)
-    form.setValue('state', '', { shouldDirty: true, shouldValidate: true })
+    form.setValue('stateId', '', { shouldDirty: true, shouldValidate: true })
+    form.setValue('cityId', '', { shouldDirty: true, shouldValidate: true })
   }
 
-  function handleSubmitterCountryChange(next: string, onChange: (value: string) => void) {
-    if (next === form.getValues('submitterCountry')) return
+  // Ganti state -> reset city.
+  function handleStateChange(next: string, onChange: (value: string) => void) {
+    if (next === form.getValues('stateId')) return
     onChange(next)
-    form.setValue('submitterState', '', { shouldDirty: true, shouldValidate: true })
+    form.setValue('cityId', '', { shouldDirty: true, shouldValidate: true })
   }
 
   return (
@@ -187,10 +161,31 @@ export function NetworkMetaPanel({
         )}
       />
 
+      {showSubmitter && (
+        <FormField
+          control={form.control}
+          name="submitterEmail"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('network:form.submitter.email')}</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  type="email"
+                  placeholder={t('network:form.submitter.emailPlaceholder')}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <FormField
           control={form.control}
-          name="country"
+          name="countryId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('network:form.country')}</FormLabel>
@@ -212,7 +207,7 @@ export function NetworkMetaPanel({
         />
         <FormField
           control={form.control}
-          name="state"
+          name="stateId"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('network:form.state')}</FormLabel>
@@ -220,7 +215,7 @@ export function NetworkMetaPanel({
                 <SearchSelect
                   options={stateOptions}
                   value={field.value}
-                  onChange={field.onChange}
+                  onChange={(value) => handleStateChange(value, field.onChange)}
                   placeholder={
                     iso2
                       ? t('network:form.statePlaceholder')
@@ -237,6 +232,33 @@ export function NetworkMetaPanel({
           )}
         />
       </div>
+
+      <FormField
+        control={form.control}
+        name="cityId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t('network:form.city')}</FormLabel>
+            <FormControl>
+              <SearchSelect
+                options={cityOptions}
+                value={field.value}
+                onChange={field.onChange}
+                placeholder={
+                  stateIdValue
+                    ? t('network:form.cityPlaceholder')
+                    : t('network:form.citySelectState')
+                }
+                searchPlaceholder={t('network:form.citySearch')}
+                emptyLabel={t('network:form.cityEmpty')}
+                isLoading={citiesQuery.isLoading}
+                disabled={disabled || !stateIdValue || citiesQuery.isLoading}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <FormField
         control={form.control}
@@ -437,105 +459,6 @@ export function NetworkMetaPanel({
             </FormItem>
           )}
         />
-      )}
-
-      {showSubmitter && (
-        <div className="flex flex-col gap-4 border-t pt-4">
-          <p className="text-sm font-medium">{t('network:form.submitter.title')}</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="submitterFullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('network:form.submitter.fullName')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder={t('network:form.submitter.fullNamePlaceholder')}
-                      disabled={disabled}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="submitterEmail"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('network:form.submitter.email')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="email"
-                      placeholder={t('network:form.submitter.emailPlaceholder')}
-                      disabled={disabled}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="submitterCountry"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('network:form.submitter.country')}</FormLabel>
-                  <FormControl>
-                    <SearchSelect
-                      options={submitterCountryOptions}
-                      value={field.value}
-                      onChange={(value) => handleSubmitterCountryChange(value, field.onChange)}
-                      placeholder={t('network:form.countryPlaceholder')}
-                      searchPlaceholder={t('network:form.countrySearch')}
-                      emptyLabel={t('network:form.countryEmpty')}
-                      isLoading={countriesQuery.isLoading}
-                      disabled={disabled}
-                      clearable
-                      clearLabel={t('common:actions.clear')}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="submitterState"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('network:form.submitter.state')}</FormLabel>
-                  <FormControl>
-                    <SearchSelect
-                      options={submitterStateOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder={
-                        submitterIso2
-                          ? t('network:form.statePlaceholder')
-                          : t('network:form.stateSelectCountry')
-                      }
-                      searchPlaceholder={t('network:form.stateSearch')}
-                      emptyLabel={t('network:form.stateEmpty')}
-                      disabled={disabled || !submitterIso2 || submitterStatesQuery.isLoading}
-                      isLoading={submitterStatesQuery.isLoading}
-                      clearable
-                      clearLabel={t('common:actions.clear')}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </div>
       )}
     </div>
   )

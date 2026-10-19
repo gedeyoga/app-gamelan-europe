@@ -27,8 +27,10 @@ export function createNetworkSchema(t: TFunction) {
         t('validation:organisationTypeInvalid'),
       ),
     ledBy: z.string().trim().max(200, t('validation:ledByMax', { count: 200 })),
-    state: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
-    country: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
+    // ID relasi geo disimpan sebagai string di form; dikonversi ke number saat submit.
+    countryId: z.string(),
+    stateId: z.string(),
+    cityId: z.string(),
     address: z.string().trim().max(500, t('validation:addressMax', { count: 500 })),
     website: z.string().trim().max(500, t('validation:websiteMax', { count: 500 })),
     mapsUrl: z
@@ -76,7 +78,6 @@ export function createNetworkSchema(t: TFunction) {
       .trim()
       .max(100, t('validation:activityTypeMax', { count: 100 })),
     content: z.string().max(100000, t('validation:contentMax', { count: 100000 })),
-    submitterFullName: z.string().trim().max(200, t('validation:fullNameMax', { count: 200 })),
     submitterEmail: z
       .string()
       .trim()
@@ -85,8 +86,6 @@ export function createNetworkSchema(t: TFunction) {
         (value) => value === '' || z.email().safeParse(value).success,
         t('validation:emailInvalid'),
       ),
-    submitterCountry: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
-    submitterState: z.string().trim().max(100, t('validation:nameMax', { count: 100 })),
   }).superRefine((values, ctx) => {
     if (values.activityType === ACTIVITY_TYPE_OTHER && values.activityTypeOther.trim() === '') {
       ctx.addIssue({
@@ -104,8 +103,9 @@ export const EMPTY_NETWORK_VALUES: NetworkFormValues = {
   name: '',
   organisationType: '',
   ledBy: '',
-  state: '',
-  country: '',
+  countryId: '',
+  stateId: '',
+  cityId: '',
   address: '',
   website: '',
   mapsUrl: '',
@@ -114,8 +114,5 @@ export const EMPTY_NETWORK_VALUES: NetworkFormValues = {
   activityType: '',
   activityTypeOther: '',
   content: '',
-  submitterFullName: '',
   submitterEmail: '',
-  submitterCountry: '',
-  submitterState: '',
 }

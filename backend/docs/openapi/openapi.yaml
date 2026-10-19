@@ -1625,8 +1625,10 @@ paths:
         Server-side rules (all surfaced as `422` with
         `errors: [{ field, message }]`):
         - `countryId` must exist; `stateId`, when sent, must belong to `countryId`.
-        - `submitter.countryId` must exist; `submitter.stateId`, when sent, must
-          belong to `submitter.countryId`.
+        - `cityId`, when sent, must exist, belong to `countryId`, and (when
+          `stateId` is sent) belong to that `stateId`. It is stored as
+          `Network.cityId` and preserved through `approve`; no geocoder runs
+          (`lat`/`lng` are derived only from `mapsUrl`).
         - `content` is sanitized server-side (strict allowlist); a payload that
           becomes empty after sanitization → **422**.
         - `socialMedia` items must have non-empty `platform` and `url`.
@@ -3447,6 +3449,13 @@ components:
           type: [integer, 'null']
         stateId:
           type: [integer, 'null']
+        cityId:
+          type: [integer, 'null']
+        city:
+          anyOf:
+            - $ref: '#/components/schemas/CityRef'
+            - type: 'null'
+          description: Resolved from `cityId`; `{ id, name } | null`.
         createdBy:
           type: [string, 'null']
           format: uuid
@@ -3491,6 +3500,15 @@ components:
         country:
           type: string
           maxLength: 100
+        countryId:
+          type: integer
+          description: 'Existing `Country.id`; when sent, resolved to `country`. `stateId` must belong to `countryId`.'
+        stateId:
+          type: integer
+          description: 'Existing `State.id`; when sent, resolved to `state` and must belong to `countryId`. Required whenever `cityId` belongs to a state.'
+        cityId:
+          type: integer
+          description: 'Existing `City.id`; when sent, resolved to `city` (id/name) and must belong to `countryId` and, when the city belongs to a state, to the required `stateId`.'
         address:
           type: string
           maxLength: 500
@@ -3542,6 +3560,9 @@ components:
       description: |
         All fields optional; omit a field to leave it untouched. Sending `{}` returns the resource unchanged.
         `website`/`contact`/`socialMedia`/`mapsUrl`/`organisationType`/`ledBy`/`activityType` accept explicit `null` to clear the value.
+        Changing `countryId` clears `stateId` and `cityId` unless those fields are explicitly resent; changing
+        (or explicitly sending) `stateId` clears `cityId` unless `cityId` is resent. Explicit `null` clears the field.
+        `stateId` is required whenever the resent `cityId` belongs to a state.
       properties:
         name:
           type: string
@@ -3553,6 +3574,15 @@ components:
         country:
           type: string
           maxLength: 100
+        countryId:
+          type: [integer, 'null']
+          description: 'Existing `Country.id`; when sent and different, resolved to `country` and clears `stateId`/`cityId` unless resent. `stateId` must belong to `countryId`. `null` clears `countryId`, `country`, and any `stateId`/`cityId`.'
+        stateId:
+          type: [integer, 'null']
+          description: 'Existing `State.id`; when sent, resolved to `state`, must belong to `countryId`, and clears `cityId` unless resent. `null` clears it and `cityId`.'
+        cityId:
+          type: [integer, 'null']
+          description: 'Existing `City.id`; when sent, resolved to `city` (id/name) and must belong to `countryId`. When the city belongs to a state, the matching `stateId` is required. `null` clears it.'
         address:
           type: string
           maxLength: 500
@@ -3614,25 +3644,15 @@ components:
       additionalProperties: false
       description: |
         Nested `submitter` section ("data pengirim") of a public network
-        submission — its own section, audit-only; stored as a public user
-        referenced by `Network.createdBy` (not field-copied). Required on
+        submission. Email address of the submitter — audit-only; never copied
+        into the created/updated `Network`. Required on
         `CreatePublicNetworkRequest`.
-      required: [fullName, email, countryId]
+      required: [email]
       properties:
-        fullName:
-          type: string
-          minLength: 1
-          maxLength: 200
         email:
           type: string
           format: email
           maxLength: 200
-        countryId:
-          type: integer
-          description: Existing `Country.id`.
-        stateId:
-          type: integer
-          description: Optional; must belong to `countryId`.
     CreatePublicNetworkRequest:
       type: object
       additionalProperties: false
@@ -3650,13 +3670,14 @@ components:
         `errors: [{ field, message }]`:
         - `countryId` must exist.
         - `stateId`, when sent, must belong to `countryId`.
-        - `submitter.countryId` must exist; `submitter.stateId`, when sent,
-          must belong to `submitter.countryId`.
+        - `cityId`, when sent, must belong to `countryId` and, when `stateId` is
+          sent, to that `stateId`.
         - each `socialMedia.N.url` must be a valid URL.
 
         The backend writes a `Network` row directly (`status=REQUEST`,
         `source=PUBLIC`): `countryId`/`stateId` are resolved to `country`/`state`
-        name strings. When `mapsUrl` is provided it is resolved server-side into
+        name strings, and `cityId` (when sent) is persisted as `Network.cityId`
+        (with no geocoder; `lat`/`lng` come only from `mapsUrl`). When `mapsUrl` is provided it is resolved server-side into
         `Network.lat`/`lng` + `Network.embedUrl` (an invalid or unresolvable link
         → 422 `mapsUrl`).
         `submitter` is audit-only.
@@ -3679,6 +3700,9 @@ components:
         stateId:
           type: integer
           description: Optional; must belong to `countryId`.
+        cityId:
+          type: integer
+          description: 'Existing `City.id`. Optional; when sent it must belong to `countryId` and, when `stateId` is sent, to that `stateId` (validated server-side → 422 `cityId`).'
         address:
           type: string
           maxLength: 500
@@ -3715,8 +3739,8 @@ components:
         submitter:
           $ref: '#/components/schemas/PublicNetworkSubmitter'
           description: |
-            Required. Submitter identity (audit-only); stored as a public user
-            referenced by `Network.createdBy`, not copied into `Network` fields.
+            Required. Email address of the submitter — audit-only; never copied
+            into the created/updated `Network`.
     # ---------- events ----------
     EventDate:
       type: object

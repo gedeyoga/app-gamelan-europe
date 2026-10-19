@@ -36,6 +36,7 @@ export function createNetworkSubmissionSchema(t: TFunction) {
       // Geo disimpan sebagai string id numerik; dikonversi Number saat submit.
       countryId: z.string().min(1, t('validation:countryRequired')),
       stateId: z.string(),
+      cityId: z.string(),
       address: z.string().trim().max(500, t('validation:addressMax', { count: 500 })),
       mapsUrl: z
         .string()
@@ -50,9 +51,11 @@ export function createNetworkSubmissionSchema(t: TFunction) {
       contact: z
         .string()
         .trim()
-        .min(1, t('validation:emailRequired'))
-        .max(200, t('validation:emailMax', { count: 200 }))
-        .email(t('validation:emailInvalid')),
+        .max(200, t('validation:contactMax', { count: 200 }))
+        .refine(
+          (value) => value === '' || /^(?:[^\s@]+@[^\s@]+\.[^\s@]{2,}|\+?\d{7,15})$/.test(value),
+          t('validation:contactInvalid'),
+        ),
       socialMedia: z
         .array(
           z.object({
@@ -101,19 +104,12 @@ export function createNetworkSubmissionSchema(t: TFunction) {
         .min(1, t('validation:contentRequired'))
         .max(10000, t('validation:contentMax', { count: 10000 })),
       submitter: z.object({
-        fullName: z
-          .string()
-          .trim()
-          .min(1, t('validation:fullNameRequired'))
-          .max(200, t('validation:fullNameMax', { count: 200 })),
         email: z
           .string()
           .trim()
           .min(1, t('validation:emailRequired'))
           .max(200, t('validation:emailMax', { count: 200 }))
           .email(t('validation:emailInvalid')),
-        countryId: z.string().min(1, t('validation:submitterCountryRequired')),
-        stateId: z.string(),
       }),
     })
     .superRefine((values, ctx) => {
@@ -140,6 +136,7 @@ export const EMPTY_NETWORK_SUBMISSION_VALUES: NetworkSubmissionFormValues = {
   ledBy: '',
   countryId: '',
   stateId: '',
+  cityId: '',
   address: '',
   mapsUrl: '',
   website: '',
@@ -149,9 +146,6 @@ export const EMPTY_NETWORK_SUBMISSION_VALUES: NetworkSubmissionFormValues = {
   activityTypeOther: '',
   content: '',
   submitter: {
-    fullName: '',
     email: '',
-    countryId: '',
-    stateId: '',
   },
 }

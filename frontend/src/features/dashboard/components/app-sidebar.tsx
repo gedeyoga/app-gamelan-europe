@@ -25,6 +25,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Kode permission (`resource:action`) syarat tampil menu; tanpa ini selalu tampil. */
   permission?: string | string[]
+  /** Sembunyikan menu untuk pemegang `admin:access` (mis. My Billings). */
+  hideForAdmin?: boolean
 }
 
 interface AppSidebarProps {

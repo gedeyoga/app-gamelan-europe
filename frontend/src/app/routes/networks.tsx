@@ -4,6 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DataTablePagination } from '@/components/shared/data-table-pagination'
 import { SearchBar } from '@/components/shared/search-bar'
@@ -16,9 +23,10 @@ import { DeleteNetworkDialog } from '@/features/network/components/delete-networ
 import { NetworkTable } from '@/features/network/components/network-table'
 import { useDeleteNetwork } from '@/features/network/hooks/use-delete-network'
 import { useNetworks } from '@/features/network/hooks/use-networks'
-import type { Network } from '@/features/network/types'
+import { NETWORK_STATUSES, type Network } from '@/features/network/types'
 
 const PAGE_LIMIT = 10
+const ALL = 'ALL'
 
 function NetworksTableSkeleton() {
   return (
@@ -36,6 +44,7 @@ export function NetworksPage() {
   const { can } = useAuthPermissions()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [sortBy, setSortBy] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<ListSortOrder | null>(null)
   const [deletingNetwork, setDeletingNetwork] = useState<Network | null>(null)
@@ -47,6 +56,7 @@ export function NetworksPage() {
     search: debouncedSearch,
     sortBy,
     sortOrder,
+    filter: statusFilter ? { status: statusFilter } : undefined,
   })
 
   const deleteNetwork = useDeleteNetwork()
@@ -110,12 +120,33 @@ export function NetworksPage() {
         )}
       </div>
 
-      <SearchBar
-        value={search}
-        onChange={handleSearchChange}
-        placeholder={t('network:search.placeholder')}
-        ariaLabel={t('network:search.ariaLabel')}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBar
+          value={search}
+          onChange={handleSearchChange}
+          placeholder={t('network:search.placeholder')}
+          ariaLabel={t('network:search.ariaLabel')}
+        />
+        <Select
+          value={statusFilter || ALL}
+          onValueChange={(value) => {
+            setStatusFilter(value === ALL ? '' : value)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={t('network:filter.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('network:filter.allStatuses')}</SelectItem>
+            {NETWORK_STATUSES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {t(`network:statusOptions.${value}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {networksQuery.isError ? (
         networksForbidden ? (

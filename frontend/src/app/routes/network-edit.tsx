@@ -1,14 +1,24 @@
 import { ArrowLeft, RefreshCw, ShieldAlert } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { PublishScheduleDialog } from '@/components/shared/publish-schedule-dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getApiErrorMessage, isValidationError, toastError, toastSuccess } from '@/lib/toast'
+import {
+  getApiErrorMessage,
+  isConflictError,
+  isValidationError,
+  toastError,
+  toastSuccess,
+} from '@/lib/toast'
 import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { NetworkForm } from '@/features/network/components/network-form'
+import { useApproveNetwork } from '@/features/network/hooks/use-approve-network'
 import { useNetwork } from '@/features/network/hooks/use-network'
+import { useRejectNetwork } from '@/features/network/hooks/use-reject-network'
 import { useUpdateNetwork } from '@/features/network/hooks/use-update-network'
 import { ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_OTHER } from '@/features/network/lib/constants'
 import type { NetworkFormValues } from '@/features/network/lib/schema'
@@ -24,8 +34,9 @@ function toFormValues(network: Network): NetworkFormValues {
     name: network.name,
     organisationType: network.organisationType ?? '',
     ledBy: network.ledBy ?? '',
-    state: network.state ?? '',
-    country: network.country ?? '',
+    countryId: network.countryId != null ? String(network.countryId) : '',
+    stateId: network.stateId != null ? String(network.stateId) : '',
+    cityId: network.cityId != null ? String(network.cityId) : '',
     address: network.address ?? '',
     website: network.website ?? '',
     mapsUrl: network.mapsUrl ?? '',
@@ -38,10 +49,7 @@ function toFormValues(network: Network): NetworkFormValues {
       activityType === '' || isKnownActivityType ? activityType : ACTIVITY_TYPE_OTHER,
     activityTypeOther: activityType === '' || isKnownActivityType ? '' : activityType,
     content: network.content ?? '',
-    submitterFullName: network.submitterFullName ?? '',
     submitterEmail: network.submitterEmail ?? '',
-    submitterCountry: network.submitterCountry ?? '',
-    submitterState: network.submitterState ?? '',
   }
 }
 
@@ -52,13 +60,57 @@ export function NetworkEditPage() {
   const { can } = useAuthPermissions()
 
   const canUpdate = can('network:update')
+  const canApprove = can('network:approve')
+  const canReject = can('network:reject')
   const networkQuery = useNetwork(id)
   const updateNetwork = useUpdateNetwork()
+  const approveNetwork = useApproveNetwork()
+  const rejectNetwork = useRejectNetwork()
   const uploadImage = useUploadImage()
+  const [approvePayload, setApprovePayload] = useState<CreateNetworkInput | null>(null)
 
   function handleUploadError(err: unknown) {
     if (isValidationError(err)) return
     toastError(getApiErrorMessage(err, t('network:errors.uploadFailed')))
+  }
+
+  function handleApprove(payload: CreateNetworkInput) {
+    setApprovePayload(payload)
+  }
+
+  async function handleConfirmApprove(publishedAt: string) {
+    if (!id || !approvePayload) return
+    // Simpan perubahan field dulu; `publishedAt` hanya ke endpoint approve.
+    try {
+      await updateNetwork.mutateAsync({ id, payload: approvePayload })
+    } catch (err: unknown) {
+      // 422/409 mengalir ke form via submissionError -> setError per-field; tetap di halaman.
+      if (isValidationError(err) || isConflictError(err)) return
+      toastError(getApiErrorMessage(err, t('network:toast.updateFailed')))
+      return
+    }
+    try {
+      await approveNetwork.mutateAsync({ id, publishedAt })
+      setApprovePayload(null)
+      toastSuccess(t('network:toast.approved'))
+    } catch (err: unknown) {
+      toastError(getApiErrorMessage(err, t('network:toast.approveFailed')))
+      return
+    }
+    navigate('/networks')
+  }
+
+  async function handleReject() {
+    if (!id) return
+    try {
+      await rejectNetwork.mutateAsync(id)
+      toastSuccess(t('network:toast.rejected'))
+    } catch (err: unknown) {
+      if (isValidationError(err)) return
+      toastError(getApiErrorMessage(err, t('network:toast.rejectFailed')))
+      return
+    }
+    navigate('/networks')
   }
 
   function handleSubmit(payload: CreateNetworkInput) {
@@ -120,16 +172,37 @@ export function NetworkEditPage() {
           </div>
         )
       ) : networkQuery.data ? (
-        <NetworkForm
-          key={id}
-          initialValues={toFormValues(networkQuery.data)}
-          isPending={updateNetwork.isPending}
-          submissionError={updateNetwork.error}
-          onSubmit={handleSubmit}
-          onCancel={() => navigate('/networks')}
-          onUploadImage={uploadImage.mutateAsync}
-          onUploadError={handleUploadError}
-        />
+        <>
+          <NetworkForm
+            key={id}
+            initialValues={toFormValues(networkQuery.data)}
+            isPending={
+              updateNetwork.isPending || approveNetwork.isPending || rejectNetwork.isPending
+            }
+            submissionError={updateNetwork.error}
+            onSubmit={handleSubmit}
+            onCancel={() => navigate('/networks')}
+            onUploadImage={uploadImage.mutateAsync}
+            onUploadError={handleUploadError}
+            status={networkQuery.data.status}
+            canApprove={canApprove}
+            canReject={canReject}
+            onApprove={handleApprove}
+            onReject={() => void handleReject()}
+          />
+          <PublishScheduleDialog
+            open={approvePayload !== null}
+            onOpenChange={(open) => !open && setApprovePayload(null)}
+            onConfirm={(publishedAt) => void handleConfirmApprove(publishedAt)}
+            isPending={updateNetwork.isPending || approveNetwork.isPending}
+            title={t('network:publishDialog.title')}
+            description={t('network:publishDialog.description')}
+            dateLabel={t('network:publishDialog.dateLabel')}
+            datePlaceholder={t('network:publishDialog.datePlaceholder')}
+            confirmLabel={t('network:publishDialog.confirm')}
+            cancelLabel={t('common:actions.cancel')}
+          />
+        </>
       ) : null}
     </div>
   )

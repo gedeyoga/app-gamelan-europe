@@ -17,9 +17,10 @@ Dokumen ini mencatat **halaman form publik `/network/join`** pada frontend React
 **Termasuk:**
 
 - Halaman publik **`/network/join`** (`app/routes/network-join.tsx`): hero + form standalone (tanpa sidebar/header dashboard).
-- Form RHF + zod, **2 section**: **Organisation Details** + **Submitted By** — mirror field referensi.
+- Form RHF + zod, **1 section**: **Organisation Details** (submitter email audit ikut di dalamnya).
 - Fitur baru `src/features/network-submission/`: API + hook + schema + payload + komponen form + layar sukses + types.
-- Cascade **Country → State** untuk `countryId`/`stateId` **dan** `submitter.countryId`/`submitter.stateId` (state difetch dari `iso2` country terpilih; ganti country reset state).
+- Cascade **Country → State → City** untuk `countryId`/`stateId`/`cityId` (state difetch dari `iso2` country terpilih; `cityId` opsional, difetch via `useCities({ countryId, stateId })`; ganti country/state reset turunannya).
+- **Submitter audit email-only**: field `submitter.email` (wajib) tampil full-width tepat di bawah `ledBy`; tanpa nama/negara/state pengirim.
 - Daftar **`socialMedia`** dinamis (platform + url, maks 10, tambah/hapus; baris kosong di-strip).
 - Handling error terpetakan: 422 per-field, 429 rate-limit, 500/network generik. Sukses → **layar terima kasih** (tanpa navigasi keluar).
 - i18n namespace baru `networkSubmission` (en/id) + key `validation:*` baru.
@@ -57,7 +58,7 @@ src/features/network-submission/
 │   ├── schema.ts                               # createNetworkSubmissionSchema(t) zod + NetworkSubmissionFormValues + EMPTY; re-export konstanta dari network/lib/constants
 │   └── payload.ts                              # buildNetworkSubmissionPayload(values) — strip baris sosial kosong, buang opsional kosong
 ├── components/
-│   ├── network-submission-form.tsx             # RHF+zod, 2 section (Organisation Details + Submitted By)
+│   ├── network-submission-form.tsx             # RHF+zod, 1 section (Organisation Details) + cascade Country→State→City
 │   └── network-submission-success.tsx          # layar terima kasih
 └── types.ts                                    # NetworkOrganisationType, NetworkSubmissionSocialMedia, NetworkSubmissionSubmitter, CreateNetworkSubmissionInput, NetworkSubmissionResult
 
@@ -68,7 +69,7 @@ src/app/routes/network-join.tsx                 # halaman publik: hero + form (s
 - Komponen shared dipakai ulang (tidak dibuat baru): `components/ui/{form,input,textarea,select,button,label,card,badge}`; `components/shared/search-select` (country/state); `components/shared/language-switcher` (opsional hero).
 - **Tidak ada** `app/routes/network-submissions.tsx` (admin), tabel/list submission mandiri, route edit submission, maupun permukaan API admin submission — semuanya **dihapus**. Review & edit usulan lewat **modul Network** (§13).
 - **Review admin (modul Network, lihat §13)**: list `features/network/hooks/use-networks.ts` (`useNetworks({ filter: { status: 'REQUEST' } })`) → `GET /networks`, aksi `use-approve-network.ts`/`use-reject-network.ts` → `POST /networks/:id/approve|reject`, editor `/networks/:id/edit`, komponen presentational `features/dashboard/components/dashboard-pending-network-submissions.tsx`, view type `DashboardPendingNetworkSubmissionItem`.
-- Reuse infra existing: `lib/api-client.ts` (`request`, `ApiError`, `isValidationError`), `lib/field-errors.ts` (`mapApiFieldErrors`), `lib/toast.ts` (`toastSuccess`/`toastError`/`getApiErrorMessage`), `features/geo/api/geo.ts` (`listCountries`, `listStatesByCountry`), `features/geo/hooks/use-countries.ts` (`useCountries`), `features/geo/hooks/use-states.ts` (`useStates(iso2)`).
+- Reuse infra existing: `lib/api-client.ts` (`request`, `ApiError`, `isValidationError`), `lib/field-errors.ts` (`mapApiFieldErrors`), `lib/toast.ts` (`toastSuccess`/`toastError`/`getApiErrorMessage`), `features/geo/api/geo.ts` (`listCountries`, `listStatesByCountry`), `features/geo/hooks/use-countries.ts` (`useCountries`), `features/geo/hooks/use-states.ts` (`useStates(iso2)`), `features/geo/hooks/use-cities.ts` (`useCities({ countryId, stateId })`).
 
 ## 4. Kontrak API
 
@@ -87,16 +88,17 @@ Prefix global `/api/v1`. Envelope: sukses `{ data, message }`; error `{ statusCo
 | `ledBy` | string | opsional — ≤200 |
 | `countryId` | int | **wajib** |
 | `stateId` | int | opsional — **harus milik `countryId`** |
+| `cityId` | int | opsional — kota untuk `countryId`/`stateId` terpilih |
 | `address` | string | ≤500 |
 | `mapsUrl` | uri | ≤2048 |
 | `website` | uri | ≤500 |
-| `contact` | email | **wajib** — ≤200 |
+| `contact` | string | opsional — email **atau** nomor telepon 7–15 digit, `^(?:[^\s@]+@[^\s@]+\.[^\s@]{2,}\|\+?\d{7,15})$`, ≤200 |
 | `socialMedia` | array | `{ platform(1–50), url(uri ≤500) }[]`, **maks 10** |
 | `activityType` | string | ≤100 (opsional) |
 | `content` | string | **wajib** — 1–10000; rich HTML, **disanitasi server** (`sanitizeStoryContent`); plain text aman |
-| `submitter` | object | **wajib** (audit-only) — `{ fullName(1–200) wajib, email wajib, countryId int wajib, stateId? }` |
+| `submitter` | object | **wajib** (audit-only) — `{ email }` saja |
 
-Tipe (`types.ts`, rencana):
+Tipe (`types.ts`):
 
 ```typescript
 export type NetworkOrganisationType = 'GAMELAN_GROUP' | 'ASSOCIATION' | 'INSTITUTION'
@@ -107,10 +109,7 @@ export interface NetworkSubmissionSocialMedia {
 }
 
 export interface NetworkSubmissionSubmitter {
-  fullName: string
   email: string
-  countryId: number
-  stateId?: number
 }
 
 export interface CreateNetworkSubmissionInput {
@@ -119,10 +118,11 @@ export interface CreateNetworkSubmissionInput {
   ledBy?: string
   countryId: number
   stateId?: number
+  cityId?: number
   address?: string
   mapsUrl?: string
   website?: string
-  contact: string
+  contact?: string
   socialMedia?: NetworkSubmissionSocialMedia[]
   activityType?: string
   content: string
@@ -152,17 +152,18 @@ export function createNetworkSubmission(
 ## 5. Aturan Validasi (zod, mirror DTO)
 
 - Schema `createNetworkSubmissionSchema(t)` di `lib/schema.ts`, dibungkus `useMemo(..., [t])`; pesan **hanya** dari `t('validation:*')`. Field string wajib `trim` + batas panjang **mirror DTO**.
-- **Geo disimpan sebagai string id numerik** di form (`countryId`/`stateId`/`submitter.countryId`/`submitter.stateId` → string), dikonversi ke `number` saat submit (`buildNetworkSubmissionPayload`). Ganti country → reset state terkait.
-- **Buang opsional kosong** saat submit (`buildNetworkSubmissionPayload`): jangan kirim `undefined`/string kosong untuk `ledBy`/`stateId`/`address`/`mapsUrl`/`website`/`socialMedia`/`activityType`.
+- **Geo disimpan sebagai string id numerik** di form (`countryId`/`stateId`/`cityId` → string), dikonversi ke `number` saat submit (`buildNetworkSubmissionPayload`). Ganti country → reset state + city; ganti state → reset city.
+- **Buang opsional kosong** saat submit (`buildNetworkSubmissionPayload`): jangan kirim `undefined`/string kosong untuk `ledBy`/`stateId`/`cityId`/`address`/`mapsUrl`/`website`/`socialMedia`/`activityType`.
+- **`contact`** opsional: email **atau** telepon, regex `^(?:[^\s@]+@[^\s@]+\.[^\s@]{2,}|\+?\d{7,15})$` (input `type="text"`, tanpa `inputMode="tel"`), pesan `validation:contactInvalid`.
 - **`socialMedia`**: `useFieldArray` (platform + url). Baris **penuh kosong di-strip** sebelum submit (jika hasil kosong → omit field). Baris terisi wajib lengkap (superRefine zod → pesan per-field via `<FormMessage />`). Maks **10**.
 - **`activityType`** Select; nilai `OTHER` → tampil `Input` deskripsi bebas (wajib bila dipilih, ≤100) yang dipetakan jadi nilai `activityType` (mirror referensi). Opsi mirror referensi: `Gamelan Ensemble` / `Dance Group` / `Theatre / Drama Group` / `Music Group` / `Education / Workshop` / `Research / Academic` / `Cultural Institution` / `OTHER` (disimpan apa adanya; label i18n).
-- 422 dari server → `mapApiFieldErrors` → `form.setError` per-field (tanpa toast). `KNOWN_FIELDS`/field path server (`submitter.fullName`, `socialMedia.N.url`, dst.) dipetakan; error tak-terpetakan → banner generik.
+- 422 dari server → `mapApiFieldErrors` → `form.setError` per-field (tanpa toast). `KNOWN_FIELDS`/field path server (`cityId`, `submitter.email`, `socialMedia.N.url`, dst.) dipetakan; error tak-terpetakan → banner generik.
 
-**Key `validation:*` baru** (tambah ke `src/i18n/locales/{en,id}/validation.json`; sisanya reuse existing `nameRequired/nameMax/emailRequired/emailInvalid/emailMax/fullNameRequired/fullNameMax/addressMax/websiteMax/contactMax/contentMax/descriptionMax/socialPlatformRequired/socialPlatformMax/socialUrlRequired/socialUrlMax/socialMediaMax`):
+**Key `validation:*` baru** (tambah ke `src/i18n/locales/{en,id}/validation.json`; sisanya reuse existing `nameRequired/nameMax/emailRequired/emailInvalid/emailMax/addressMax/websiteMax/contactMax/contentMax/descriptionMax/socialPlatformRequired/socialPlatformMax/socialUrlRequired/socialUrlMax/socialMediaMax`):
 
 ```
 organisationTypeRequired, organisationTypeInvalid,
-countryRequired, submitterCountryRequired,
+countryRequired,
 activityTypeMax, activityTypeOtherRequired, ledByMax,
 mapsUrlMax, mapsUrlInvalid, websiteInvalid,
 socialUrlInvalid, contentRequired
@@ -170,8 +171,8 @@ socialUrlInvalid, contentRequired
 
 ## 6. Aksi / Flow
 
-1. User buka `/network/join` (anonim). Hero + form 2 section.
-2. Isi form; cascade Country→State via `useCountries` + `useStates(iso2)` (`iso2 = countries.find(c => String(c.id) === countryId)?.iso2`). State select `disabled` bila country belum dipilih / query pending. Ganti country → reset state.
+1. User buka `/network/join` (anonim). Hero + form 1 section.
+2. Isi form; cascade Country→State→City via `useCountries` + `useStates(iso2)` (`iso2 = countries.find(c => String(c.id) === countryId)?.iso2`) + `useCities({ countryId, stateId })`. State select `disabled` bila country belum dipilih; city select `disabled` bila state belum dipilih. Ganti country → reset state + city; ganti state → reset city.
 3. Submit → validasi zod client → `buildNetworkSubmissionPayload(values)` → `useCreateNetworkSubmission().mutate(payload)` → `POST /network-submissions`.
 4. Call-site (`network-join.tsx`) `onSuccess` → `toastSuccess(t('networkSubmission:success.toast'))` + **set state `submitted` → render `NetworkSubmissionSuccess`** (layar terima kasih; **tanpa** navigasi keluar).
 5. Banner error (`network-submission-form.tsx`; banner **hanya non-422**):
@@ -180,7 +181,7 @@ socialUrlInvalid, contentRequired
    - **500 / non-`ApiError`** (mis. fetch gagal/`TypeError`) → banner generik (`errors.generic`).
 6. Hook `useCreateNetworkSubmission` = `useMutation(createNetworkSubmission)` **(tanpa invalidate** — tidak ada list publik; boleh no-invalidate).
 
-**`buildNetworkSubmissionPayload(values)`** (`lib/payload.ts`): konversi `countryId`/`stateId`/`submitter.countryId`/`submitter.stateId` → `Number`; `submitter.stateId` hanya bila terisi; strip baris `socialMedia` kosong; omit opsional kosong; `activityType` OTHER → teks bebas. Tidak ada flag `ENABLE_SUBMISSION`.
+**`buildNetworkSubmissionPayload(values)`** (`lib/payload.ts`): konversi `countryId`/`stateId`/`cityId` → `Number`; `stateId`/`cityId` hanya bila terisi; `submitter` **hanya** `{ email }`; strip baris `socialMedia` kosong; omit opsional kosong; `activityType` OTHER → teks bebas. Tidak ada flag `ENABLE_SUBMISSION`.
 
 ```tsx
 // network-join.tsx (rencana) — call-site
@@ -204,14 +205,14 @@ createNetworkSubmission.mutate(buildNetworkSubmissionPayload(values), {
 - Struktur key utama:
 
   - `hero.{title,subtitle,badge?}` — hero halaman publik.
-  - `section.organisation` / `section.submitter` — judul 2 section.
+  - `section.organisation` — judul section.
   - `form.organisationType.{label,placeholder}`, `form.organisationType.options.{GAMELAN_GROUP,ASSOCIATION,INSTITUTION}`.
-  - `form.name.{label,placeholder}`, `form.ledBy.{label,placeholder}`, `form.country.{label,placeholder}`, `form.state.{label,placeholder}`, `form.address.{label,placeholder}`, `form.mapsUrl.{label,placeholder}`, `form.website.{label,placeholder}`, `form.contact.{label,placeholder}`.
+  - `form.name.{label,placeholder}`, `form.ledBy.{label,placeholder}`, `form.country.{label,placeholder}`, `form.state.{label,placeholder}`, `form.city.{label,placeholder}`, `form.address.{label,placeholder}`, `form.mapsUrl.{label,placeholder}`, `form.website.{label,placeholder}`, `form.contact.{label,placeholder}`.
   - `form.socialMedia.{label,platform,url,add,remove,platformAria,urlAria}`.
-  - `form.stateSelectCountry` — placeholder state saat country belum dipilih.
+  - `form.stateSelectCountry` — placeholder state saat country belum dipilih; `form.citySelectState` — placeholder city saat state belum dipilih.
   - `form.activityType.{label,placeholder,options.*,otherLabel,otherPlaceholder}`.
   - `form.content.{label,placeholder}`.
-  - `form.submitter.{fullName,email,country,state}` (label + placeholder).
+  - `form.submitter.email.{label,placeholder}` (satu-satunya field submitter).
   - `actions.{submit,submitting}`.
   - `errors.{rateLimited,generic}`.
   - `success.{title,message,toast}`.
@@ -223,8 +224,8 @@ createNetworkSubmission.mutate(buildNetworkSubmissionPayload(values), {
 
 Mengikuti `docs/DESIGN_SYSTEM.md` (token, tanpa hardcode warna/radius; `cn()` dari `@/lib/utils`). Standalone tanpa sidebar — hero + kartu form, responsif (`sm:grid-cols-2` untuk pasangan field, 1 kolom di mobile).
 
-- Field organisasi (urutan mirror referensi): `organisationType` (Select) → `name` (Input) → `ledBy` (Input) → `country`+`state` (SearchSelect, 2 kolom) → `address` (Input) → `mapsUrl` (Input url) → `website`+`contact` (Input url + email, 2 kolom) → `socialMedia` (field array) → `activityType` (Select; `OTHER` → Input deskripsi) → `content` (Textarea).
-- Field submitter: `submitter.fullName`+`submitter.email` (2 kolom) → `submitter.country`+`submitter.state` (SearchSelect, 2 kolom, cascade).
+- Field organisasi (urutan final): `organisationType` (Select) → `name` (Input) → `ledBy` (Input) → `submitter.email` (Input email, full-width) → `country`+`state` (SearchSelect, 2 kolom) → `city` (SearchSelect, full-width, opsional) → `address` (Input) → `mapsUrl` (Input url) → `website`+`contact` (Input url + Input teks email/telepon opsional, 2 kolom) → `socialMedia` (field array) → `activityType` (Select; `OTHER` → Input deskripsi) → `content` (Textarea).
+- **Tidak ada** section/card "Submitted By" — field submitter audit direduksi menjadi email saja di dalam Organisation Details.
 - Tombol submit `Button` `disabled` saat `isPending` + label `actions.submitting` (`aria-busy`).
 - Banner error (`role="alert"`) di atas tombol submit — **hanya non-422**; 422 per-field via `<FormMessage />` kosong.
 - Layar sukses (`network-submission-success.tsx`): ikon centang + `success.title` + `success.message`; presentational, terima props/teks.
@@ -241,13 +242,14 @@ Mengikuti `docs/DESIGN_SYSTEM.md` (token, tanpa hardcode warna/radius; `cn()` da
 - [ ] `/network/join` dapat diakses **tanpa login**; tidak di-redirect ke `/login`.
 - [ ] Route didaftarkan **sebelum** fallback `*`; halaman standalone (tanpa sidebar dashboard).
 - [ ] Field form **lengkap** sesuai §4/§8 (semua field DTO `CreateNetworkSubmissionDto` terwakili).
-- [ ] Cascade Country→State berfungsi untuk section organisasi **dan** submitter; ganti country reset state; state select `disabled` sebelum country dipilih.
+- [ ] Cascade Country→State→City berfungsi: ganti country reset state + city; ganti state reset city; state `disabled` sebelum country dipilih; city `disabled` sebelum state dipilih.
+- [ ] `cityId` opsional (tidak wajib) — kosong → tidak dikirim.
 - [ ] `socialMedia` dinamis: tambah/hapus, maks 10, baris kosong di-strip; baris terisi wajib lengkap.
 - [ ] `activityType = OTHER` → Input deskripsi bebas wajib; nilai terkirim = deskripsi.
 - [ ] Submit → `POST /network-submissions`; **201** → layar terima kasih (tanpa navigasi).
 - [ ] **422** → error per-field via `form.setError`/`<FormMessage />`, tanpa toast/banner.
 - [ ] **429** → banner rate-limit; **500/network** → banner generik.
-- [ ] Geo dikirim sebagai `number`; opsional kosong **tidak** dikirim; `socialMedia` kosong → omit.
+- [ ] Geo dikirim sebagai `number`; opsional kosong **tidak** dikirim; `submitter` hanya `{ email }`; `socialMedia` kosong → omit.
 - [ ] Tidak ada `ENABLE_SUBMISSION`; submit selalu `POST`.
 - [ ] i18n `networkSubmission` terdaftar en/id; key `validation:*` baru ada; tanpa string hardcode.
 - [ ] **Review admin** (§13): section "Network Submissions Awaiting Approval" dirender di dashboard home hanya bila `can('network:read')`; query `useNetworks({ filter: { status: 'REQUEST' } })`; tombol Setujui/Tolak ter-gate `network:approve`/`network:reject`; approve `POST /networks/:id/approve` (tanpa `publishedAt`/dialog) + reject `POST /networks/:id/reject` → toast `network:toast.*` + invalidate `['network']`; tombol Edit (gate `network:update`) → `/networks/:id/edit`.
@@ -260,17 +262,17 @@ Hasil aktual:
 - `pnpm exec tsc -p tsconfig.app.json --noEmit` → **0 error baru** (2 error pre-existing di `event-detail.tsx`/`story-detail.tsx`; catatan: `pnpm tsc --noEmit` **no-op** karena `tsconfig.json` `files: []`).
 - `pnpm dev` → buka `/network/join` tanpa login; isi + submit; cek 201 → layar sukses.
 - Cek manual error: 422 (field salah) per-field; spam >5/menit → 429 banner; matikan backend → banner generik.
-- Cek cascade: pilih country → state terisi; ganti country → state reset; submitter cascade independen.
-- Pastikan **tidak ada** entri sidebar / `RequirePermission` untuk `/network/join`, dan **tidak** ada perubahan `backend/`.
+- Cek cascade: pilih country → state terisi; pilih state → city terisi; ganti country/state → turunan reset.
+- Pastikan **tidak ada** section "Submitted By" dan **tidak** ada perubahan `backend/`.
 
 ## 12. Catatan
 
-- **Backend SUDAH ADA — jangan diubah.** `POST /network-submissions` publik, 201, `REQUEST`, rate-limit 5/menit, whitelist body; error **422** per-field / **429** rate-limit / **500/network** — tanpa duplikat 409. Rujuk `backend/apps/app/src/controllers/network-submissions.controller.ts` dan `backend/libs/src/modules/network/network.service.ts` (`createPublicSubmission`).
+- **Kontrak backend (sudah diterapkan).** `POST /network-submissions` publik, 201, `REQUEST`, rate-limit 5/menit, whitelist body; body menerima `cityId` opsional dan `submitter` **hanya** `{ email }`; error **422** per-field (`cityId`, `submitter.email`) / **429** rate-limit / **500/network** — tanpa duplikat 409. Rujuk `backend/apps/app/src/controllers/network-submissions.controller.ts` dan `backend/libs/src/modules/network/network.service.ts` (`createPublicSubmission`) untuk detail kontrak aktual; **jangan** edit `backend/`.
 - **Beda dari referensi**: referensi memakai `ENABLE_SUBMISSION = false` (menahan submit); repo ini **tidak** — submit selalu `POST` karena endpoint sudah final.
 - **Route publik tidak muncul di sidebar**: `/network/join` di luar `DashboardLayout`; tanpa menu, tanpa gate permission.
-- **`submitter` audit-only**: tidak membuat `User`/akun; hanya data kontak pelapor.
+- **`submitter` audit-only**: tidak membuat `User`/akun; hanya email pelapor.
 - **`content` plain text aman**: di-render sebagai teks/label; server men-sanitasi (`sanitizeStoryContent`). Form memakai `Textarea` (bukan rich text editor).
-- **Mirror field**: `NetworkSubmissionForm.tsx` referensi dibaca sebagai sumber field/urutan validasi — **tidak** diedit.
+- **Mirror field (dengan deviasi)**: field diambil dari `NetworkSubmissionForm.tsx` referensi (baca-saja; **tidak** diedit), **kecuali**: submitter direduksi jadi email saja (tanpa nama/negara/state, tanpa card "Submitted By") dan ditambah `cityId` opsional (cascade setelah country/state).
 
 ## 13. Review & Edit Admin (Modul Network)
 

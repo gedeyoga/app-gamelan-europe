@@ -1,4 +1,6 @@
-export type NetworkStatus = 'DRAFT' | 'REQUEST' | 'APPROVED' | 'PUBLISHED'
+export const NETWORK_STATUSES = ['DRAFT', 'REQUEST', 'APPROVED', 'PUBLISHED'] as const
+
+export type NetworkStatus = (typeof NETWORK_STATUSES)[number]
 
 export type NetworkOrganisationType = 'GAMELAN_GROUP' | 'ASSOCIATION' | 'INSTITUTION'
 
@@ -31,11 +33,10 @@ export interface Network {
   activityType: string | null
   countryId: number | null
   stateId: number | null
+  cityId: number | null
+  city: { id: number; name: string } | null
   createdBy: string | null
-  submitterFullName: string | null
   submitterEmail: string | null
-  submitterCountry: string | null
-  submitterState: string | null
   createdAt: string
   updatedAt: string
 }
@@ -44,9 +45,9 @@ export interface CreateNetworkInput {
   name: string
   organisationType?: NetworkOrganisationType | null
   ledBy?: string | null
-  /** `null` = clear; `undefined` = biarkan. */
-  state?: string | null
-  country?: string | null
+  countryId?: number
+  stateId?: number
+  cityId?: number
   address?: string | null
   website?: string | null
   mapsUrl?: string | null
@@ -56,12 +57,7 @@ export interface CreateNetworkInput {
   activityType?: string | null
   /** `null` = clear; `undefined` = biarkan. */
   content?: string | null
-  submitterFullName?: string | null
   submitterEmail?: string | null
-  /** Nama country (display), bukan id. */
-  submitterCountry?: string | null
-  /** Nama state (display), bukan id. */
-  submitterState?: string | null
 }
 
 export type UpdateNetworkInput = Partial<CreateNetworkInput>

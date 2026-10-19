@@ -63,7 +63,7 @@ export class NetworkRepository {
     return this.findById(id);
   }
 
-  async update(id: string, data: Prisma.NetworkUpdateInput): Promise<NetworkEntity> {
+  async update(id: string, data: Prisma.NetworkUncheckedUpdateInput): Promise<NetworkEntity> {
     const existing = await this.prisma.network.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('Network not found');
     return mapNetwork(await this.prisma.network.update({ where: { id }, data, select: networkSelect }));

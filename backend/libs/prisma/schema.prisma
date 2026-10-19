@@ -245,10 +245,9 @@ model Network {
   activityType     String?                  @map("activity_type")
   countryId        Int?                     @map("country_id")
   stateId          Int?                     @map("state_id")
-  submitterFullName String?                 @map("submitter_full_name")
+  cityId           Int?                     @map("city_id")
+  city             City?                    @relation(fields: [cityId], references: [id], onDelete: SetNull)
   submitterEmail   String?                  @map("submitter_email")
-  submitterCountry String?                  @map("submitter_country")
-  submitterState   String?                  @map("submitter_state")
   createdBy        String?                  @map("created_by")
   creator          User?                    @relation("NetworkCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   users            User[]
@@ -257,6 +256,7 @@ model Network {
   updatedAt        DateTime                 @updatedAt @map("updated_at")
 
   @@index([createdBy])
+  @@index([cityId])
   @@map("networks")
 }
 
@@ -745,6 +745,7 @@ model City {
   longitude  Decimal?        @db.Decimal(11, 8)
   wikiDataId String?         @map("wiki_data_id")
   locations  EventLocation[]
+  networks   Network[]
   createdAt  DateTime        @default(now()) @map("created_at")
   updatedAt  DateTime        @updatedAt @map("updated_at")
 

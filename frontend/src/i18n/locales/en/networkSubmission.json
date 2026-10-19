@@ -5,11 +5,11 @@
     "subtitle": "Tell us about your gamelan organisation. Our team will review your submission and get back to you."
   },
   "section": {
-    "organisation": "Organisation Details",
-    "submitter": "Submitted By"
+    "organisation": "Organisation Details"
   },
   "form": {
     "stateSelectCountry": "Select a country first",
+    "citySelectState": "Select a state / region first",
     "organisationType": {
       "label": "Organisation type",
       "placeholder": "Select organisation type",
@@ -35,6 +35,10 @@
       "label": "State / Region",
       "placeholder": "Select state / region"
     },
+    "city": {
+      "label": "City",
+      "placeholder": "Select city"
+    },
     "address": {
       "label": "Address",
       "placeholder": "Street, city, postal code"
@@ -48,8 +52,8 @@
       "placeholder": "https://example.com"
     },
     "contact": {
-      "label": "Contact email",
-      "placeholder": "contact@example.com"
+      "label": "Email or phone number",
+      "placeholder": "contact@example.com / +6281234567890"
     },
     "socialMedia": {
       "label": "Social media",
@@ -85,21 +89,9 @@
       "placeholder": "Describe your organisation, its activities, and how it works with gamelan."
     },
     "submitter": {
-      "fullName": {
-        "label": "Full name",
-        "placeholder": "Your full name"
-      },
       "email": {
         "label": "Email",
         "placeholder": "you@example.com"
-      },
-      "country": {
-        "label": "Country",
-        "placeholder": "Select country"
-      },
-      "state": {
-        "label": "State / Region",
-        "placeholder": "Select state / region"
       }
     }
   },

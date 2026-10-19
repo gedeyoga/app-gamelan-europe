@@ -4,6 +4,7 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -18,8 +19,6 @@ import { NetworkOrganisationType } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 // Whitespace-only → null (bukan `''`) agar kolom nullable benar-benar kosong.
-const trimNullable = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() || null : value;
 const trimNullableLower = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() || null : value;
 
@@ -43,6 +42,23 @@ export class CreateNetworkDto {
   @IsNotEmpty()
   @MaxLength(200)
   name: string;
+
+  // ID geografi opsional; bila dikirim, menang atas `country`/`state` (string tetap
+  // dipertahankan untuk kompatibilitas). `null` eksplisit = kosongkan (update).
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  countryId?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stateId?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number | null;
 
   @Transform(trim)
   @IsOptional()
@@ -113,30 +129,12 @@ export class CreateNetworkDto {
   @MaxLength(100)
   activityType?: string | null;
 
-  // Identitas pengirim usulan publik (kolom `submitter_*`); `null` eksplisit = kosongkan (update).
-  @Transform(trimNullable)
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  submitterFullName?: string | null;
-
+  // Email pengirim usulan publik (kolom `submitter_email`); `null` eksplisit = kosongkan (update).
   @Transform(trimNullableLower)
   @IsOptional()
   @IsEmail()
   @MaxLength(200)
   submitterEmail?: string | null;
-
-  @Transform(trimNullable)
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  submitterCountry?: string | null;
-
-  @Transform(trimNullable)
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  submitterState?: string | null;
 
   @IsOptional()
   @IsNumber()

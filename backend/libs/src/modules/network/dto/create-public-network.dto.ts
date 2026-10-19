@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -18,6 +19,12 @@ import { NetworkOrganisationType } from '@prisma/client';
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const trimLower = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
+// Blank/whitespace → undefined agar `@IsOptional` melewati validasi (semantik: absent).
+const trimOrUndefined = ({ value }: { value: unknown }) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
 
 export class PublicNetworkSocialMediaDto {
   @Transform(trim)
@@ -34,29 +41,13 @@ export class PublicNetworkSocialMediaDto {
   url: string;
 }
 
-// Section `submitter` ("data pengirim") — disimpan pada kolom `submitter*` di row `networks`
-// (tanpa membuat `User`), dipakai review admin.
-// Cross-field `submitter.stateId` milik `submitter.countryId` dicek di service → 422.
+// Section `submitter` ("data pengirim") — disimpan pada kolom `submitter_email` di row `networks`
+// (tanpa membuat `User`), dipakai review admin. Hanya `email` (wajib).
 export class PublicNetworkSubmitterDto {
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200)
-  fullName: string;
-
   @Transform(trimLower)
   @IsEmail()
   @MaxLength(200)
   email: string;
-
-  @Type(() => Number)
-  @IsInt()
-  countryId: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  stateId?: number;
 }
 
 // Submit publik (tanpa JWT): menulis langsung ke `networks` (`status=REQUEST`, `source=PUBLIC`).
@@ -97,6 +88,11 @@ export class CreatePublicNetworkDto {
   @IsInt()
   stateId?: number;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
+
   @Transform(trim)
   @IsOptional()
   @IsString()
@@ -111,10 +107,14 @@ export class CreatePublicNetworkDto {
   @MaxLength(500)
   website?: string;
 
-  @Transform(trim)
-  @IsEmail()
+  @Transform(trimOrUndefined)
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:[^\s@]+@[^\s@]+\.[^\s@]{2,}|\+?\d{7,15})$/, {
+    message: 'contact must be an email or phone number',
+  })
   @MaxLength(200)
-  contact: string;
+  contact?: string;
 
   @IsOptional()
   @IsArray()

@@ -6,6 +6,16 @@
     "placeholder": "Search name, state, country, or address...",
     "ariaLabel": "Search networks"
   },
+  "statusOptions": {
+    "DRAFT": "Draft",
+    "REQUEST": "Awaiting approval",
+    "APPROVED": "Approved",
+    "PUBLISHED": "Published"
+  },
+  "filter": {
+    "status": "Status",
+    "allStatuses": "All statuses"
+  },
   "errors": {
     "loadData": "Failed to load network data. Please try again.",
     "loadDetail": "Failed to load network detail.",
@@ -16,8 +26,10 @@
   },
   "table": {
     "name": "Name",
-    "state": "State",
+    "ledBy": "Led by",
+    "city": "City",
     "country": "Country",
+    "status": "Status",
     "created": "Created",
     "empty": "No networks yet",
     "notFound": "No results for \"{{term}}\".",
@@ -80,13 +92,8 @@
       }
     },
     "submitter": {
-      "title": "Submitted by",
-      "fullName": "Submitter full name",
-      "fullNamePlaceholder": "Full name",
-      "email": "Submitter email",
-      "emailPlaceholder": "name@example.com",
-      "country": "Submitter country",
-      "state": "Submitter state"
+      "email": "Email",
+      "emailPlaceholder": "name@example.com"
     },
     "settingsTitle": "Settings",
     "hideSettings": "Hide settings",
@@ -97,7 +104,12 @@
     "statePlaceholder": "Select state",
     "stateSearch": "Search state...",
     "stateEmpty": "No state found.",
-    "stateSelectCountry": "Select a country first"
+    "stateSelectCountry": "Select a country first",
+    "city": "City",
+    "cityPlaceholder": "Select city",
+    "citySearch": "Search city...",
+    "cityEmpty": "No city found.",
+    "citySelectState": "Select a state first"
   },
   "delete": {
     "title": "Delete Network",
@@ -110,6 +122,11 @@
     "datePlaceholder": "Choose date & time",
     "confirmDescription": "The network will be published at the selected date and time. Continue?",
     "confirm": "Publish"
+  },
+  "workflow": {
+    "requested": "This network is awaiting approval",
+    "approve": "Approve",
+    "reject": "Reject"
   },
   "toast": {
     "created": "Network created successfully",

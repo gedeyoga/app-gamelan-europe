@@ -16,6 +16,7 @@ export function useLogout() {
     },
     onSettled: () => {
       syncLogout()
+      sessionStorage.removeItem('auth.from')
       queryClient.clear()
       navigate('/login', { replace: true })
     },

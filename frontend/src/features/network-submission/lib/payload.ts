@@ -30,23 +30,17 @@ export function buildNetworkSubmissionPayload(
     organisationType: values.organisationType as NetworkOrganisationType,
     name: values.name.trim(),
     countryId: Number(values.countryId),
-    contact: values.contact.trim(),
     content: values.content,
-    submitter: {
-      fullName: values.submitter.fullName.trim(),
-      email: values.submitter.email.trim(),
-      countryId: Number(values.submitter.countryId),
-      ...(values.submitter.stateId.trim()
-        ? { stateId: Number(values.submitter.stateId) }
-        : {}),
-    },
+    submitter: { email: values.submitter.email.trim() },
   }
 
   if (values.ledBy.trim()) payload.ledBy = values.ledBy.trim()
   if (values.stateId.trim()) payload.stateId = Number(values.stateId)
+  if (values.cityId.trim()) payload.cityId = Number(values.cityId)
   if (values.address.trim()) payload.address = values.address.trim()
   if (values.mapsUrl.trim()) payload.mapsUrl = values.mapsUrl.trim()
   if (values.website.trim()) payload.website = values.website.trim()
+  if (values.contact.trim()) payload.contact = values.contact.trim()
   if (socialMedia.length > 0) payload.socialMedia = socialMedia
   if (activityType) payload.activityType = activityType
 

@@ -5,11 +5,11 @@
     "subtitle": "Ceritakan tentang organisasi gamelan Anda. Tim kami akan meninjau pendaftaran dan menghubungi Anda."
   },
   "section": {
-    "organisation": "Detail Organisasi",
-    "submitter": "Data Pengirim"
+    "organisation": "Detail Organisasi"
   },
   "form": {
     "stateSelectCountry": "Pilih negara terlebih dahulu",
+    "citySelectState": "Pilih negara bagian / wilayah terlebih dahulu",
     "organisationType": {
       "label": "Jenis organisasi",
       "placeholder": "Pilih jenis organisasi",
@@ -35,6 +35,10 @@
       "label": "Negara Bagian / Wilayah",
       "placeholder": "Pilih negara bagian / wilayah"
     },
+    "city": {
+      "label": "Kota",
+      "placeholder": "Pilih kota"
+    },
     "address": {
       "label": "Alamat",
       "placeholder": "Jalan, kota, kode pos"
@@ -48,8 +52,8 @@
       "placeholder": "https://contoh.com"
     },
     "contact": {
-      "label": "Email kontak",
-      "placeholder": "kontak@contoh.com"
+      "label": "Email atau nomor telepon",
+      "placeholder": "kontak@contoh.com / +6281234567890"
     },
     "socialMedia": {
       "label": "Sosial media",
@@ -85,21 +89,9 @@
       "placeholder": "Jelaskan organisasi Anda, aktivitasnya, dan cara bekerja dengan gamelan."
     },
     "submitter": {
-      "fullName": {
-        "label": "Nama lengkap",
-        "placeholder": "Nama lengkap Anda"
-      },
       "email": {
         "label": "Email",
         "placeholder": "anda@contoh.com"
-      },
-      "country": {
-        "label": "Negara",
-        "placeholder": "Pilih negara"
-      },
-      "state": {
-        "label": "Negara Bagian / Wilayah",
-        "placeholder": "Pilih negara bagian / wilayah"
       }
     }
   },

@@ -28,15 +28,21 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function targetFrom(state: unknown): string {
+  const from = (state as { from?: { pathname: string; search: string; hash: string } } | null)?.from
+  return from ? `${from.pathname}${from.search}${from.hash}` : '/'
+}
+
 export function GuestRoute({ children }: { children: ReactNode }) {
   const { status, isAuthenticated } = useAuth()
+  const location = useLocation()
 
   if (status === 'loading') {
     return <AuthLoading />
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to={targetFrom(location.state)} replace />
   }
 
   return <>{children}</>

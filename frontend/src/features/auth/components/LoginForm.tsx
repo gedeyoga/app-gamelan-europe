@@ -3,7 +3,7 @@ import { LogIn } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, type Location } from 'react-router-dom'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ import { useLogin } from '../hooks/useLogin'
 export function LoginForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const login = useLogin()
 
   const loginSchema = useMemo(
@@ -71,7 +72,12 @@ export function LoginForm() {
     login.mutate(values, {
       onSuccess: () => {
         toastSuccess(t('auth:toast.loggedIn'))
-        navigate('/', { replace: true })
+        const stored = sessionStorage.getItem('auth.from')
+        sessionStorage.removeItem('auth.from')
+        const from = (location.state as { from?: Location } | null)?.from
+        navigate(from ? `${from.pathname}${from.search}${from.hash}` : (stored ?? '/'), {
+          replace: true,
+        })
       },
       onError: (err: unknown) => {
         if (isValidationError(err)) return // 422 → per-field via useEffect

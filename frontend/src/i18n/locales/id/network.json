@@ -6,6 +6,16 @@
     "placeholder": "Cari nama, negara bagian, negara, atau alamat...",
     "ariaLabel": "Cari network"
   },
+  "statusOptions": {
+    "DRAFT": "Draf",
+    "REQUEST": "Menunggu persetujuan",
+    "APPROVED": "Disetujui",
+    "PUBLISHED": "Terbit"
+  },
+  "filter": {
+    "status": "Status",
+    "allStatuses": "Semua status"
+  },
   "errors": {
     "loadData": "Gagal memuat data network. Silakan coba lagi.",
     "loadDetail": "Gagal memuat detail network.",
@@ -16,8 +26,10 @@
   },
   "table": {
     "name": "Nama",
-    "state": "Negara Bagian",
+    "ledBy": "Dipimpin oleh",
+    "city": "Kota",
     "country": "Negara",
+    "status": "Status",
     "created": "Dibuat",
     "empty": "Belum ada network",
     "notFound": "Tidak ditemukan untuk \"{{term}}\".",
@@ -80,13 +92,8 @@
       }
     },
     "submitter": {
-      "title": "Data Pengirim",
-      "fullName": "Nama lengkap pengirim",
-      "fullNamePlaceholder": "Nama lengkap",
-      "email": "Email pengirim",
-      "emailPlaceholder": "nama@contoh.com",
-      "country": "Negara pengirim",
-      "state": "Negara Bagian pengirim"
+      "email": "Email",
+      "emailPlaceholder": "nama@contoh.com"
     },
     "settingsTitle": "Pengaturan",
     "hideSettings": "Sembunyikan pengaturan",
@@ -97,7 +104,12 @@
     "statePlaceholder": "Pilih negara bagian",
     "stateSearch": "Cari negara bagian...",
     "stateEmpty": "Negara bagian tidak ditemukan.",
-    "stateSelectCountry": "Pilih negara terlebih dahulu"
+    "stateSelectCountry": "Pilih negara terlebih dahulu",
+    "city": "Kota",
+    "cityPlaceholder": "Pilih kota",
+    "citySearch": "Cari kota...",
+    "cityEmpty": "Kota tidak ditemukan.",
+    "citySelectState": "Pilih negara bagian terlebih dahulu"
   },
   "delete": {
     "title": "Hapus Network",
@@ -110,6 +122,11 @@
     "datePlaceholder": "Pilih tanggal & waktu",
     "confirmDescription": "Network akan diterbitkan pada tanggal & waktu yang dipilih. Lanjutkan?",
     "confirm": "Terbitkan"
+  },
+  "workflow": {
+    "requested": "Network ini menunggu persetujuan",
+    "approve": "Setujui",
+    "reject": "Tolak"
   },
   "toast": {
     "created": "Network berhasil dibuat",

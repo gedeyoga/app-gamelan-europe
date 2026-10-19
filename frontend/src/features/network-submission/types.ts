@@ -8,10 +8,7 @@ export interface NetworkSubmissionSocialMedia {
 }
 
 export interface NetworkSubmissionSubmitter {
-  fullName: string
   email: string
-  countryId: number
-  stateId?: number | null
 }
 
 export interface CreateNetworkSubmissionInput {
@@ -20,10 +17,11 @@ export interface CreateNetworkSubmissionInput {
   ledBy?: string
   countryId: number
   stateId?: number
+  cityId?: number
   address?: string
   mapsUrl?: string
   website?: string
-  contact: string
+  contact?: string
   socialMedia?: NetworkSubmissionSocialMedia[]
   activityType?: string
   content: string

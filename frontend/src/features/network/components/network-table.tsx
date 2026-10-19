@@ -1,6 +1,7 @@
 import { MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -19,7 +20,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-import type { Network } from '../types'
+import type { Network, NetworkStatus } from '../types'
+
+const STATUS_VARIANT: Record<NetworkStatus, 'default' | 'secondary' | 'outline'> = {
+  DRAFT: 'secondary',
+  REQUEST: 'outline',
+  APPROVED: 'default',
+  PUBLISHED: 'default',
+}
 
 export interface NetworkTableProps {
   items: Network[]
@@ -51,7 +59,7 @@ export function NetworkTable({
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 5 : 4
+  const columnCount = showActions ? 7 : 6
   return (
     <div className="rounded-xl border">
       <Table>
@@ -61,10 +69,16 @@ export function NetworkTable({
               <SortableHeader label={t('network:table.name')} field="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             </TableHead>
             <TableHead>
-              <SortableHeader label={t('network:table.state')} field="state" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortableHeader label={t('network:table.ledBy')} field="ledBy" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+            </TableHead>
+            <TableHead>
+              <SortableHeader label={t('network:table.city')} field="city" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             </TableHead>
             <TableHead>
               <SortableHeader label={t('network:table.country')} field="country" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+            </TableHead>
+            <TableHead>
+              <SortableHeader label={t('network:table.status')} field="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             </TableHead>
             <TableHead>
               <SortableHeader label={t('network:table.created')} field="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
@@ -98,8 +112,14 @@ export function NetworkTable({
             items.map((network) => (
               <TableRow key={network.id}>
                 <TableCell className="font-medium">{network.name}</TableCell>
-                <TableCell>{network.state ?? '—'}</TableCell>
+                <TableCell>{network.ledBy ?? '—'}</TableCell>
+                <TableCell>{network.city?.name ?? '—'}</TableCell>
                 <TableCell>{network.country ?? '—'}</TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_VARIANT[network.status]}>
+                    {t(`network:statusOptions.${network.status}`, { defaultValue: network.status })}
+                  </Badge>
+                </TableCell>
                 <TableCell>{formatDateTime(network.createdAt)}</TableCell>
                 {showActions && (
                   <TableCell className="text-right">

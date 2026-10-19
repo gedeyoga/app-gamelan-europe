@@ -31,6 +31,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useCountries } from '@/features/geo/hooks/use-countries'
 import { useStates } from '@/features/geo/hooks/use-states'
+import { useCities } from '@/features/geo/hooks/use-cities'
 import { ApiError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
@@ -55,26 +56,16 @@ export interface NetworkSubmissionFormProps {
   className?: string
 }
 
-interface CountryStateFieldsProps {
+interface GeoFieldsProps {
   form: UseFormReturn<NetworkSubmissionFormValues>
-  countryName: 'countryId' | 'submitter.countryId'
-  stateName: 'stateId' | 'submitter.stateId'
-  countryLabel: string
-  stateLabel: string
   disabled: boolean
 }
 
-// Cascade Country -> State; ganti country reset state. Dipakai 2x (org + submitter).
-function CountryStateFields({
-  form,
-  countryName,
-  stateName,
-  countryLabel,
-  stateLabel,
-  disabled,
-}: CountryStateFieldsProps) {
+// Cascade Country -> State -> City; ganti country/state reset turunannya.
+function GeoFields({ form, disabled }: GeoFieldsProps) {
   const { t } = useTranslation()
-  const countryValue = form.watch(countryName)
+  const countryValue = form.watch('countryId')
+  const stateValue = form.watch('stateId')
 
   const countriesQuery = useCountries()
   const countries = useMemo(() => countriesQuery.data ?? [], [countriesQuery.data])
@@ -91,56 +82,101 @@ function CountryStateFields({
     [states],
   )
 
+  const countryId = Number(countryValue) || undefined
+  const stateId = Number(stateValue) || undefined
+  const citiesQuery = useCities({ countryId, stateId })
+  const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data])
+  const cityOptions = useMemo<SearchSelectOption[]>(
+    () => cities.map((city) => ({ value: String(city.id), label: city.name })),
+    [cities],
+  )
+
   function handleCountryChange(next: string, onChange: (value: string) => void) {
-    if (next === form.getValues(countryName)) return
+    if (next === form.getValues('countryId')) return
     onChange(next)
-    form.setValue(stateName, '', { shouldDirty: true, shouldValidate: true })
+    form.setValue('stateId', '', { shouldDirty: true, shouldValidate: true })
+    form.setValue('cityId', '', { shouldDirty: true, shouldValidate: true })
+  }
+
+  function handleStateChange(next: string, onChange: (value: string) => void) {
+    if (next === form.getValues('stateId')) return
+    onChange(next)
+    form.setValue('cityId', '', { shouldDirty: true, shouldValidate: true })
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          control={form.control}
+          name="countryId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('networkSubmission:form.country.label')}</FormLabel>
+              <FormControl>
+                <SearchSelect
+                  options={countryOptions}
+                  value={field.value}
+                  onChange={(value) => handleCountryChange(value, field.onChange)}
+                  placeholder={t('networkSubmission:search.placeholder')}
+                  searchPlaceholder={t('networkSubmission:search.searchPlaceholder')}
+                  emptyLabel={t('networkSubmission:search.emptyLabel')}
+                  isLoading={countriesQuery.isLoading}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="stateId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('networkSubmission:form.state.label')}</FormLabel>
+              <FormControl>
+                <SearchSelect
+                  options={stateOptions}
+                  value={field.value}
+                  onChange={(value) => handleStateChange(value, field.onChange)}
+                  placeholder={
+                    iso2
+                      ? t('networkSubmission:search.placeholder')
+                      : t('networkSubmission:form.stateSelectCountry')
+                  }
+                  searchPlaceholder={t('networkSubmission:search.searchPlaceholder')}
+                  emptyLabel={t('networkSubmission:search.emptyLabel')}
+                  isLoading={statesQuery.isLoading}
+                  disabled={disabled || !iso2 || statesQuery.isLoading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
       <FormField
         control={form.control}
-        name={countryName}
+        name="cityId"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>{countryLabel}</FormLabel>
+            <FormLabel>{t('networkSubmission:form.city.label')}</FormLabel>
             <FormControl>
               <SearchSelect
-                options={countryOptions}
-                value={field.value}
-                onChange={(value) => handleCountryChange(value, field.onChange)}
-                placeholder={t('networkSubmission:search.placeholder')}
-                searchPlaceholder={t('networkSubmission:search.searchPlaceholder')}
-                emptyLabel={t('networkSubmission:search.emptyLabel')}
-                isLoading={countriesQuery.isLoading}
-                disabled={disabled}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name={stateName}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{stateLabel}</FormLabel>
-            <FormControl>
-              <SearchSelect
-                options={stateOptions}
+                options={cityOptions}
                 value={field.value}
                 onChange={field.onChange}
                 placeholder={
-                  iso2
-                    ? t('networkSubmission:search.placeholder')
-                    : t('networkSubmission:form.stateSelectCountry')
+                  stateId
+                    ? t('networkSubmission:form.city.placeholder')
+                    : t('networkSubmission:form.citySelectState')
                 }
                 searchPlaceholder={t('networkSubmission:search.searchPlaceholder')}
                 emptyLabel={t('networkSubmission:search.emptyLabel')}
-                isLoading={statesQuery.isLoading}
-                disabled={disabled || !iso2 || statesQuery.isLoading}
+                isLoading={citiesQuery.isLoading}
+                disabled={disabled || !stateId || citiesQuery.isLoading}
               />
             </FormControl>
             <FormMessage />
@@ -267,14 +303,26 @@ export function NetworkSubmissionForm({
               )}
             />
 
-            <CountryStateFields
-              form={form}
-              countryName="countryId"
-              stateName="stateId"
-              countryLabel={t('networkSubmission:form.country.label')}
-              stateLabel={t('networkSubmission:form.state.label')}
-              disabled={isPending}
+            <FormField
+              control={form.control}
+              name="submitter.email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('networkSubmission:form.submitter.email.label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder={t('networkSubmission:form.submitter.email.placeholder')}
+                      disabled={isPending}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
+
+            <GeoFields form={form} disabled={isPending} />
 
             <FormField
               control={form.control}
@@ -341,7 +389,6 @@ export function NetworkSubmissionForm({
                     <FormControl>
                       <Input
                         {...field}
-                        type="email"
                         placeholder={t('networkSubmission:form.contact.placeholder')}
                         disabled={isPending}
                       />
@@ -506,60 +553,6 @@ export function NetworkSubmissionForm({
                   <FormMessage />
                 </FormItem>
               )}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('networkSubmission:section.submitter')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="submitter.fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('networkSubmission:form.submitter.fullName.label')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder={t('networkSubmission:form.submitter.fullName.placeholder')}
-                        disabled={isPending}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="submitter.email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('networkSubmission:form.submitter.email.label')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        placeholder={t('networkSubmission:form.submitter.email.placeholder')}
-                        disabled={isPending}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <CountryStateFields
-              form={form}
-              countryName="submitter.countryId"
-              stateName="submitter.stateId"
-              countryLabel={t('networkSubmission:form.submitter.country.label')}
-              stateLabel={t('networkSubmission:form.submitter.state.label')}
-              disabled={isPending}
             />
           </CardContent>
         </Card>

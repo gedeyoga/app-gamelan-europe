@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { PanelRightClose, PanelRightOpen, Save, X } from 'lucide-react'
+import { Check, PanelRightClose, PanelRightOpen, Save, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -14,7 +14,7 @@ import type { UploadedImage } from '@/types/image'
 
 import { createNetworkSchema, type NetworkFormValues } from '../lib/schema'
 import { buildNetworkPayload } from '../lib/payload'
-import type { CreateNetworkInput } from '../types'
+import type { CreateNetworkInput, NetworkStatus } from '../types'
 import { NetworkMetaPanel } from './network-meta-panel'
 
 export interface NetworkFormProps {
@@ -25,6 +25,11 @@ export interface NetworkFormProps {
   onCancel: () => void
   onUploadImage: (file: File) => Promise<UploadedImage>
   onUploadError: (error: unknown) => void
+  status?: NetworkStatus
+  canApprove?: boolean
+  canReject?: boolean
+  onApprove?: (payload: CreateNetworkInput) => void
+  onReject?: () => void
 }
 
 export function NetworkForm({
@@ -35,6 +40,11 @@ export function NetworkForm({
   onCancel,
   onUploadImage,
   onUploadError,
+  status,
+  canApprove,
+  canReject,
+  onApprove,
+  onReject,
 }: NetworkFormProps) {
   const { t } = useTranslation()
   const schema = useMemo(() => createNetworkSchema(t), [t])
@@ -87,6 +97,39 @@ export function NetworkForm({
           >
             {globalMessage}
           </p>
+        )}
+
+        {status === 'REQUEST' && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border bg-card px-4 py-2">
+            <span className="text-sm text-muted-foreground">{t('network:workflow.requested')}</span>
+            {(canApprove || canReject) && (
+              <div className="flex items-center gap-2">
+                {canReject && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={onReject}
+                  >
+                    <X className="size-4" data-icon="inline-start" />
+                    {t('network:workflow.reject')}
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={form.handleSubmit((values) => onApprove?.(buildNetworkPayload(values)))}
+                  >
+                    <Check className="size-4" data-icon="inline-start" />
+                    {t('network:workflow.approve')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <div

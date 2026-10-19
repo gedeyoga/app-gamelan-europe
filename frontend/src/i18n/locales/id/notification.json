@@ -1,21 +1,5 @@
 {
-  "title": "Notifikasi",
-  "subtitle": "Pembaruan tentang konten yang diterbitkan.",
-  "markAllRead": "Tandai semua dibaca",
-  "markRead": "Tandai dibaca",
-  "open": "Buka",
-  "unread": "Belum dibaca",
-  "read": "Dibaca",
-  "empty": "Belum ada notifikasi.",
-  "errors": {
-    "forbidden": "Tidak punya akses ke notifikasi.",
-    "loadData": "Gagal memuat notifikasi. Silakan coba lagi."
-  },
   "toast": {
-    "read": "Notifikasi ditandai dibaca.",
-    "readFailed": "Gagal menandai notifikasi dibaca.",
-    "allRead": "Semua notifikasi ditandai dibaca.",
-    "allReadFailed": "Gagal menandai semua notifikasi dibaca.",
     "preferenceUpdated": "Preferensi notifikasi diperbarui.",
     "preferenceUpdateFailed": "Gagal memperbarui preferensi notifikasi."
   },

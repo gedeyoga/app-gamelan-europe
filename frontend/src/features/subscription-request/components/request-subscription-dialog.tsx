@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, Send, X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { useForm, type FieldPath } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
@@ -24,21 +24,12 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError, isValidationError } from '@/lib/api-client'
 import { mapApiFieldErrors } from '@/lib/field-errors'
 import { cn } from '@/lib/utils'
 
 import type { CreateMySubscriptionRequestInput, SubscriptionRequestPlanOption } from '../types'
-
-export interface RequestSubscriptionContactDefaults {
-  phone?: string
-  website?: string
-  address?: string
-  country?: string
-  organisation?: string
-}
 
 export interface RequestSubscriptionDialogProps {
   open: boolean
@@ -47,12 +38,11 @@ export interface RequestSubscriptionDialogProps {
   isError: boolean
   isSubmitting: boolean
   submissionError: Error | null
-  defaultContact?: RequestSubscriptionContactDefaults
   onConfirm: (payload: CreateMySubscriptionRequestInput) => void
   onOpenChange: (open: boolean) => void
 }
 
-// Dialog self-service: pilih paket + alasan + kontak opsional → POST /subscription-requests/me.
+// Dialog self-service: pilih paket + alasan → POST /subscription-requests/me.
 export function RequestSubscriptionDialog({
   open,
   plans,
@@ -60,7 +50,6 @@ export function RequestSubscriptionDialog({
   isError,
   isSubmitting,
   submissionError,
-  defaultContact,
   onConfirm,
   onOpenChange,
 }: RequestSubscriptionDialogProps) {
@@ -76,17 +65,7 @@ export function RequestSubscriptionDialog({
           .trim()
           .min(1, t('validation:reasonRequired'))
           .max(2000, t('validation:reasonMax', { count: 2000 })),
-        phone: z.string().trim(),
-        website: z
-          .string()
-          .trim()
-          .max(500, t('validation:websiteMax', { count: 500 })),
-        address: z
-          .string()
-          .trim()
-          .max(500, t('validation:addressMax', { count: 500 })),
-        country: z.string().trim(),
-        organisation: z.string().trim(),
+        // Kontak diisi backend dari tabel user; dialog tidak mengirimnya.
       }),
     [t],
   )
@@ -98,11 +77,6 @@ export function RequestSubscriptionDialog({
     defaultValues: {
       subscriptionId: '',
       reason: '',
-      phone: defaultContact?.phone ?? '',
-      website: defaultContact?.website ?? '',
-      address: defaultContact?.address ?? '',
-      country: defaultContact?.country ?? '',
-      organisation: defaultContact?.organisation ?? '',
     },
   })
 
@@ -111,7 +85,9 @@ export function RequestSubscriptionDialog({
     if (!isValidationError(submissionError)) return
     form.clearErrors()
     for (const [field, message] of Object.entries(mapApiFieldErrors(submissionError))) {
-      form.setError(field as FieldPath<RequestFormValues>, { type: 'server', message })
+      if (field === 'subscriptionId' || field === 'reason') {
+        form.setError(field, { type: 'server', message })
+      }
     }
   }, [submissionError, form])
 
@@ -124,20 +100,8 @@ export function RequestSubscriptionDialog({
     onConfirm({
       subscriptionId: values.subscriptionId,
       reason: values.reason,
-      ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
-      ...(values.website.trim() ? { website: values.website.trim() } : {}),
-      ...(values.address.trim() ? { address: values.address.trim() } : {}),
-      ...(values.country.trim() ? { country: values.country.trim() } : {}),
-      ...(values.organisation.trim() ? { organisation: values.organisation.trim() } : {}),
     })
   }
-
-  const contactFields: { name: FieldPath<RequestFormValues>; label: string; max?: number }[] = [
-    { name: 'phone', label: t('form.phone'), max: 50 },
-    { name: 'website', label: t('form.website'), max: 500 },
-    { name: 'country', label: t('form.country'), max: 100 },
-    { name: 'organisation', label: t('form.organisation'), max: 200 },
-  ]
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -252,43 +216,6 @@ export function RequestSubscriptionDialog({
                 </FormItem>
               )}
             />
-
-            <fieldset className="flex flex-col gap-3">
-              <legend className="text-sm font-medium">{t('form.contactSection')}</legend>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {contactFields.map((contact) => (
-                  <FormField
-                    key={contact.name}
-                    control={form.control}
-                    name={contact.name}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{contact.label}</FormLabel>
-                        <FormControl>
-                          <Input maxLength={contact.max} disabled={isSubmitting} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ))}
-                <div className="sm:col-span-2">
-                  <FormField
-                    control={form.control}
-                    name="address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('form.address')}</FormLabel>
-                        <FormControl>
-                          <Input maxLength={500} disabled={isSubmitting} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </fieldset>
 
             <DialogFooter>
               <DialogClose asChild>

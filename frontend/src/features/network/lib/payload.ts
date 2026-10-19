@@ -14,6 +14,13 @@ export function buildNetworkPayload(values: NetworkFormValues): CreateNetworkInp
       ? values.activityTypeOther.trim()
       : values.activityType.trim()
 
+  // Geo dikirim sebagai ID numerik, di-omit saat kosong (mirror submission publik).
+  const geo = {
+    ...(values.countryId ? { countryId: Number(values.countryId) } : {}),
+    ...(values.stateId ? { stateId: Number(values.stateId) } : {}),
+    ...(values.cityId ? { cityId: Number(values.cityId) } : {}),
+  }
+
   // Field opsional dikirim `null` eksplisit saat kosong (backend map null → clear), bukan di-omit.
   return {
     name: values.name,
@@ -21,8 +28,7 @@ export function buildNetworkPayload(values: NetworkFormValues): CreateNetworkInp
       ? (values.organisationType as NetworkOrganisationType)
       : null,
     ledBy: values.ledBy.trim() || null,
-    state: values.state ? values.state : null,
-    country: values.country ? values.country : null,
+    ...geo,
     address: values.address ? values.address : null,
     website: values.website ? values.website : null,
     mapsUrl: values.mapsUrl ? values.mapsUrl : null,
@@ -30,9 +36,6 @@ export function buildNetworkPayload(values: NetworkFormValues): CreateNetworkInp
     socialMedia: socialMedia.length > 0 ? socialMedia : null,
     activityType: activityType || null,
     content: values.content ? values.content : null,
-    submitterFullName: values.submitterFullName.trim() || null,
     submitterEmail: values.submitterEmail.trim() || null,
-    submitterCountry: values.submitterCountry.trim() || null,
-    submitterState: values.submitterState.trim() || null,
   }
 }

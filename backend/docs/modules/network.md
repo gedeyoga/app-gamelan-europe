@@ -74,10 +74,9 @@ model Network {
   lng         Decimal?  @db.Decimal(10, 7)
   embedUrl    String?   @map("embed_url")
   mapsUrl     String?   @map("maps_url")
-  submitterFullName String? @map("submitter_full_name")
   submitterEmail    String? @map("submitter_email")
-  submitterCountry  String? @map("submitter_country")
-  submitterState    String? @map("submitter_state")
+  cityId      Int?      @map("city_id")
+  city        City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
   users       User[]
   events      Event[]
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -95,7 +94,8 @@ model Network {
 - `embedUrl` `String?` nullable (`@map("embed_url")`) — URL embed Google Maps keyless yang dibuat server dari koordinat hasil resolve (`https://www.google.com/maps?q=<lat>,<lng>&z=15&hl=en&output=embed`). Migration `20261010120000_network_embed_url` menambah kolom ini, mem-backfill `lat`/`lng` dari `mapsUrl` pada row lama (pin `!3d!4d` → viewport `@lat,lng`), lalu mem-backfill `embed_url` dari koordinat.
 - `lat`/`lng` `Decimal(10, 7)` nullable; dikonversi ke `number | null` saat mapping (Decimal tidak bisa di-`JSON.stringify` dengan bentuk yang diinginkan FE). Diisi server-side dari `mapsUrl` bila ada (**menimpa** `lat`/`lng` klien); tanpa `mapsUrl` nilainya dari `lat`/`lng` klien (opsional).
 - `User.networkId` memakai `onDelete: SetNull` → menghapus network tidak menghapus user, hanya melepas relasinya.
-- `submitterFullName`/`submitterEmail`/`submitterCountry`/`submitterState` `String?` nullable (`@map("submitter_*")`) — identitas pengirim usulan publik, **disimpan di row `networks`** (tidak ada `User` yang dibuat). `null` untuk network buatan admin/terdaftar. Migration `20261018120000_network_submitter_fields`. `submitterCountry`/`submitterState` berisi **nama** hasil resolve `countryId`/`stateId` submitter; submitter yang sama boleh mengirim berkali-kali (tidak ada dedupe/unique email).
+- `cityId` `Int?` nullable (`@map("city_id")`, index `networks_city_id_idx`, relasi `city City?` `onDelete: SetNull`) — kota network (opsional). `City.networks Network[]` adalah back-relation. Menghapus city tidak menghapus network, hanya `cityId` → `null`.
+- `submitterEmail` `String?` nullable (`@map("submitter_email")`) — email pengirim usulan publik (audit-only), **disimpan di row `networks`** (tidak ada `User` yang dibuat). `null` untuk network buatan admin/terdaftar. Migration `20261018120000_network_submitter_fields`; kolom submitter lain di-drop migration `20261019150000_drop_network_submitter_fields`. Submitter yang sama boleh mengirim berkali-kali (tidak ada dedupe/unique email).
 - `createdBy` (`@map("created_by")`, relasi `creator`, `onDelete: SetNull`) tetap dipakai network buatan admin/terdaftar; submit publik menulis `createdBy: null`.
 
 ---
@@ -123,10 +123,8 @@ export const networkSelect = {
   embedUrl: true,
   countryId: true,
   stateId: true,
-  submitterFullName: true,
+  cityId: true,
   submitterEmail: true,
-  submitterCountry: true,
-  submitterState: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.NetworkSelect;
@@ -214,18 +212,9 @@ export class CreateNetworkDto {
   @Transform(trim) @IsOptional() @IsString() @MaxLength(100)
   activityType?: string | null;
 
-  // Identitas pengirim usulan publik (kolom `submitter_*`); `null` eksplisit = kosongkan (update).
-  @Transform(trimNullable) @IsOptional() @IsString() @MaxLength(200)
-  submitterFullName?: string | null;
-
+  // Email pengirim usulan publik (kolom `submitter_email`); `null` eksplisit = kosongkan (update).
   @Transform(trimNullableLower) @IsOptional() @IsEmail() @MaxLength(200)
   submitterEmail?: string | null;
-
-  @Transform(trimNullable) @IsOptional() @IsString() @MaxLength(100)
-  submitterCountry?: string | null;
-
-  @Transform(trimNullable) @IsOptional() @IsString() @MaxLength(100)
-  submitterState?: string | null;
 
   // `null` eksplisit = kosongkan (update) → `Prisma.DbNull`. Max 10 entri.
   @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => NetworkSocialMediaDto)
@@ -269,10 +258,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `organisationType` | opsional, `@IsEnum(NetworkOrganisationType)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'organisationType', message }` |
 | `ledBy` | trim opsional, `@IsString()`, `@MaxLength(200)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'ledBy', message }` |
 | `activityType` | trim opsional, `@IsString()`, `@MaxLength(100)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'activityType', message }` |
-| `submitterFullName` | trim opsional (`''`/whitespace → `null`), `@IsString()`, `@MaxLength(200)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'submitterFullName', message }` |
 | `submitterEmail` | trim + lowercase opsional (`''`/whitespace → `null`), `@IsEmail()`, `@MaxLength(200)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'submitterEmail', message }` |
-| `submitterCountry` | trim opsional (`''`/whitespace → `null`), `@IsString()`, `@MaxLength(100)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'submitterCountry', message }` |
-| `submitterState` | trim opsional (`''`/whitespace → `null`), `@IsString()`, `@MaxLength(100)`, nullable (`null` = kosongkan saat update) | 422 `{ field: 'submitterState', message }` |
 | `socialMedia` | opsional, `@IsArray()`, `@ArrayMaxSize(10)`, `@ValidateNested({ each: true })` `NetworkSocialMediaDto`; nullable (`null` = kosongkan saat update) | 422 `{ field: 'socialMedia', message }` (atau `socialMedia.0.platform` dst.) |
 | `socialMedia[].platform` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(50)` | 422 `{ field: 'socialMedia.0.platform', message }` |
 | `socialMedia[].url` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(500)` | 422 `{ field: 'socialMedia.0.url', message }` |
@@ -281,6 +267,26 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `:id` path | `ParseUUIDPipe` | 422/400 UUID invalid |
 
 > `lat`/`lng` harus **number JSON** (`@IsNumber()`); kirim sebagai string → 422. `UpdateNetworkDto` (PartialType) membuat semua field opsional; `PATCH` dengan body kosong `{}` mengembalikan resource apa adanya (tanpa update).
+
+### DTO submit publik (`CreatePublicNetworkDto`)
+
+`POST /api/v1/network-submissions` (`libs/src/modules/network/dto/create-public-network.dto.ts`):
+
+| Field | Aturan | Gagal → |
+| --- | --- | --- |
+| `organisationType` | wajib, `@IsEnum(NetworkOrganisationType)` | 422 |
+| `name` | trim, `@IsString()`, `@IsNotEmpty()`, `@MaxLength(200)` | 422 `name` |
+| `ledBy`/`address`/`activityType` | trim opsional, `@IsString()`, `@MaxLength(200/500/100)` | 422 |
+| `countryId` | wajib, `@Type(() => Number)`, `@IsInt()` | 422 `countryId` |
+| `stateId` | opsional, `@Type(() => Number)`, `@IsInt()`; harus milik `countryId` (service) | 422 `stateId` |
+| `cityId` | opsional, `@Type(() => Number)`, `@IsInt()`; harus ada & milik `countryId` (dan `stateId` bila dikirim) — service | 422 `cityId` |
+| `mapsUrl` | trim opsional, `@IsUrl()`, `@MaxLength(2048)` | 422 `mapsUrl` |
+| `website` | trim opsional, `@IsUrl()`, `@MaxLength(500)` | 422 `website` |
+| `contact` | opsional (trim, blank → `undefined`), `@IsString()`, `@Matches(/^(?:[^\s@]+@[^\s@]+\.[^\s@]{2,}|\+?\d{7,15})$/)` — **email atau telepon** (email `x@y.zz`, atau telepon 7-15 digit dengan prefix `+` opsional), `@MaxLength(200)` | 422 `contact` |
+| `socialMedia` | opsional array max 10 (`PublicNetworkSocialMediaDto`) | 422 |
+| `content` | `@IsString()`, `@IsNotEmpty()`, `@MaxLength(10000)`; disanitasi server-side | 422 `content` |
+| `submitter` | wajib objek (`IsNotEmptyObject`, nested) | 422 `submitter` |
+| `submitter.email` | trim + lowercase, `@IsEmail()`, `@MaxLength(200)` — **satu-satunya field submitter** | 422 `submitter.email` |
 
 ```json
 // POST /networks dengan lat di luar rentang
@@ -298,7 +304,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | Konstanta | Nilai |
 | --- | --- |
 | `NETWORK_SEARCHABLE_FIELDS` | `['name', 'state', 'country', 'address', 'website', 'contact']` |
-| `NETWORK_SORT_FIELDS` | `['name', 'state', 'country', 'address', 'website', 'contact', 'createdAt', 'updatedAt']` |
+| `NETWORK_SORT_FIELDS` | `['name', 'ledBy', 'state', 'country', 'city', 'address', 'website', 'contact', 'status', 'createdAt', 'updatedAt']` |
 | `NETWORK_FILTER_FIELDS` | `['name', 'state', 'country', 'website', 'contact', 'createdAt', 'updatedAt']` |
 | `NETWORK_DATE_FIELDS` | `['createdAt', 'updatedAt']` (ISO 8601; invalid → 422; `like` ditolak) |
 
@@ -306,6 +312,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 - `search` OR `like insensitive` ke field searchable; trim, kosong/<2 char diabaikan (`buildSearch`).
 - `filter[status]=PUBLISHED` menambahkan guard `publishedAt != null AND publishedAt <= now` (mirror archive) — konten terjadwal di masa depan tidak ikut list. `GET /networks/:id` **tidak** dibatasi guard ini (editor admin tetap bisa membaca row terjadwal).
 - `page` default 1, `limit` default 20 (clamp 100), `sortOrder` default `desc`, `sortBy` default `createdAt`.
+- `sortBy=city` mengurutkan berdasarkan nama city (`orderBy: { city: { name } }`); network tanpa city (`city = null`) mengikuti urutan `NULL` Prisma.
 
 ---
 
@@ -333,7 +340,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `create(dto)` | Petakan field DTO → `repository.create`. Bila `dto.content !== undefined` → simpan hasil `sanitizeStoryContent(dto.content)`. `website`/`contact`/`organisationType`/`ledBy`/`activityType` → `?? null`; `socialMedia` → `dto.socialMedia ?? undefined` (biarkan DB default NULL bila tidak dikirim). Bila `dto.mapsUrl` ada → resolve server-side (`resolveGoogleMapsLink`, follow shortlink) → tulis `lat`/`lng`/`embedUrl` (**menimpa** `lat`/`lng` klien); gagal resolve → 422 `mapsUrl`. |
 | `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; `content` disanitasi via `sanitizeStoryContent` bila dikirim; `website`/`contact`/`organisationType`/`ledBy`/`activityType` ditulis apa adanya (termasuk `null` = kosongkan); `socialMedia`: `null` → `Prisma.DbNull`, selain itu array `[{ platform, url }]` apa adanya; body kosong → kembalikan `findOne(id)` tanpa update. `mapsUrl`: kosong → `null` (koordinat lama dipertahankan); berbeda dari nilai lama **atau** `lat`/`lng` masih null (row lama) → resolve → set `mapsUrl` + `lat`/`lng`/`embedUrl` (gagal → 422); tidak berubah (sudah berkoordinat) → set `mapsUrl` saja (tanpa jaringan). `mapsUrl` ter-resolve menang atas `lat`/`lng` eksplisit. |
 | `remove(id)` | `repository.remove`. |
-| `createPublicSubmission(dto)` | Submit publik tanpa JWT. `assertGeography` untuk `countryId`/`stateId` **dan** `submitter.countryId`/`submitter.stateId` (negara wajib ada, state harus milik negara → 422 per-field); helper mengembalikan row hasil lookup sehingga nama dipakai tanpa query ulang. `content` disanitasi + wajib non-kosong (422); `mapsUrl` di-resolve **sebelum** insert. Menulis satu row `networks` (`status=REQUEST`, `source=PUBLIC`, `createdBy: null`) plus `submitterFullName`/`submitterEmail`/`submitterCountry`/`submitterState` (nama negara/state submitter). **Tidak** membuat `User`. Setelah row tersimpan → `NotificationService.notifyAdmins` (`CONTENT_SUBMITTED`, `entityType=NETWORK`, title `name`, link `/dashboard`) ke admin ACTIVE; kegagalan notifikasi tidak menggagalkan submission. Respons `{ id, status }`. |
+| `createPublicSubmission(dto)` | Submit publik tanpa JWT. `assertGeography` untuk `countryId`/`stateId` (negara wajib ada, state harus milik negara → 422 per-field); helper mengembalikan row hasil lookup sehingga nama dipakai tanpa query ulang. `cityId` bila dikirim: `CityRepository.findByIdOrNull` → harus ada, `city.countryId === dto.countryId`, dan bila `dto.stateId` dikirim `city.stateId === dto.stateId` → 422 `cityId`; persist `cityId: dto.cityId ?? null`. `content` disanitasi + wajib non-kosong (422); `mapsUrl` di-resolve **sebelum** insert. Menulis satu row `networks` (`status=REQUEST`, `source=PUBLIC`, `createdBy: null`) plus `submitterEmail: dto.submitter.email`. **Tidak** membuat `User`. Setelah row tersimpan → `NotificationService.notifyAdmins` (`CONTENT_SUBMITTED`, `entityType=NETWORK`, title `name`, link `/dashboard`) ke admin ACTIVE; kegagalan notifikasi tidak menggagalkan submission. Respons `{ id, status }`. |
 
 > **Handling `socialMedia` (Json nullable).** Create: `dto.socialMedia ?? undefined` (tidak mengirim → kolom dibiarkan `NULL` default; tanpa sentinel). Update: hanya bila `dto.socialMedia !== undefined`; `null` → `Prisma.DbNull` (set kolom `NULL`), array → disimpan apa adanya. Array di-map ke plain `{ platform, url }` agar assignable ke `Prisma.InputJsonValue`.
 

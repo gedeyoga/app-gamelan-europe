@@ -6,6 +6,7 @@ import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
 import { resolveGoogleMapsLink } from '@app/libs/common/utils/google-maps.util';
 import { CountryRepository } from '@app/libs/modules/country/country.repository';
 import { StateRepository } from '@app/libs/modules/state/state.repository';
+import { CityRepository } from '@app/libs/modules/city/city.repository';
 import { CountryEntity } from '@app/libs/modules/country/entities/country.entity';
 import { StateWithCountryEntity } from '@app/libs/modules/state/entities/state.entity';
 import { NotificationService } from '@app/libs/modules/notification/notification.service';
@@ -16,7 +17,7 @@ import { UpdateNetworkDto } from './dto/update-network.dto';
 import { CreatePublicNetworkDto } from './dto/create-public-network.dto';
 
 export const NETWORK_SEARCHABLE_FIELDS = ['name', 'state', 'country', 'address', 'website', 'contact'];
-export const NETWORK_SORT_FIELDS = ['name', 'state', 'country', 'address', 'website', 'contact', 'status', 'createdAt', 'updatedAt'];
+export const NETWORK_SORT_FIELDS = ['name', 'ledBy', 'state', 'country', 'city', 'address', 'website', 'contact', 'status', 'createdAt', 'updatedAt'];
 export const NETWORK_FILTER_FIELDS = ['name', 'state', 'country', 'website', 'contact', 'status', 'source', 'createdAt', 'updatedAt'];
 export const NETWORK_DATE_FIELDS = ['createdAt', 'updatedAt'];
 
@@ -34,6 +35,7 @@ export class NetworkService {
     private readonly networkRepository: NetworkRepository,
     private readonly countryRepository: CountryRepository,
     private readonly stateRepository: StateRepository,
+    private readonly cityRepository: CityRepository,
     private readonly notificationService: NotificationService,
   ) {}
 
@@ -68,7 +70,7 @@ export class NetworkService {
       where,
       skip,
       take,
-      orderBy: buildOrderBy<Prisma.NetworkOrderByWithRelationInput>(query.sortBy, query.sortOrder),
+      orderBy: buildOrderBy<Prisma.NetworkOrderByWithRelationInput>(query.sortBy, query.sortOrder, { city: 'city.name' }),
     });
   }
 
@@ -112,11 +114,30 @@ export class NetworkService {
   async create(dto: CreateNetworkDto, tx?: Prisma.TransactionClient): Promise<NetworkEntity> {
     // Resolved link menimpa `lat`/`lng` klien.
     const coords = await this.resolveLocationMaps(dto.mapsUrl);
+
+    // ID menang atas string nama; tanpa id, perilaku lama (simpan nama apa adanya).
+    let countryName: string | null | undefined = dto.country;
+    let stateName: string | null | undefined = dto.state;
+    if (dto.countryId != null || dto.stateId != null) {
+      if (dto.countryId == null) {
+        throw this.validationError('countryId', 'countryId is required when stateId is sent');
+      }
+      const geo = await this.assertGeography(dto.countryId, dto.stateId ?? undefined, 'countryId', 'stateId');
+      countryName = geo.country.name;
+      stateName = geo.state?.name ?? null;
+    }
+    if (dto.cityId != null) {
+      if (dto.countryId == null) {
+        throw this.validationError('countryId', 'countryId is required when cityId is sent');
+      }
+      await this.assertCity(dto.cityId, dto.countryId, dto.stateId ?? undefined);
+    }
+
     return this.networkRepository.create(
       {
         name: dto.name,
-        state: dto.state,
-        country: dto.country,
+        state: stateName,
+        country: countryName,
         address: dto.address,
         content: dto.content === undefined ? undefined : sanitizeStoryContent(dto.content),
         website: dto.website ?? null,
@@ -125,35 +146,88 @@ export class NetworkService {
         organisationType: dto.organisationType ?? null,
         ledBy: dto.ledBy ?? null,
         activityType: dto.activityType ?? null,
-        submitterFullName: dto.submitterFullName ?? null,
         submitterEmail: dto.submitterEmail ?? null,
-        submitterCountry: dto.submitterCountry ?? null,
-        submitterState: dto.submitterState ?? null,
         socialMedia: this.socialMediaJson(dto.socialMedia),
         lat: coords?.lat ?? dto.lat,
         lng: coords?.lng ?? dto.lng,
         embedUrl: coords?.embedUrl ?? null,
+        countryId: dto.countryId ?? null,
+        stateId: dto.stateId ?? null,
+        cityId: dto.cityId ?? null,
       },
       tx,
     );
   }
 
   async update(id: string, dto: UpdateNetworkDto): Promise<NetworkEntity> {
-    const data: Prisma.NetworkUpdateInput = {};
+    const data: Prisma.NetworkUncheckedUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.state !== undefined) data.state = dto.state;
-    if (dto.country !== undefined) data.country = dto.country;
     if (dto.address !== undefined) data.address = dto.address;
+
+    // Geo: hanya field yang dikirim yang disentuh. `null` eksplisit = kosongkan.
+    // Anak yang tidak lagi cocok dengan induk baru dibuang kecuali dikirim ulang.
+    const touchesGeo = dto.countryId !== undefined || dto.stateId !== undefined || dto.cityId !== undefined;
+    const existing = touchesGeo ? await this.networkRepository.findById(id) : undefined;
+
+    if (existing) {
+      const countryProvided = dto.countryId !== undefined;
+      const stateProvided = dto.stateId !== undefined;
+      const cityProvided = dto.cityId !== undefined;
+      const countryChanged = countryProvided && dto.countryId !== existing.countryId;
+
+      const effectiveCountryId = countryProvided ? (dto.countryId ?? null) : existing.countryId;
+      // Negara berubah → state lama dibuang kecuali state dikirim ulang.
+      let effectiveStateId = stateProvided ? (dto.stateId ?? null) : existing.stateId;
+      if (countryChanged && !stateProvided) effectiveStateId = null;
+      // Negara/state berubah → city lama dibuang kecuali city dikirim ulang.
+      const effectiveCityId = cityProvided ? (dto.cityId ?? null) : (countryChanged || stateProvided ? null : existing.cityId);
+
+      if (effectiveCountryId == null) {
+        if (effectiveStateId != null) {
+          throw this.validationError('countryId', 'countryId is required when stateId is sent');
+        }
+        if (effectiveCityId != null) {
+          throw this.validationError('countryId', 'countryId is required when cityId is sent');
+        }
+      }
+
+      // Validasi rantai hanya saat induk disentuh; hasil lookup dipakai untuk nama display.
+      const geo =
+        effectiveCountryId != null && (countryProvided || stateProvided)
+          ? await this.assertGeography(effectiveCountryId, effectiveStateId ?? undefined, 'countryId', 'stateId')
+          : null;
+
+      if (countryProvided) {
+        data.countryId = dto.countryId ?? null;
+        data.country = dto.countryId == null ? null : (geo?.country.name ?? null);
+      }
+      if (stateProvided || countryChanged) {
+        data.stateId = effectiveStateId;
+        data.state = effectiveStateId == null ? null : (geo?.state?.name ?? null);
+      }
+      if (cityProvided) {
+        if (effectiveCityId != null) {
+          await this.assertCity(effectiveCityId, effectiveCountryId!, effectiveStateId ?? undefined);
+        }
+        data.cityId = effectiveCityId;
+      } else if (countryChanged || stateProvided) {
+        data.cityId = null;
+      }
+    }
+
+    // Tanpa id geo: perilaku lama, string nama bebas (kompatibilitas).
+    if (!touchesGeo) {
+      if (dto.state !== undefined) data.state = dto.state;
+      if (dto.country !== undefined) data.country = dto.country;
+    }
+
     if (dto.content !== undefined) data.content = sanitizeStoryContent(dto.content);
     if (dto.website !== undefined) data.website = dto.website;
     if (dto.contact !== undefined) data.contact = dto.contact;
     if (dto.organisationType !== undefined) data.organisationType = dto.organisationType;
     if (dto.ledBy !== undefined) data.ledBy = dto.ledBy;
     if (dto.activityType !== undefined) data.activityType = dto.activityType;
-    if (dto.submitterFullName !== undefined) data.submitterFullName = dto.submitterFullName;
     if (dto.submitterEmail !== undefined) data.submitterEmail = dto.submitterEmail;
-    if (dto.submitterCountry !== undefined) data.submitterCountry = dto.submitterCountry;
-    if (dto.submitterState !== undefined) data.submitterState = dto.submitterState;
     if (dto.socialMedia !== undefined) {
       data.socialMedia = dto.socialMedia === null ? Prisma.DbNull : this.socialMediaJson(dto.socialMedia);
     }
@@ -204,17 +278,31 @@ export class NetworkService {
     return { country, state };
   }
 
+  // `cityId` harus milik `countryId`; bila city punya state, `stateId` wajib dikirim dan harus cocok
+  // (mirror event.assertLocationGeo) → 422 `stateId`/`cityId`.
+  private async assertCity(cityId: number, countryId: number, stateId?: number | null): Promise<void> {
+    const city = await this.cityRepository.findByIdOrNull(cityId);
+    if (!city || city.countryId !== countryId) {
+      throw this.validationError('cityId', 'cityId must exist and match countryId/stateId');
+    }
+    if (city.stateId != null) {
+      if (stateId == null) {
+        throw this.validationError('stateId', 'stateId is required when cityId belongs to a state');
+      }
+      if (city.stateId !== stateId) {
+        throw this.validationError('cityId', 'cityId must belong to stateId');
+      }
+    } else if (stateId != null) {
+      throw this.validationError('cityId', 'cityId must belong to stateId');
+    }
+  }
+
   // Submit publik (tanpa JWT): tulis langsung `Network` status REQUEST, source PUBLIC.
-  // Identitas pengirim disimpan di kolom `submitter*` (tanpa membuat `User`); `createdBy` = null.
+  // Identitas pengirim (email saja) disimpan di kolom `submitter_email` (tanpa membuat `User`); `createdBy` = null.
   // Respons hanya { id, status } (tanpa echo row/PII). Resolve country/state id → nama display.
   async createPublicSubmission(dto: CreatePublicNetworkDto): Promise<{ id: string; status: NetworkStatus }> {
     const { country, state } = await this.assertGeography(dto.countryId, dto.stateId, 'countryId', 'stateId');
-    const submitter = await this.assertGeography(
-      dto.submitter.countryId,
-      dto.submitter.stateId,
-      'submitter.countryId',
-      'submitter.stateId',
-    );
+    if (dto.cityId != null) await this.assertCity(dto.cityId, dto.countryId, dto.stateId);
 
     const content = sanitizeStoryContent(dto.content);
     if (!content.trim()) {
@@ -231,7 +319,7 @@ export class NetworkService {
       address: dto.address ?? null,
       content,
       website: dto.website ?? null,
-      contact: dto.contact,
+      contact: dto.contact ?? null,
       socialMedia: this.socialMediaJson(dto.socialMedia),
       status: NetworkStatus.REQUEST,
       source: ContentSource.PUBLIC,
@@ -244,10 +332,8 @@ export class NetworkService {
       embedUrl: coords?.embedUrl ?? null,
       countryId: dto.countryId,
       stateId: dto.stateId ?? null,
-      submitterFullName: dto.submitter.fullName,
+      cityId: dto.cityId ?? null,
       submitterEmail: dto.submitter.email,
-      submitterCountry: submitter.country.name,
-      submitterState: submitter.state?.name ?? null,
       createdBy: null,
     });
     await this.notificationService.notifyAdmins({

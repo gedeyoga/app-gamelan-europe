@@ -73,6 +73,8 @@ async function refreshTokens(): Promise<RefreshOutcome> {
 
 function expireSession(): void {
   clearSessionStorage()
+  const { pathname, search, hash } = window.location
+  if (pathname !== '/login') sessionStorage.setItem('auth.from', `${pathname}${search}${hash}`)
   window.location.assign('/login')
 }
 

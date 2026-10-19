@@ -68,7 +68,6 @@
   "organisationTypeRequired": "Organisation type is required",
   "organisationTypeInvalid": "Selected organisation type is invalid",
   "countryRequired": "Country is required",
-  "submitterCountryRequired": "Country is required",
   "activityTypeMax": "Activity type must be at most {{count}} characters",
   "activityTypeOtherRequired": "Please describe your activity type",
   "ledByMax": "Leader must be at most {{count}} characters",
@@ -76,6 +75,7 @@
   "mapsUrlInvalid": "Google Maps link must be a valid URL",
   "websiteInvalid": "Website must be a valid URL",
   "contentRequired": "Description is required",
+  "contactInvalid": "Contact must be an email or phone number",
   "reasonRequired": "Reason is required",
   "reasonMax": "Reason must be at most {{count}} characters"
 }
