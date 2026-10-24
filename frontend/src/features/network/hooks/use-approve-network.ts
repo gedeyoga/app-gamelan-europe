@@ -7,9 +7,8 @@ export function useApproveNetwork() {
   return useMutation({
     mutationFn: ({ id, publishedAt }: { id: string; publishedAt?: string }) =>
       approveNetwork(id, publishedAt),
-    onSuccess: (_data, { id }) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['network'] })
-      void qc.invalidateQueries({ queryKey: ['network', { id }] })
     },
   })
 }

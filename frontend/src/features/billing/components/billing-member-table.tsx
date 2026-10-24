@@ -4,8 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { MobileRecordList } from '@/components/shared/mobile-record-list'
+import { MobileSortChips } from '@/components/shared/mobile-sort-chips'
 import { SortableHeader, type SortOrder } from '@/components/shared/sortable-header'
 import { formatDate } from '@/lib/datetime'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -49,6 +52,73 @@ export interface BillingMemberTableProps {
   canRead?: boolean
 }
 
+function MemberAvatar({ member }: { member: MemberSubscription }) {
+  return (
+    <Avatar>
+      {member.user.avatar && <AvatarImage src={member.user.avatar} alt={member.user.fullName} />}
+      <AvatarFallback>{initials(member.user.fullName)}</AvatarFallback>
+    </Avatar>
+  )
+}
+
+interface RowActionsProps {
+  member: MemberSubscription
+  onUpgrade: (member: MemberSubscription) => void
+  onNew: (member: MemberSubscription) => void
+  onCancel: (member: MemberSubscription) => void
+  onHistory: (member: MemberSubscription) => void
+  canCreate: boolean
+  canUpdate: boolean
+  canRead: boolean
+}
+
+function RowActions({
+  member,
+  onUpgrade,
+  onNew,
+  onCancel,
+  onHistory,
+  canCreate,
+  canUpdate,
+  canRead,
+}: RowActionsProps) {
+  const { t } = useTranslation()
+  const isActive = member.status === 'ACTIVE'
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {isActive ? (
+        <>
+          {canCreate && (
+            <Button size="sm" variant="outline" onClick={() => onUpgrade(member)}>
+              <ArrowUpCircle className="size-4" data-icon="inline-start" />
+              {t('billing:actions.upgrade')}
+            </Button>
+          )}
+          {canUpdate && (
+            <Button size="sm" variant="destructive" onClick={() => onCancel(member)}>
+              <Ban className="size-4" data-icon="inline-start" />
+              {t('billing:actions.cancel')}
+            </Button>
+          )}
+        </>
+      ) : (
+        canCreate && (
+          <Button size="sm" onClick={() => onNew(member)}>
+            <Plus className="size-4" data-icon="inline-start" />
+            {t('billing:actions.new')}
+          </Button>
+        )
+      )}
+      {canRead && (
+        <Button size="sm" variant="ghost" onClick={() => onHistory(member)}>
+          <History className="size-4" data-icon="inline-start" />
+          {t('billing:actions.history')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // Tabel manajemen langganan member: avatar, user, paket, expiry, status, aksi kondisional.
 export function BillingMemberTable({
   items,
@@ -71,92 +141,86 @@ export function BillingMemberTable({
   const columnCount = showActions ? 6 : 5
 
   return (
-    <div className="overflow-x-auto rounded-xl border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">
-              <span className="sr-only">{t('billing:table.photo')}</span>
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('billing:table.user')}
-                field="user.fullName"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('billing:table.plan')}
-                field="subscription.name"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('billing:table.expiry')}
-                field="expiryDate"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('billing:table.status')}
-                field="status"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            {showActions && (
-              <TableHead className="text-right">{t('common:table.actions')}</TableHead>
-            )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 ? (
+    <>
+      <div className={cn('overflow-hidden rounded-xl border', items.length > 0 && 'max-md:hidden')}>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell
-                colSpan={columnCount}
-                className="h-24 text-center text-sm text-muted-foreground"
-              >
-                {trimmedSearch.length > 0 ? (
-                  <>
-                    {t('billing:table.notFound', { term: trimmedSearch })}{' '}
-                    {onResetSearch && (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 underline"
-                        onClick={onResetSearch}
-                      >
-                        <RotateCcw className="size-3.5" aria-hidden="true" />
-                        {t('billing:table.reset')}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  t('billing:table.empty')
-                )}
-              </TableCell>
+              <TableHead className="w-12">
+                <span className="sr-only">{t('billing:table.photo')}</span>
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('billing:table.user')}
+                  field="user.fullName"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('billing:table.plan')}
+                  field="subscription.name"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('billing:table.expiry')}
+                  field="expiryDate"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('billing:table.status')}
+                  field="status"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              {showActions && (
+                <TableHead className="text-right">{t('common:table.actions')}</TableHead>
+              )}
             </TableRow>
-          ) : (
-            items.map((member) => {
-              const isActive = member.status === 'ACTIVE'
-              return (
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columnCount}
+                  className="h-24 text-center text-sm text-muted-foreground"
+                >
+                  {trimmedSearch.length > 0 ? (
+                    <>
+                      {t('billing:table.notFound', { term: trimmedSearch })}{' '}
+                      {onResetSearch && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 underline"
+                          onClick={onResetSearch}
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          {t('billing:table.reset')}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    t('billing:table.empty')
+                  )}
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((member) => (
                 <TableRow key={member.userId}>
                   <TableCell>
-                    <Avatar>
-                      {member.user.avatar && (
-                        <AvatarImage src={member.user.avatar} alt={member.user.fullName} />
-                      )}
-                      <AvatarFallback>{initials(member.user.fullName)}</AvatarFallback>
-                    </Avatar>
+                    <MemberAvatar member={member} />
                   </TableCell>
                   <TableCell>
                     <div className="flex min-w-0 flex-col">
@@ -177,45 +241,78 @@ export function BillingMemberTable({
                   </TableCell>
                   {showActions && (
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {isActive ? (
-                          <>
-                            {canCreate && (
-                              <Button size="sm" variant="outline" onClick={() => onUpgrade(member)}>
-                                <ArrowUpCircle className="size-4" data-icon="inline-start" />
-                                {t('billing:actions.upgrade')}
-                              </Button>
-                            )}
-                            {canUpdate && (
-                              <Button size="sm" variant="destructive" onClick={() => onCancel(member)}>
-                                <Ban className="size-4" data-icon="inline-start" />
-                                {t('billing:actions.cancel')}
-                              </Button>
-                            )}
-                          </>
-                        ) : (
-                          canCreate && (
-                            <Button size="sm" onClick={() => onNew(member)}>
-                              <Plus className="size-4" data-icon="inline-start" />
-                              {t('billing:actions.new')}
-                            </Button>
-                          )
-                        )}
-                        {canRead && (
-                          <Button size="sm" variant="ghost" onClick={() => onHistory(member)}>
-                            <History className="size-4" data-icon="inline-start" />
-                            {t('billing:actions.history')}
-                          </Button>
-                        )}
-                      </div>
+                      <RowActions
+                        member={member}
+                        onUpgrade={onUpgrade}
+                        onNew={onNew}
+                        onCancel={onCancel}
+                        onHistory={onHistory}
+                        canCreate={canCreate}
+                        canUpdate={canUpdate}
+                        canRead={canRead}
+                      />
                     </TableCell>
                   )}
                 </TableRow>
-              )
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {items.length > 0 && (
+        <MobileSortChips
+          options={[
+            { field: 'user.fullName', label: t('billing:table.user') },
+            { field: 'subscription.name', label: t('billing:table.plan') },
+            { field: 'expiryDate', label: t('billing:table.expiry') },
+            { field: 'status', label: t('billing:table.status') },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={onSort}
+        />
+      )}
+
+      {items.length > 0 && (
+        <MobileRecordList
+          items={items.map((member) => ({
+            id: member.userId,
+            title: (
+              <div className="flex min-w-0 flex-col">
+                <span className="break-words font-medium">{member.user.fullName}</span>
+                <span className="text-xs break-words text-muted-foreground">
+                  {member.user.email}
+                </span>
+              </div>
+            ),
+            leading: <MemberAvatar member={member} />,
+            badge: (
+              <Badge variant={STATUS_VARIANT[member.status]}>
+                {t(`billing:memberStatusOptions.${member.status}`, {
+                  defaultValue: member.status,
+                })}
+              </Badge>
+            ),
+            fields: [
+              { label: t('billing:table.plan'), value: member.subscription?.name ?? '—' },
+              { label: t('billing:table.expiry'), value: formatDate(member.expiryDate) },
+            ],
+            actions: showActions ? (
+              <RowActions
+                member={member}
+                onUpgrade={onUpgrade}
+                onNew={onNew}
+                onCancel={onCancel}
+                onHistory={onHistory}
+                canCreate={canCreate}
+                canUpdate={canUpdate}
+                canRead={canRead}
+              />
+            ) : undefined,
+          }))}
+        />
+      )}
+    </>
   )
 }

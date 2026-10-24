@@ -6,7 +6,11 @@
   "type": {
     "CONTENT_PUBLISHED": "Konten diterbitkan",
     "CONTENT_SUBMITTED": "Pengajuan konten baru",
-    "SUBSCRIPTION_REQUEST_SUBMITTED": "Pengajuan langganan baru"
+    "SUBSCRIPTION_REQUEST_SUBMITTED": "Pengajuan langganan baru",
+    "SUBSCRIPTION_ACTIVE": "Keanggotaan aktif",
+    "SUBSCRIPTION_EXPIRING": "Keanggotaan akan berakhir",
+    "SUBSCRIPTION_EXPIRED": "Keanggotaan berakhir",
+    "SUBSCRIPTION_CANCELED": "Keanggotaan dibatalkan"
   },
   "preferences": {
     "title": "Notifikasi email",

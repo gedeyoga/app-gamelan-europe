@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, List, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
+import { LayoutGrid, List, Loader2, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
 import {
@@ -33,15 +34,20 @@ import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { EventCard } from '@/features/event/components/event-card'
 import { EventTable } from '@/features/event/components/event-table'
+import { listAllEventIds, MAX_BULK_IDS } from '@/features/event/api/events'
+import { useBulkDeleteEvent } from '@/features/event/hooks/use-bulk-delete-event'
+import { useBulkUpdateEventStatus } from '@/features/event/hooks/use-bulk-update-event-status'
 import { useDeleteEvent } from '@/features/event/hooks/use-delete-event'
 import { useEvents } from '@/features/event/hooks/use-events'
 import { useEventTypes } from '@/features/event/hooks/use-event-types'
 import { CONTENT_STATUSES } from '@/features/event/types'
-import type { Event } from '@/features/event/types'
+import type { ContentStatus, Event } from '@/features/event/types'
 
 import { OrgEventsPage } from './events-org'
 
 const PAGE_LIMIT = 10
+/** Batas `ids` per request (`ArrayMaxSize(100)` backend). */
+const BULK_CHUNK_SIZE = 100
 const ALL = 'ALL'
 
 type ViewMode = 'card' | 'list'
@@ -73,7 +79,14 @@ function EventsCardSkeleton() {
 function AdminEventsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { can } = useAuthPermissions()
+  const { can, canAny } = useAuthPermissions()
+  // Target status bulk yang bisa dicapai user (hindari 403): DRAFT ← reject/unpublish,
+  // REQUEST ← submit, PUBLISHED ← approve/publish. APPROVED tidak ditawarkan (tanpa transisi).
+  const bulkStatusOptions: ContentStatus[] = [
+    ...(canAny(['event:reject', 'event:unpublish']) ? (['DRAFT'] as const) : []),
+    ...(can('event:submit') ? (['REQUEST'] as const) : []),
+    ...(canAny(['event:approve', 'event:publish']) ? (['PUBLISHED'] as const) : []),
+  ]
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<string | null>(null)
@@ -82,6 +95,10 @@ function AdminEventsPage() {
   const [eventTypeFilter, setEventTypeFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkStatus, setBulkStatus] = useState<ContentStatus>('DRAFT')
+  const [bulkAction, setBulkAction] = useState<'status' | 'delete' | null>(null)
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
 
   const debouncedSearch = useDebouncedValue(search, 400)
 
@@ -104,10 +121,24 @@ function AdminEventsPage() {
     filter,
   })
   const deleteEvent = useDeleteEvent()
+  const bulkUpdate = useBulkUpdateEventStatus()
+  const bulkDelete = useBulkDeleteEvent()
 
   const listTotal = eventsQuery.data?.total ?? 0
   const eventsForbidden = isForbiddenError(eventsQuery.error)
   const canCreateEvent = can('event:create')
+  const canBulkUpdate = can('event:update')
+  const canBulkDelete = can('event:delete')
+  const canBulk = canBulkUpdate || canBulkDelete
+  const allSelected =
+    listTotal > 0 && selectedIds.length >= Math.min(listTotal, MAX_BULK_IDS)
+  // Default ke satu-satunya target yang bisa dicapai; fallback bila pilihan lama tak lagi valid.
+  const activeBulkStatus = bulkStatusOptions.includes(bulkStatus)
+    ? bulkStatus
+    : (bulkStatusOptions[0] ?? 'DRAFT')
+  const someSelected = selectedIds.length > 0 && !allSelected
+  const bulkPending = bulkUpdate.isPending || bulkDelete.isPending
+  const bulkBusy = bulkPending || isSelectingAll
 
   // Clamp pagination boundary setelah total berubah (mis. hapus item terakhir).
   useEffect(() => {
@@ -116,6 +147,13 @@ function AdminEventsPage() {
       setPage(Math.max(1, Math.ceil(listTotal / PAGE_LIMIT)))
     }
   }, [listTotal, page])
+
+  // Pilihan lintas halaman dipertahankan saat pindah halaman; reset hanya saat
+  // kriteria berubah (search/filter/sort). ID usang aman — endpoint bulk idempotent.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds([])
+  }, [debouncedSearch, statusFilter, eventTypeFilter, sortBy, sortOrder])
 
   function handleSearchChange(value: string) {
     setSearch(value)
@@ -146,6 +184,85 @@ function AdminEventsPage() {
         toastError(getApiErrorMessage(err, t('event:toast.deleteFailed')))
       },
     })
+  }
+
+  async function handleToggleAll() {
+    if (allSelected) {
+      setSelectedIds([])
+      return
+    }
+    setIsSelectingAll(true)
+    try {
+      const ids = await listAllEventIds({
+        search: debouncedSearch,
+        eventTypeId: eventTypeFilter || undefined,
+        filter,
+      })
+      setSelectedIds(ids)
+    } catch (err: unknown) {
+      toastError(getApiErrorMessage(err, t('event:toast.bulkSelectAllFailed')))
+    } finally {
+      setIsSelectingAll(false)
+    }
+  }
+
+  async function handleBulkApply() {
+    let updated = 0
+    let skipped = 0
+    let failed = 0
+    let error: unknown = null
+    // Backend membatasi `ids` maks 100 → kirim berurutan per batch, jumlahkan hasil.
+    for (let i = 0; i < selectedIds.length; i += BULK_CHUNK_SIZE) {
+      try {
+        const result = await bulkUpdate.mutateAsync({
+          ids: selectedIds.slice(i, i + BULK_CHUNK_SIZE),
+          status: activeBulkStatus,
+        })
+        updated += result.updated
+        skipped += result.skipped
+        failed += result.failed
+      } catch (err: unknown) {
+        // Chunk gagal: hentikan loop, laporkan counter yang sudah terkumpul.
+        error = err
+        break
+      }
+    }
+    if (updated > 0) toastSuccess(t('event:toast.bulkUpdated', { count: updated }))
+    if (skipped > 0) toastError(t('event:bulk.skipped', { count: skipped }))
+    if (failed > 0) toastError(t('event:bulk.failed', { count: failed }))
+    else if (error !== null) {
+      toastError(getApiErrorMessage(error, t('event:toast.bulkUpdateFailed')))
+    }
+    if (error !== null) return // Pilihan dipertahankan agar user bisa mengulang.
+    setBulkAction(null)
+    setSelectedIds([])
+  }
+
+  async function handleBulkDelete() {
+    let deleted = 0
+    let failed = 0
+    let error: unknown = null
+    for (let i = 0; i < selectedIds.length; i += BULK_CHUNK_SIZE) {
+      try {
+        const result = await bulkDelete.mutateAsync({
+          ids: selectedIds.slice(i, i + BULK_CHUNK_SIZE),
+        })
+        deleted += result.deleted
+        failed += result.failed
+      } catch (err: unknown) {
+        // Chunk gagal: hentikan loop, laporkan counter yang sudah terkumpul.
+        error = err
+        break
+      }
+    }
+    if (deleted > 0) toastSuccess(t('event:toast.bulkDeleted', { count: deleted }))
+    if (failed > 0) toastError(t('event:bulk.failed', { count: failed }))
+    else if (error !== null) {
+      toastError(getApiErrorMessage(error, t('event:toast.bulkDeleteFailed')))
+    }
+    if (error !== null) return
+    setBulkAction(null)
+    setSelectedIds([])
   }
 
   return (
@@ -226,7 +343,74 @@ function AdminEventsPage() {
             <List className="size-4" />
           </Toggle>
         </div>
+        {canBulk && listTotal > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+              onCheckedChange={() => void handleToggleAll()}
+              disabled={bulkBusy}
+              aria-label={t('event:bulk.selectAll')}
+            />
+            <span className="text-sm text-muted-foreground">{t('event:bulk.selectAllLabel')}</span>
+            {isSelectingAll && (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+            )}
+          </span>
+        )}
       </div>
+
+      {canBulk && selectedIds.length > 0 && (
+        <div
+          role="region"
+          aria-label={t('event:bulk.regionLabel')}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <span className="text-sm text-muted-foreground">
+            {t('event:bulk.selected', { count: selectedIds.length })}
+          </span>
+          {canBulkUpdate && bulkStatusOptions.length > 0 && (
+            <>
+              <Select
+                value={activeBulkStatus}
+                onValueChange={(value) => setBulkStatus(value as ContentStatus)}
+                disabled={bulkBusy}
+              >
+                <SelectTrigger size="sm" aria-label={t('event:bulk.statusLabel')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkStatusOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(`event:statusOptions.${value}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={() => setBulkAction('status')} disabled={bulkBusy}>
+                {t('event:bulk.apply')}
+              </Button>
+            </>
+          )}
+          {canBulkDelete && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkAction('delete')}
+              disabled={bulkBusy}
+            >
+              {t('event:bulk.delete')}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelectedIds([])}
+            disabled={bulkBusy}
+          >
+            {t('event:bulk.clear')}
+          </Button>
+        </div>
+      )}
 
       {eventsQuery.isError ? (
         eventsForbidden ? (
@@ -258,6 +442,11 @@ function AdminEventsPage() {
               canUpdate={can('event:update')}
               canDelete={can('event:delete')}
               canCreate={canCreateEvent}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              isSelectingAll={isSelectingAll}
+              isBulkPending={bulkPending}
+              canBulkUpdate={canBulk}
             />
           ) : (
             <EventTable
@@ -273,6 +462,13 @@ function AdminEventsPage() {
               canUpdate={can('event:update')}
               canDelete={can('event:delete')}
               canCreate={canCreateEvent}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              allSelected={allSelected}
+              onToggleAll={() => void handleToggleAll()}
+              isSelectingAll={isSelectingAll}
+              isBulkPending={bulkPending}
+              canBulkUpdate={canBulk}
             />
           )}
 
@@ -321,6 +517,75 @@ function AdminEventsPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog
+        open={bulkAction === 'status'}
+        onOpenChange={(open) => {
+          if (!open && !bulkPending) setBulkAction(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('event:bulk.confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('event:bulk.confirmDescription', {
+                count: selectedIds.length,
+                status: t(`event:statusOptions.${activeBulkStatus}`),
+              })}
+              {activeBulkStatus === 'PUBLISHED' && (
+                <span className="mt-2 block font-medium text-destructive">
+                  {t('event:bulk.publishWarning')}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>{t('event:bulk.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                void handleBulkApply()
+              }}
+              disabled={bulkPending}
+            >
+              {t('event:bulk.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={bulkAction === 'delete'}
+        onOpenChange={(open) => {
+          if (!open && !bulkPending) setBulkAction(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('event:bulk.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('event:bulk.deleteDescription', { count: selectedIds.length })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>{t('event:bulk.cancel')}</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={bulkPending}
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleBulkDelete()
+                }}
+              >
+                <Trash2 className="size-4" data-icon="inline-start" />
+                {t('event:bulk.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

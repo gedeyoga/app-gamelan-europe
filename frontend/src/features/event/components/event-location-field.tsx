@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
+import { CreatableSelect } from '@/components/shared/creatable-select'
 import { cn } from '@/lib/utils'
 
 import { useCities } from '@/features/geo/hooks/use-cities'
@@ -18,7 +19,6 @@ import { useCountries } from '@/features/geo/hooks/use-countries'
 import { useStates } from '@/features/geo/hooks/use-states'
 import type { CityOption } from '@/features/geo/api/geo'
 
-import { CitySelect } from './city-select'
 import type { EventFormValues } from '../lib/schema'
 
 export interface EventLocationFieldProps {
@@ -166,7 +166,7 @@ export function EventLocationField({
             <FormItem>
               <FormLabel>{t('event:location.cityLabel')}</FormLabel>
               <FormControl>
-                <CitySelect
+                <CreatableSelect
                   options={cityOptions}
                   value={field.value}
                   onChange={field.onChange}

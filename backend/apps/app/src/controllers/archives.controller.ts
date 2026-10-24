@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import {
   ArchiveService,
   AuthenticatedUser,
+  BulkDeleteArchivesDto,
+  BulkUpdateArchiveStatusDto,
   CreateArchiveDto,
   CurrentUser,
   ListArchivesQueryDto,
@@ -38,6 +40,21 @@ export class ArchivesController {
     return this.archiveService.findOneBySlug(params.slug, user.id);
   }
 
+  // Bulk route dideklarasikan sebelum `@Post(':id/...')` agar tidak tertangkap route berparameter.
+  @Post('bulk-status')
+  @Permissions('archive:update')
+  @HttpCode(200)
+  bulkUpdateStatus(@Body() dto: BulkUpdateArchiveStatusDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.archiveService.bulkUpdateStatus(dto.ids, dto.status, user.permissions ?? [], user.id);
+  }
+
+  @Post('bulk-delete')
+  @Permissions('archive:delete')
+  @HttpCode(200)
+  bulkDelete(@Body() dto: BulkDeleteArchivesDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.archiveService.bulkDelete(dto.ids, user.id);
+  }
+
   @Get(':id')
   @Permissions('archive:read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
@@ -47,7 +64,7 @@ export class ArchivesController {
   @Patch(':id')
   @Permissions('archive:update')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateArchiveDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.archiveService.update(id, dto, user.id);
+    return this.archiveService.update(id, dto, user.id, user.permissions ?? []);
   }
 
   @Delete(':id')

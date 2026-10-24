@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
   AuthenticatedUser,
+  BulkDeletePostsDto,
+  BulkUpdatePostStatusDto,
   CreatePostDto,
   CurrentUser,
   ListPostsQueryDto,
@@ -38,6 +40,21 @@ export class PostsController {
     return this.postService.findOneBySlug(params.slug, user.id);
   }
 
+  // Bulk route dideklarasikan sebelum `@Post(':id/...')` agar tidak tertangkap route berparameter.
+  @Post('bulk-status')
+  @Permissions('story:update')
+  @HttpCode(200)
+  bulkUpdateStatus(@Body() dto: BulkUpdatePostStatusDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.postService.bulkUpdateStatus(dto.ids, dto.status, user.permissions ?? [], user.id);
+  }
+
+  @Post('bulk-delete')
+  @Permissions('story:delete')
+  @HttpCode(200)
+  bulkDelete(@Body() dto: BulkDeletePostsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.postService.bulkDelete(dto.ids, user.id);
+  }
+
   @Get(':id')
   @Permissions('story:read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
@@ -47,7 +64,7 @@ export class PostsController {
   @Patch(':id')
   @Permissions('story:update')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePostDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.postService.update(id, dto, user.id);
+    return this.postService.update(id, dto, user.id, user.permissions ?? []);
   }
 
   @Delete(':id')

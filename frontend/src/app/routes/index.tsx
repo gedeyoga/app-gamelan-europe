@@ -1,38 +1,67 @@
+import { lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { RequirePermission } from '@/components/shared/require-permission'
 import { GuestRoute, ProtectedRoute } from '@/features/auth/auth-routes'
 
-import { ForbiddenPage } from './403'
-import { ApiKeysPage } from './api-keys'
-import { ArchiveDetailPage } from './archive-detail'
-import { ArchiveEditPage } from './archive-edit'
-import { ArchiveNewPage } from './archive-new'
-import { ArchivesPage } from './archives'
-import { BillingsPage } from './billings'
 import { DashboardLayout } from './dashboard'
-import { DashboardHomePage } from './dashboard-home'
-import { EventDetailPage } from './event-detail'
-import { EventEditPage } from './event-edit'
-import { EventsPage } from './events'
-import { EventNewPage } from './event-new'
-import { LoginPage } from './login'
-import { MyBillingsPage } from './my-billings'
-import { NetworkEditPage } from './network-edit'
-import { NetworkJoinPage } from './network-join'
-import { NetworkNewPage } from './network-new'
-import { NetworksPage } from './networks'
-import { ProfilePage } from './profile'
-import { RegisterPage } from './register'
-import { RolesPage } from './roles'
-import { SubscriptionRequestDetailPage } from './subscription-request-detail'
-import { SubscriptionRequestsPage } from './subscription-requests'
-import { SubscriptionsPage } from './subscriptions'
-import { StoriesPage } from './stories'
-import { StoryDetailPage } from './story-detail'
-import { StoryEditPage } from './story-edit'
-import { StoryNewPage } from './story-new'
-import { UsersPage } from './users'
+
+const ForbiddenPage = lazy(() => import('./403').then((m) => ({ default: m.ForbiddenPage })))
+const ApiKeysPage = lazy(() => import('./api-keys').then((m) => ({ default: m.ApiKeysPage })))
+const ArchiveDetailPage = lazy(() =>
+  import('./archive-detail').then((m) => ({ default: m.ArchiveDetailPage })),
+)
+const ArchiveEditPage = lazy(() =>
+  import('./archive-edit').then((m) => ({ default: m.ArchiveEditPage })),
+)
+const ArchiveNewPage = lazy(() =>
+  import('./archive-new').then((m) => ({ default: m.ArchiveNewPage })),
+)
+const ArchivesPage = lazy(() => import('./archives').then((m) => ({ default: m.ArchivesPage })))
+const BillingsPage = lazy(() => import('./billings').then((m) => ({ default: m.BillingsPage })))
+const DashboardHomePage = lazy(() =>
+  import('./dashboard-home').then((m) => ({ default: m.DashboardHomePage })),
+)
+const EventDetailPage = lazy(() =>
+  import('./event-detail').then((m) => ({ default: m.EventDetailPage })),
+)
+const EventEditPage = lazy(() =>
+  import('./event-edit').then((m) => ({ default: m.EventEditPage })),
+)
+const EventsPage = lazy(() => import('./events').then((m) => ({ default: m.EventsPage })))
+const EventNewPage = lazy(() => import('./event-new').then((m) => ({ default: m.EventNewPage })))
+const LoginPage = lazy(() => import('./login').then((m) => ({ default: m.LoginPage })))
+const MyBillingsPage = lazy(() =>
+  import('./my-billings').then((m) => ({ default: m.MyBillingsPage })),
+)
+const NetworkEditPage = lazy(() =>
+  import('./network-edit').then((m) => ({ default: m.NetworkEditPage })),
+)
+const NetworkJoinPage = lazy(() =>
+  import('./network-join').then((m) => ({ default: m.NetworkJoinPage })),
+)
+const NetworkNewPage = lazy(() =>
+  import('./network-new').then((m) => ({ default: m.NetworkNewPage })),
+)
+const NetworksPage = lazy(() => import('./networks').then((m) => ({ default: m.NetworksPage })))
+const ProfilePage = lazy(() => import('./profile').then((m) => ({ default: m.ProfilePage })))
+const RolesPage = lazy(() => import('./roles').then((m) => ({ default: m.RolesPage })))
+const SubscriptionRequestDetailPage = lazy(() =>
+  import('./subscription-request-detail').then((m) => ({ default: m.SubscriptionRequestDetailPage })),
+)
+const SubscriptionRequestsPage = lazy(() =>
+  import('./subscription-requests').then((m) => ({ default: m.SubscriptionRequestsPage })),
+)
+const SubscriptionsPage = lazy(() =>
+  import('./subscriptions').then((m) => ({ default: m.SubscriptionsPage })),
+)
+const StoriesPage = lazy(() => import('./stories').then((m) => ({ default: m.StoriesPage })))
+const StoryDetailPage = lazy(() =>
+  import('./story-detail').then((m) => ({ default: m.StoryDetailPage })),
+)
+const StoryEditPage = lazy(() => import('./story-edit').then((m) => ({ default: m.StoryEditPage })))
+const StoryNewPage = lazy(() => import('./story-new').then((m) => ({ default: m.StoryNewPage })))
+const UsersPage = lazy(() => import('./users').then((m) => ({ default: m.UsersPage })))
 
 export const router = createBrowserRouter([
   {
@@ -146,14 +175,6 @@ export const router = createBrowserRouter([
     element: (
       <GuestRoute>
         <LoginPage />
-      </GuestRoute>
-    ),
-  },
-  {
-    path: '/register',
-    element: (
-      <GuestRoute>
-        <RegisterPage />
       </GuestRoute>
     ),
   },

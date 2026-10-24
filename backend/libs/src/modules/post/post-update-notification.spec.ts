@@ -50,7 +50,7 @@ function makeService() {
 describe('PostService.update auto-publish notify wiring', () => {
   it('notify:false diteruskan → NotificationService tidak enqueue', async () => {
     const { service, notificationService } = makeService();
-    await service.update('p1', { status: 'PUBLISHED', notify: false } as UpdatePostDto, 'admin');
+    await service.update('p1', { status: 'PUBLISHED', notify: false } as UpdatePostDto, 'admin', ['story:publish']);
     expect(notificationService.publishAfterCommit).toHaveBeenCalledWith(
       expect.objectContaining({ entityId: 'p1', notify: false }),
     );
@@ -58,7 +58,7 @@ describe('PostService.update auto-publish notify wiring', () => {
 
   it('default (undefined) → notify true', async () => {
     const { service, notificationService } = makeService();
-    await service.update('p1', { status: 'PUBLISHED' } as UpdatePostDto, 'admin');
+    await service.update('p1', { status: 'PUBLISHED' } as UpdatePostDto, 'admin', ['story:publish']);
     expect(notificationService.publishAfterCommit).toHaveBeenCalledWith(
       expect.objectContaining({ entityId: 'p1', notify: true }),
     );

@@ -1,6 +1,6 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CategoryType, ContentSource, ContentStatus, ContentVisibility, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
-import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
+import { AccessScope, AccessScopeService, canPublishFromCodes, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { sanitizeStoryContent } from '@app/libs/common/utils/sanitize.util';
@@ -26,15 +26,24 @@ export const POST_SORT_FIELDS = ['name', 'slug', 'status', 'visibility', 'publis
 export const POST_FILTER_FIELDS = ['status', 'publishedAt', 'createdAt', 'updatedAt'];
 export const POST_DATE_FIELDS = ['publishedAt', 'createdAt', 'updatedAt'];
 
+// Bulk status wajib punya permission transisi sesuai status target (cegah eskalasi via `story:update`).
+// APPROVED sengaja tak ada: tak ada transisi yang menghasilkan APPROVED (approve → PUBLISHED).
+export const POST_BULK_STATUS_PERMISSIONS: Partial<Record<ContentStatus, string[]>> = {
+  [ContentStatus.PUBLISHED]: ['story:approve', 'story:publish'],
+  [ContentStatus.REQUEST]: ['story:submit'],
+  [ContentStatus.DRAFT]: ['story:reject', 'story:unpublish'],
+};
+
 export type PostAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpublish';
 
 // Sumber tunggal aturan transisi status story. Pure & mudah diaudit.
-export const POST_TRANSITIONS: Record<PostAction, { from: ContentStatus; to: ContentStatus }> = {
-  submit: { from: ContentStatus.DRAFT, to: ContentStatus.REQUEST },
-  approve: { from: ContentStatus.REQUEST, to: ContentStatus.PUBLISHED },
-  reject: { from: ContentStatus.REQUEST, to: ContentStatus.DRAFT },
-  publish: { from: ContentStatus.APPROVED, to: ContentStatus.PUBLISHED },
-  unpublish: { from: ContentStatus.PUBLISHED, to: ContentStatus.DRAFT },
+// `from` berupa array (mirror network/event): `approve` boleh langsung dari DRAFT tanpa `submit`.
+export const POST_TRANSITIONS: Record<PostAction, { from: ContentStatus[]; to: ContentStatus }> = {
+  submit: { from: [ContentStatus.DRAFT], to: ContentStatus.REQUEST },
+  approve: { from: [ContentStatus.DRAFT, ContentStatus.REQUEST], to: ContentStatus.PUBLISHED },
+  reject: { from: [ContentStatus.REQUEST], to: ContentStatus.DRAFT },
+  publish: { from: [ContentStatus.DRAFT, ContentStatus.APPROVED], to: ContentStatus.PUBLISHED },
+  unpublish: { from: [ContentStatus.PUBLISHED], to: ContentStatus.DRAFT },
 };
 
 @Injectable()
@@ -282,7 +291,8 @@ export class PostService {
   private buildCreateData(dto: CreatePostDto, slug: string, status: ContentStatus, createdBy?: string): CreatePostData {
     const now = new Date();
     // Tanggal publish manual → pakai tanggal user + paksa PUBLISHED. Tanpa itu, perilaku lama.
-    const autoPublish = dto.publishedAt !== undefined;
+    // `null` = jangan sentuh (bukan epoch).
+    const autoPublish = typeof dto.publishedAt === 'string';
     return {
       name: dto.name,
       slug,
@@ -419,6 +429,11 @@ export class PostService {
           entityType: NotificationEntityType.POST,
           entityId: post.id,
           title: dto.name,
+          details: [
+            { label: 'Submitted by', value: dto.submitter.fullName },
+            { label: 'Email', value: dto.submitter.email },
+            { label: 'Type', value: 'Story' },
+          ],
           imageUrl: thumbnail ?? null,
           linkPath: '/dashboard',
         });
@@ -454,7 +469,12 @@ export class PostService {
     }
   }
 
-  async update(id: string, dto: UpdatePostDto, userId: string): Promise<PostResponse> {
+  async update(
+    id: string,
+    dto: UpdatePostDto,
+    userId: string,
+    permissions: string[] = [],
+  ): Promise<PostResponse> {
     const existing = await this.postRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(existing, scope);
@@ -496,8 +516,17 @@ export class PostService {
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
+    // Scope `all` saja tidak cukup untuk terbit: `*:reject`/`*:unpublish` juga memberi scope `all`,
+    // jadi niat terbit via PATCH wajib `*:approve` atau `*:publish` (403 bila tidak punya).
+    // `publishedAt: null` = jangan sentuh (bukan epoch); hanya string ISO yang diterima.
+    const publishing =
+      typeof dto.publishedAt === 'string' ||
+      (dto.status === ContentStatus.PUBLISHED && existing.status !== ContentStatus.PUBLISHED);
     if (scope.kind === 'all') {
-      if (dto.publishedAt !== undefined) {
+      if (publishing && !canPublishFromCodes(permissions, 'story')) {
+        throw new ForbiddenException('Publishing requires permission story:approve or story:publish');
+      }
+      if (typeof dto.publishedAt === 'string') {
         // Tanggal publish manual: timpa nilai lama (ubah/backdate) + paksa PUBLISHED.
         data.publishedAt = new Date(dto.publishedAt);
         data.status = ContentStatus.PUBLISHED;
@@ -516,14 +545,14 @@ export class PostService {
     }
 
     const post = await this.postRepository.update(id, data);
-    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ContentStatus.PUBLISHED)) {
+    if (scope.kind === 'all' && (typeof dto.publishedAt === 'string' || dto.status === ContentStatus.PUBLISHED)) {
       await this.notifyPublished(post, userId, dto.notify);
     }
     return (await this.hydrate([post]))[0];
   }
 
   // Transisi status terkontrol; `PATCH /posts/:id` tetap untuk update konten.
-  // `approve` langsung PUBLISHED (+ `publishedAt`); `publish` legacy (APPROVED → PUBLISHED) tetap ada.
+  // `approve` langsung PUBLISHED dari DRAFT|REQUEST (+ `publishedAt`); `publish` menerima DRAFT|APPROVED (legacy).
   async transition(
     id: string,
     action: PostAction,
@@ -534,7 +563,7 @@ export class PostService {
     const scope = await this.accessScope.resolve(userId, 'story');
     this.assertWritable(existing, scope);
     const rule = POST_TRANSITIONS[action];
-    if (existing.status !== rule.from) {
+    if (!rule.from.includes(existing.status)) {
       throw new ConflictException(`Cannot ${action} post in status ${existing.status}`);
     }
     // `updateStatusIf` conditional → dua request paralel dari status sama: hanya satu sukses.
@@ -548,8 +577,9 @@ export class PostService {
     }
     const publishing = action === 'approve' || action === 'publish';
     // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    // Predikat = status aktual hasil baca (bukan seluruh array) → balapan tetap 409.
     const updated = await this.postRepository.transaction(async (tx) => {
-      const ok = await this.postRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      const ok = await this.postRepository.updateStatusIf(id, existing.status, rule.to, extra, tx);
       if (!ok) return false;
       if (publishing && existing.visibility === ContentVisibility.PUBLIC) {
         await this.notificationService.enqueueContentPublished(tx, {
@@ -594,5 +624,73 @@ export class PostService {
     }
     await this.postRepository.delete(id);
     return response;
+  }
+
+  // Bulk status: per-id lewat `transition` (aturan transisi + scope tetap berlaku → timestamp ikut).
+  // APPROVED ditolak 400: tak ada transisi yang menghasilkan APPROVED. Kandidat aksi hanya yang
+  // permission-nya dipegang (bulk tak boleh lebih longgar dari endpoint tunggal).
+  // 404/409 → `skipped` (row hilang / sudah di status target); 403 & error lain → `failed`.
+  async bulkUpdateStatus(
+    ids: string[],
+    status: ContentStatus,
+    permissions: string[] = [],
+    userId: string,
+  ): Promise<{ updated: number; skipped: number; failed: number }> {
+    const required = POST_BULK_STATUS_PERMISSIONS[status];
+    if (!required) {
+      throw new BadRequestException(`Bulk status target ${status} is not supported`);
+    }
+    if (!required.some((permission) => permissions.includes(permission))) {
+      throw new ForbiddenException(`Bulk status ${status} requires permission ${required.join(' or ')}`);
+    }
+    const candidates: PostAction[] =
+      status === ContentStatus.PUBLISHED
+        ? [
+            ...(permissions.includes('story:approve') ? (['approve'] as const) : []),
+            ...(permissions.includes('story:publish') ? (['publish'] as const) : []),
+          ]
+        : status === ContentStatus.REQUEST
+          ? ['submit']
+          : [
+              ...(permissions.includes('story:reject') ? (['reject'] as const) : []),
+              ...(permissions.includes('story:unpublish') ? (['unpublish'] as const) : []),
+            ];
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      let outcome: 'updated' | 'skipped' | 'failed' = 'skipped';
+      for (const action of candidates) {
+        try {
+          await this.transition(id, action, userId);
+          outcome = 'updated';
+          break;
+        } catch (e) {
+          if (!(e instanceof HttpException)) throw e;
+          if (!(e instanceof NotFoundException || e instanceof ConflictException)) outcome = 'failed';
+        }
+      }
+      if (outcome === 'updated') updated++;
+      else if (outcome === 'failed') failed++;
+      else skipped++;
+    }
+    return { updated, skipped, failed };
+  }
+
+  // Hapus massal: per-id `remove` (scope + S3 cleanup tetap jalan). Row hilang/terlarang = `failed`
+  // (tak ada konsep "sudah di status target" untuk delete).
+  async bulkDelete(ids: string[], userId: string): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await this.remove(id, userId);
+        deleted++;
+      } catch (e) {
+        if (!(e instanceof HttpException)) throw e;
+        failed++;
+      }
+    }
+    return { deleted, failed };
   }
 }

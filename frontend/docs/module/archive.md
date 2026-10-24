@@ -291,8 +291,8 @@ Perilaku **identik story**:
 - Tombol **Simpan sebagai Draft** tambahan (`action 'draft'`) tampil saat `status === 'PUBLISHED'` atau (`canPublishArchive && status === 'APPROVED'`) → menurunkan ke `DRAFT` (konfirmasi `archive:confirm.*`).
 - **Terbitkan** (ikon `CalendarClock`, `action 'publish'`, `canPublishArchive && status !== 'REQUEST'`) → validasi form lalu buka **`PublishScheduleDialog`**; konfirmasi memanggil submit `publish` + `publishedAt` ISO. **Dialog dilewati bila `publishedAt` sudah ada** (`initialPublishedAt` terisi → langsung submit dengan tanggal itu).
 - **Ajukan untuk Terbit** (ikon `Send`, `action 'request'`, `!canPublishArchive && canSubmitArchive && status === 'DRAFT'`) → konfirmasi `archive:confirm.*` lalu submit `request`.
-- **Bar `status === 'REQUEST'`** (full-width, `archive:workflow.requested`) menampilkan:
-  - **Tolak** (`canRejectArchive`, ikon `X`) → AlertDialog konfirmasi → `action 'reject'` (endpoint `POST /archives/:id/reject`).
+- **Bar `status === 'REQUEST'`** (full-width, `archive:workflow.requested`) — juga tampil saat **`status === 'DRAFT' && canApproveArchive`** dengan label `archive:workflow.draft` ("Arsip ini masih draf — Anda dapat langsung menerbitkannya"; approver menerbitkan langsung tanpa submit) — menampilkan:
+  - **Tolak** (`canRejectArchive`, ikon `X`, **hanya `status === 'REQUEST'`**) → AlertDialog konfirmasi → `action 'reject'` (endpoint `POST /archives/:id/reject`).
   - **Setujui** (`canApproveArchive`, ikon `Check`) → buka `PublishScheduleDialog` → `action 'approve'` (endpoint `POST /archives/:id/approve` + `publishedAt`); dialog dilewati bila `publishedAt` sudah ada.
 - Submit form default (mis. tekan Enter) = `action 'save'` (mempertahankan `status` form; draft tetap draft) — tidak pernah tiba-tiba Terbit.
 - **`publishedAt` dikirim hanya ketika** ada override (approve/publish, ISO) **atau** `status === 'PUBLISHED'` (mempertahankan tanggal lama / `now`). `DRAFT`/`REQUEST` **OMIT total** (backend memaksa `PUBLISHED` begitu menerima tanggal non-null).
@@ -301,6 +301,7 @@ Perilaku **identik story**:
 ### Aksi
 
 - Tombol **Batal**, aksi status (Simpan sebagai Draft / Ajukan untuk Terbit / Terbitkan / Tolak / Setujui) di footer & bar workflow (`disabled={isPending}`); sukses → toast (`archive:toast.created`/`updated`/`approved`/`rejected`) + redirect `/archives`.
+- **Bulk `PUBLISHED`** di list `/archives` (`canAny(['archive:approve','archive:publish'])`, `POST /archives/bulk-status`) **tidak berubah** — bulk menulis status langsung, jadi target PUBLISHED sudah mencakup baris DRAFT maupun REQUEST; copy konfirmasi tidak menyebut REQUEST. Card/table arsip **tidak** punya aksi publish/reject per baris: workflow tetap di form.
 - Aksi submit/approve/reject di-gate permission `archive:submit`/`archive:approve`/`archive:reject` (via props `canSubmitArchive`/`canApproveArchive`/`canRejectArchive`); simpan konten di-gate gate form existing (`archive:create`/`archive:update`).
 - 422 → `form.setError` per-field, **tetap di halaman** (tanpa toast, tanpa redirect).
 - Binding thumbnail (`thumbnail` URL), dokumen (`documentIds`) & link (`externalLinks`) selalu dikirim saat edit (termasuk `[]` untuk array) agar replace seluruh array diterapkan; `thumbnail` `null` menghapus.
@@ -381,7 +382,7 @@ archive:typeOptions.{MEMBER,PUBLIC}
 archive:statusOptions.{DRAFT,REQUEST,APPROVED,PUBLISHED}
 archive:form.{sectionInfo,sectionLinks,titleLabel,titlePlaceholder,descriptionLabel,type,categories,categoryPlaceholder,categorySearch,categoryAdd,categoryCreating,categoryEmpty,thumbnail,externalLinks,externalLinksEmpty,externalLinksPlaceholder,externalLinksAdd,externalLinksRemove,documents,save,saveAsDraft,requestPublish,publish,cancel}
 archive:publishDialog.{title,description,dateLabel,datePlaceholder,next,confirmTitle,confirmDescription,confirm}
-archive:workflow.{requested,approve,reject}
+archive:workflow.{requested,draft,approve,reject}
 archive:confirm.{title,description,submit}
 archive:document.{add,empty,formats,uploading,uploadTooLarge,uploadInvalid,remove,moveUp,moveDown,open,size}
 archive:thumbnail.{upload,uploading,remove,formats,uploadInvalid}

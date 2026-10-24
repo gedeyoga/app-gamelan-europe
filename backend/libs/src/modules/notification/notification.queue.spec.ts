@@ -118,6 +118,25 @@ describe('NotificationQueue.enqueueRecovery', () => {
   });
 });
 
+describe('NotificationQueue.enqueueSubscriptionLifecycle', () => {
+  it('scheduler repeatable tiap 6 jam', async () => {
+    const { producer, queue } = makeQueue();
+    await producer.enqueueSubscriptionLifecycle();
+    expect(queue.upsertJobScheduler).toHaveBeenCalledWith(
+      'notifications-subscription-lifecycle',
+      { every: 21_600_000 },
+      expect.objectContaining({ name: 'subscription-lifecycle' }),
+    );
+  });
+
+  it('Redis gagal → tidak melempar', async () => {
+    const { producer } = makeQueue({
+      queue: { upsertJobScheduler: jest.fn().mockRejectedValue(new Error('redis down')) },
+    });
+    await expect(producer.enqueueSubscriptionLifecycle()).resolves.toBeUndefined();
+  });
+});
+
 describe('NotificationRepository.findDue', () => {
   it('hanya PENDING dengan scheduledAt <= now', async () => {
     const findMany = jest.fn().mockResolvedValue([]);

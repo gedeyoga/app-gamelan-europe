@@ -12,7 +12,7 @@ Dokumen ini mencatat rencana desain/implementasi halaman **Dashboard** pada fron
 
 - Route di `src/app/routes/` (React Router, `createBrowserRouter`).
 - `/` (**protected**) — tanpa token → redirect ke `/login` (wrap `ProtectedRoute` dari `@/features/auth/auth-routes`). Setelah login, `useLogin` → `navigate('/')`.
-- Dashboard menempati root `/`; halaman `/login` & `/register` public (GuestRoute).
+- Dashboard menempati root `/`; halaman `/login` public (GuestRoute).
 
 Struktur nested:
 

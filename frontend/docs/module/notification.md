@@ -49,7 +49,7 @@ Base: `/api/v1`, JWT Bearer, envelope `{ data, message }` di-unwrap oleh `lib/ap
 
 Enum:
 
-- `NotificationType`: `CONTENT_PUBLISHED` | `CONTENT_SUBMITTED` | `SUBSCRIPTION_REQUEST_SUBMITTED`
+- `NotificationType`: `CONTENT_PUBLISHED` | `CONTENT_SUBMITTED` | `SUBSCRIPTION_REQUEST_SUBMITTED` | `SUBSCRIPTION_ACTIVE` | `SUBSCRIPTION_EXPIRING` | `SUBSCRIPTION_EXPIRED` | `SUBSCRIPTION_CANCELED`
 - `NotificationPreference.channel`: `EMAIL`
 
 ## 5. Query Key & Cache
@@ -81,7 +81,7 @@ Enum:
 ## 9. i18n
 
 - Namespace `notification` (`src/i18n/locales/{en,id}/notification.json`) didaftarkan di `src/i18n/index.ts`.
-- Key tersisa: `toast.preferenceUpdated`, `toast.preferenceUpdateFailed`, `type.CONTENT_PUBLISHED`, `type.CONTENT_SUBMITTED`, `type.SUBSCRIPTION_REQUEST_SUBMITTED`, `preferences.*`.
+- Key tersisa: `toast.preferenceUpdated`, `toast.preferenceUpdateFailed`, `type.CONTENT_PUBLISHED`, `type.CONTENT_SUBMITTED`, `type.SUBSCRIPTION_REQUEST_SUBMITTED`, `type.SUBSCRIPTION_ACTIVE`, `type.SUBSCRIPTION_EXPIRING`, `type.SUBSCRIPTION_EXPIRED`, `type.SUBSCRIPTION_CANCELED`, `preferences.*`.
 - Key list-page (`title`, `subtitle`, `markAllRead`, `markRead`, `open`, `unread`, `read`, `empty`, `errors`, `toast.read*`, `toast.allRead*`) dan `dashboard:nav.notifications` dihapus.
 
 ## 10. Verifikasi

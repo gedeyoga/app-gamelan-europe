@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { MobileRecordList } from '@/components/shared/mobile-record-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -41,6 +42,98 @@ export interface MyEventListProps {
   className?: string
 }
 
+function EventDates({ event }: { event: Event }) {
+  if (event.dates.length === 0) return <>—</>
+  return (
+    <div className="flex flex-col gap-2">
+      {event.dates.map((d, i) => {
+        const { date: dateText, time } = formatEventDateLines(d)
+        return (
+          <span key={`${d.date}-${i}`}>
+            {dateText}
+            {time && (
+              <>
+                <br />
+                {time}
+              </>
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function EventLocation({ event }: { event: Event }) {
+  return (
+    <>
+      <span className="block">{event.location?.name ?? '—'}</span>
+      {event.location?.address && <span className="block text-xs">{event.location.address}</span>}
+    </>
+  )
+}
+
+function EventTypes({ event }: { event: Event }) {
+  if (event.eventTypes.length === 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {event.eventTypes.map((eventType) => (
+        <Badge key={eventType.id} variant="secondary">
+          {eventType.name}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
+interface RowActionsProps {
+  event: Event
+  canUpdate: boolean
+  canDelete: boolean
+  onDetail: (event: Event) => void
+  onEdit: (event: Event) => void
+  onDelete: (event: Event) => void
+}
+
+function RowActions({ event, canUpdate, canDelete, onDetail, onEdit, onDelete }: RowActionsProps) {
+  const { t } = useTranslation()
+  const showMenu = canUpdate || canDelete
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      <Button variant="outline" size="sm" onClick={() => onDetail(event)}>
+        {t('event:org.detail')}
+      </Button>
+      {showMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('common:table.actionsFor', { name: event.name })}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canUpdate && (
+              <DropdownMenuItem onClick={() => onEdit(event)}>
+                <Pencil />
+                {t('event:table.edit')}
+              </DropdownMenuItem>
+            )}
+            {canDelete && (
+              <DropdownMenuItem variant="destructive" onClick={() => onDelete(event)}>
+                <Trash2 />
+                {t('event:table.delete')}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
+}
+
 export function MyEventList({
   items,
   isPending,
@@ -54,12 +147,12 @@ export function MyEventList({
   className,
 }: MyEventListProps) {
   const { t } = useTranslation()
-  const showMenu = canUpdate || canDelete
+  const showList = items.length > 0 && !errorMessage && !isPending
 
   return (
     <section className={cn('flex flex-col gap-4', className)}>
       <h2 className="text-lg font-semibold">{t('event:org.myTitle')}</h2>
-      <div className="rounded-xl border">
+      <div className={cn('overflow-hidden rounded-xl border', showList && 'max-md:hidden')}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -110,26 +203,7 @@ export function MyEventList({
               items.map((event) => (
                 <TableRow key={event.id}>
                   <TableCell className="text-muted-foreground">
-                    {event.dates.length === 0 ? (
-                      '—'
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {event.dates.map((d, i) => {
-                          const { date: dateText, time } = formatEventDateLines(d)
-                          return (
-                            <span key={`${d.date}-${i}`}>
-                              {dateText}
-                              {time && (
-                                <>
-                                  <br />
-                                  {time}
-                                </>
-                              )}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    )}
+                    <EventDates event={event} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -146,23 +220,10 @@ export function MyEventList({
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    <span className="block">{event.location?.name ?? '—'}</span>
-                    {event.location?.address && (
-                      <span className="block text-xs">{event.location.address}</span>
-                    )}
+                    <EventLocation event={event} />
                   </TableCell>
                   <TableCell>
-                    {event.eventTypes.length === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {event.eventTypes.map((eventType) => (
-                          <Badge key={eventType.id} variant="secondary">
-                            {eventType.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    <EventTypes event={event} />
                   </TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[event.status]}>
@@ -170,41 +231,14 @@ export function MyEventList({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="outline" size="sm" onClick={() => onDetail(event)}>
-                        {t('event:org.detail')}
-                      </Button>
-                      {showMenu && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t('common:table.actionsFor', { name: event.name })}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canUpdate && (
-                              <DropdownMenuItem onClick={() => onEdit(event)}>
-                                <Pencil />
-                                {t('event:table.edit')}
-                              </DropdownMenuItem>
-                            )}
-                            {canDelete && (
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => onDelete(event)}
-                              >
-                                <Trash2 />
-                                {t('event:table.delete')}
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
+                    <RowActions
+                      event={event}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      onDetail={onDetail}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                    />
                   </TableCell>
                 </TableRow>
               ))
@@ -212,6 +246,58 @@ export function MyEventList({
           </TableBody>
         </Table>
       </div>
+
+      {showList && (
+        <MobileRecordList
+          items={items.map((event) => ({
+            id: event.id,
+            title: event.name,
+            leading: event.thumbnail ? (
+              <img
+                src={event.thumbnail}
+                alt={event.name}
+                className="size-10 shrink-0 rounded object-cover"
+              />
+            ) : (
+              <div className="size-10 shrink-0 rounded bg-muted" />
+            ),
+            badge: (
+              <Badge variant={STATUS_VARIANT[event.status]}>
+                {t(`event:statusOptions.${event.status}`, { defaultValue: event.status })}
+              </Badge>
+            ),
+            fields: [
+              {
+                label: t('event:org.columnDate'),
+                value: (
+                  <span className="text-muted-foreground">
+                    <EventDates event={event} />
+                  </span>
+                ),
+              },
+              {
+                label: t('event:table.location'),
+                value: (
+                  <span className="text-muted-foreground">
+                    <EventLocation event={event} />
+                  </span>
+                ),
+              },
+              { label: t('event:org.columnCategory'), value: <EventTypes event={event} /> },
+            ],
+            actions: (
+              <RowActions
+                event={event}
+                canUpdate={canUpdate}
+                canDelete={canDelete}
+                onDetail={onDetail}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ),
+          }))}
+        />
+      )}
     </section>
   )
 }

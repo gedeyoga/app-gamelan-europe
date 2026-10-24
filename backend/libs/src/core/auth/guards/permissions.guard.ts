@@ -63,9 +63,12 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Unauthorized');
     }
 
-    // Principal API key membawa permission-nya sendiri; JWT load fresh dari DB.
-    const codes =
-      user.permissions ?? (await this.permissionService.getPermissionCodesByUserId(user.id));
+    // Principal API key membawa permission-nya sendiri; JWT load fresh dari DB lalu ditempel
+    // ke `request.user` agar controller/service bisa membacanya tanpa query ulang di request yang sama.
+    if (!user.permissions) {
+      user.permissions = await this.permissionService.getPermissionCodesByUserId(user.id);
+    }
+    const codes = user.permissions;
     const allowed = required.some((code) => codes.includes(code));
     if (!allowed) throw new ForbiddenException('Forbidden resource');
     return true;

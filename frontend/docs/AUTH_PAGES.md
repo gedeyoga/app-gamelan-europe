@@ -1,22 +1,22 @@
-# Halaman Login & Register — Rencana Desain & Implementasi
+# Halaman Login — Desain & Implementasi
 
-Dokumen ini mencatat rencana desain/implementasi halaman **Login** dan **Register** pada frontend React, termasuk mekanisme **auto-refresh token**.
+Dokumen ini mencatat desain/implementasi halaman **Login** pada frontend React, termasuk mekanisme **auto-refresh token**.
 
 ## 1. Tujuan & Ruang Lingkup
 
-- Mendesain halaman Login & Register untuk frontend.
+- Mendesain halaman Login untuk frontend.
 - Mendefinisikan struktur fitur auth, routing, penyimpanan token, serta penanganan error.
 - Backend auth sudah tersedia (`backend/docs/modules/auth.md`) — kontrak API di bawah adalah kontrak final.
 
 ## 2. Routing
 
 - Routes didefinisikan di `src/app/routes/` (React Router, `createBrowserRouter`).
-- `/login` dan `/register` bersifat **public**.
+- `/login` bersifat **public** (satu-satunya halaman auth publik).
 - Halaman app (protected) di-guard: redirect ke `/login` bila tidak ada token.
 - Struktur fitur auth di `src/features/auth/`:
-  - `api/authApi.ts` — fungsi fetch endpoint login/register.
-  - `hooks/` — `useLogin`, `useRegister` (TanStack Query mutation).
-  - `components/` — `LoginForm`, `RegisterForm`.
+  - `api/authApi.ts` — fungsi fetch endpoint login/refresh/logout/me.
+  - `hooks/` — `useLogin`, `useLogout`, `useSession` (TanStack Query).
+  - `components/` — `LoginForm`.
   - `types.ts` — type payload/response auth.
 - `AuthProvider` dipasang di `src/app/providers.tsx` untuk memegang state token + user.
 
@@ -26,7 +26,6 @@ Kontrak final sesuai `backend/docs/modules/auth.md`. Prefix global `/api/v1`.
 
 | Method | Path | Akses | Response | Error |
 | --- | --- | --- | --- | --- |
-| POST | `/auth/register` | PUBLIC | 201 data user (tanpa password_hash) | 409 duplikat, 422 |
 | POST | `/auth/login` | PUBLIC | 200 `{ data: { accessToken, refreshToken, user }, message }` | 401 credential salah, 422 |
 | POST | `/auth/refresh` | PUBLIC (body `refreshToken`) | 200 `{ data: { accessToken, refreshToken }, message }` — **rotasi** (token lama direvoke, token baru terbit) | 401 invalid/expired/reuse, 422 |
 | POST | `/auth/logout` | LOGIN (Bearer) + body `{ refreshToken }` | 200 `{ data: null, message }` | 401 |
@@ -44,7 +43,7 @@ Envelope sukses: `{ "data": { ... }, "message": "..." }`. Envelope error: `{ sta
 `LoginForm` (react-hook-form + zod) → submit → `useLogin` mutation → sukses:
 1. `storeAuth(auth)` — simpan access+refresh+placeholder `SessionUser{role:null,permissions:[]}` (backend `/auth/login` tidak mengembalikan permissions).
 2. `await hydrateSession()` — `GET /auth/me` via `authApi.me` dengan token baru, timpa `localStorage['auth.user']` + state sebelum navigate (fix gate `RequirePermission` users→`user:read`, roles→`role:read` yang sebelumnya selalu tolak sampai reload).
-3. `navigate('/', { replace: true })` — route `/` (dashboard) = LOGIN-only via `ProtectedRoute` (tanpa kode permission).
+3. Navigasi ke tujuan setelah login: `navigate()` ke `location.state.from` (`pathname` + `search` + `hash`) bila ada, else `sessionStorage['auth.from']` bila ada, else `/` — semuanya dengan `{ replace: true }` (lihat `LoginForm.tsx:76-79`). Route `/` (dashboard) = LOGIN-only via `ProtectedRoute` (tanpa kode permission).
 
 Assert manual (tanpa runner test):
 - Login sebagai admin → `localStorage['auth.user']` wajib memuat `permissions: string[]` non-kosong tanpa reload.
@@ -52,33 +51,9 @@ Assert manual (tanpa runner test):
 - Injeksi devtools (`localStorage['auth.user']` dengan `permissions: [123]` / `role: "admin"`) → `readStoredUser` menolak (key dihapus, status `unauthenticated`).
 - `<RequirePermission>` tanpa `code`/`anyOf` atau `canAny([])` → deny (`false`) + `console.warn`.
 
-## 5. Alur Register
+## 5. Register (dihapus)
 
-`RegisterForm` → submit → `useRegister` mutation. Pasca sukses: auto-login **atau** redirect ke `/login`.
-
-Field form (react-hook-form + zod):
-
-| Field | Tipe | Catatan |
-| --- | --- | --- |
-| `fullName` | Input teks | trim, wajib, max 100. |
-| `email` | Input email | trim, wajib, max 255, format email. |
-| `password` | Input password | wajib, min 8, max 128. |
-| `confirmPassword` | Input password | wajib cocok dengan `password`. |
-| `phone` | Komposit dial + nasional | `{ dial, national }`; opsional (kosong = tidak dikirim). |
-| `countryId` | `Select` negara | opsional (sentinel `none` = tanpa negara), nilai `iso2`. |
-| `network` | Checkbox | bila dicentang, `networkName` wajib. |
-| `networkName` | Input teks | trim, max 200; hanya dikirim bila `network` true. |
-
-Tidak ada field alamat.
-
-**Phone (dial-code combobox):**
-
-- Dial code dipilih via **combobox searchable** (`PhoneCodeCombobox`, cmdk + Popover) berisi opsi dial unik dari daftar negara (`useCountries`), diurut dial numerik; filter mencocokkan nama, `iso2`, dial, dan `+dial` (mis. ketik `+62`).
-- Combobox **default dari region locale browser** (`id-ID` → `ID`) saat opsi tersedia, sekali saja dan tidak pernah menimpa pilihan user.
-- Trigger combobox mewarisi status invalid + `aria-describedby` pesan error field `phone` (`useFormField`) agar kontrol yang salah terekspos ke AT; indikator terpilih tunggal memakai `data-checked` dari `CommandItem`.
-- Validasi: bila nomor nasional diisi, dial wajib ada (`validation:phoneCodeRequired`); total digit `dial + national` harus 7–15 (`validation:phoneInvalid`).
-- **Kontrak E.164**: payload dikirim sebagai `phone` string `+<dial><national>` (contoh `+628123456789`), atau `undefined` bila nomor kosong — hanya digit yang diikutkan, mirror validasi backend `/^\+[1-9]\d{6,14}$/`.
-- **Leading zero nasional dibuang** (`replace(/^0+/, '')`) sebelum validasi & penggabungan: `dial=62` + `08239482032` → `+628239482032`; `dial=62` + `0000000` → nasional kosong → dianggap tidak diisi (tanpa error). E.164 tidak memuat trunk prefix. Pengupasan hanya di jalur validasi/submit, input user tetap utuh saat mengetik.
+Halaman `/register`, `RegisterForm`, `useRegister`, dan combobox dial-code sudah **dihapus**. Akun kini dibuat oleh admin lewat modul **Users** (`POST /users`, proteksi permission `user:create`), bukan self-service. Tidak ada tautan/entry point ke register di UI; `/register` jatuh ke wildcard route (redirect `/`).
 
 
 ## 6. Penyimpanan Token & Status Sesi
@@ -138,7 +113,7 @@ Constraint: `lib/api-client.ts` **tidak boleh** import dari `features/auth/` (ci
 
 - Wajib: **react-hook-form** + **zod** (standar shadcn/ui).
 - Schema di dalam komponen, bungkus `useMemo(..., [t])`; pesan hanya dari `t('validation:*')`; field string `trim/max` mirror DTO backend.
-- Validasi: email valid, password min length (mis. 8 karakter).
+- Validasi: email valid; password cukup `min(1)` (non-kosong) **dengan sengaja** — client tidak membocorkan policy password. Policy penuh (panjang, kompleksitas, dsb.) ditegakkan sepenuhnya oleh backend.
 - Field errors ditampilkan via komponen `Form` shadcn/ui (`<FormMessage/>` kosong tiap field, tanpa children).
 
 ## 10. Reusable Component
@@ -147,9 +122,9 @@ Mengikuti `AGENTS.md` (Reusable Component):
 
 - Komponen form bersifat **presentational**; data/props masuk via props, `onSubmit` di-inject.
 - Tanpa fetch langsung di dalam komponen form.
-- Logika query/mutation diletakkan di hook (`useLogin` / `useRegister`).
+- Logika query/mutation diletakkan di hook (`useLogin` / `useLogout` / `useSession`).
 
 ## 11. Catatan
 
-- Backend auth sudah final (register, login, refresh rotasi, logout, me) — kontrak seksi 3 mengikuti `backend/docs/modules/auth.md` dan tidak lagi TODO.
+- Backend auth sudah final (login, refresh rotasi, logout, me) — kontrak seksi 3 mengikuti `backend/docs/modules/auth.md` dan tidak lagi TODO.
 - Refresh token berotasi: jangan abaikan/mis-handle token baru dari response 200 refresh (token lama langsung direvoke backend).

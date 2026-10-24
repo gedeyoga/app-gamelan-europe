@@ -409,14 +409,14 @@ Permission di-seed di `libs/prisma/seed.ts` (`DEFAULT_PERMISSIONS`); role `admin
 | Action | Endpoint | Permission | Dari | Ke |
 | --- | --- | --- | --- | --- |
 | `submit` | `POST /events/:id/submit` | `event:submit` | `DRAFT` | `REQUEST` |
-| `approve` | `POST /events/:id/approve` | `event:approve` | `REQUEST` | `PUBLISHED` |
+| `approve` | `POST /events/:id/approve` | `event:approve` | `DRAFT` **atau** `REQUEST` | `PUBLISHED` |
 | `reject` | `POST /events/:id/reject` | `event:reject` | `REQUEST` | `DRAFT` |
 | `publish` | `POST /events/:id/publish` | `event:publish` | `DRAFT` **atau** `APPROVED` (legacy) | `PUBLISHED` |
 | `unpublish` | `POST /events/:id/unpublish` | `event:unpublish` | `PUBLISHED` | `DRAFT` |
 
-- **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
+- **`approve` langsung menerbitkan** (`DRAFT|REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Approver boleh menerbitkan event buatan admin langsung dari `DRAFT` (tanpa `submit`); `submit` tetap jalur minta-review. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy).
 - `approvedAt` = **audit marker "pertama kali terbit"** (server-managed): di-set `existing.approvedAt ?? now` saat transisi `approve`/`publish`, atau saat `create`/`update` menghasilkan `PUBLISHED`. **Bukan** penanda status `APPROVED`.
-- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }` (`@IsOptional() @IsISO8601()` / `@IsBoolean()`): bila `publishedAt` dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish). `publish` menerima `DRAFT → PUBLISHED` (jalur utama) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). Bentuk `EVENT_TRANSITIONS` disesuaikan: `from` menjadi array — `publish: { from: [DRAFT, APPROVED], to: PUBLISHED }`. **RENCANA** — perubahan `EVENT_TRANSITIONS` ini belum ada di kode; kode saat ini masih `from: APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }` (`@IsOptional() @IsISO8601()` / `@IsBoolean()`): bila `publishedAt` dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish). `publish` menerima `DRAFT → PUBLISHED` (jalur utama) **dan** `APPROVED → PUBLISHED` (legacy; baris `APPROVED` lama tetap jalan). `EVENT_TRANSITIONS`: `from` array — `approve: { from: [DRAFT, REQUEST] }`, `publish: { from: [DRAFT, APPROVED] }`. **Siapa yang boleh publish:** `event:approve`/`event:publish` satu-satunya gate publish; `event:update` **tidak** bisa publish.
 - `submit`/`reject`/`unpublish` **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <event>, message }`.
 - Status saat ini tidak cocok dengan `from` → **409** `ConflictException` pesan `Cannot <action> event in status <STATUS>`. Race dua request paralel dijaga `EventRepository.updateStatusIf` (conditional `updateMany`).
 - `unpublish`/`reject` **menyisakan** `publishedAt` (disengaja, konsisten `PATCH`).
@@ -513,4 +513,31 @@ Kolom `event_locations.embed_url` (field `embedUrl`) = URL embed Google Maps key
 
 `EventService.resolveLocationMaps(location, field)` memanggil util ini saat `create`/`update` (bila `location.mapsUrl` ada) dan `createPublicSubmission` (bila `dto.mapsUrl` ada). Koordinat hasil resolve **menimpa** `lat`/`lng` kiriman klien; link tak resolvable → **422** (`location.mapsUrl` admin, `mapsUrl` submission publik). Tanpa `mapsUrl` → `lat`/`lng`/`embedUrl` dibiarkan apa adanya.
 
+## Bulk actions
 
+Bulk routes dideklarasikan sebelum route berparameter `POST /events/:id/...` dan memakai `@HttpCode(200)`.
+
+| Endpoint | Permission (controller) | Body | Response |
+| --- | --- | --- | --- |
+| `POST /events/bulk-status` | `event:update` | `{ ids: uuid[1..100], status: DRAFT|REQUEST|PUBLISHED }` | `{ updated, skipped, failed }` |
+| `POST /events/bulk-delete` | `event:delete` | `{ ids: uuid[1..100] }` | `{ deleted, failed }` |
+
+Target status yang diterima hanya `DRAFT`, `REQUEST`, `PUBLISHED`. `APPROVED` ditolak **400** (tak ada transisi yang menghasilkannya; `approve` langsung ke `PUBLISHED`).
+
+Permission transisi (salah satu, dicek di service; di atas `event:update` di controller):
+
+| Target | Permission | Aksi yang dijalankan |
+| --- | --- | --- |
+| `REQUEST` | `event:submit` | `submit` (DRAFT -> REQUEST) |
+| `PUBLISHED` | `event:approve` atau `event:publish` | `approve` (DRAFT|REQUEST -> PUBLISHED), lalu `publish` (DRAFT|APPROVED -> PUBLISHED) |
+| `DRAFT` | `event:reject` atau `event:unpublish` | `reject` (REQUEST -> DRAFT), lalu `unpublish` (PUBLISHED -> DRAFT) |
+
+Kandidat aksi dibangun dari permission yang benar-benar dipegang: `reject` hanya bila `event:reject`, `unpublish` hanya bila `event:unpublish` (idem `approve`/`publish`). Jadi bulk tidak pernah lebih longgar dari endpoint tunggal `POST /events/:id/<action>`.
+
+Permission tak memenuhi -> **403**. Setiap id tetap lewat `transition()` (aturan transisi, scope, dan timestamp `approvedAt`/`publishedAt` berlaku).
+
+- `updated`: row benar-benar berubah.
+- `skipped`: 404 (row hilang) atau 409 (transisi tidak valid dari status saat ini, termasuk row yang sudah berada di status target) - row tidak diubah.
+- `failed`: 403 (scope/izin) atau error lain per-row - row tidak diubah; batch lanjut.
+
+`POST /events/bulk-delete` memakai `remove()` per id (scope + cleanup storage tetap jalan): `deleted` = berhasil, `failed` = 404/403/error lain. Tidak ada `skipped` karena delete tidak punya konsep "sudah di status target".

@@ -16,13 +16,33 @@
     "status": "Status",
     "allStatuses": "Semua status"
   },
+  "bulk": {
+    "selectAll": "Pilih semua network",
+    "selectRow": "Pilih {{name}}",
+    "selected_one": "{{count}} dipilih",
+    "selected": "{{count}} dipilih",
+    "statusLabel": "Ubah status menjadi",
+    "apply": "Terapkan",
+    "clear": "Kosongkan",
+    "confirmTitle": "Ubah status network",
+    "confirmDescription": "Ubah status {{count}} network menjadi {{status}}?",
+    "publishWarning": "Network yang menjadi Terbit akan langsung tampil publik.",
+    "confirm": "Terapkan",
+    "cancel": "Batal",
+    "skipped_one": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "skipped": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "failed_one": "{{count}} item gagal karena masalah izin atau server",
+    "failed": "{{count}} item gagal karena masalah izin atau server"
+  },
   "errors": {
     "loadData": "Gagal memuat data network. Silakan coba lagi.",
     "loadDetail": "Gagal memuat detail network.",
     "forbidden": "Tidak punya akses untuk melihat data network.",
     "uploadFailed": "Gagal mengunggah gambar. Silakan coba lagi.",
     "noCreatePermission": "Tidak punya izin untuk membuat network.",
-    "noUpdatePermission": "Tidak punya izin untuk mengubah network."
+    "noUpdatePermission": "Tidak punya izin untuk mengubah network.",
+    "createStateFailed": "Gagal membuat negara bagian.",
+    "createCityFailed": "Gagal membuat kota."
   },
   "table": {
     "name": "Nama",
@@ -35,6 +55,9 @@
     "notFound": "Tidak ditemukan untuk \"{{term}}\".",
     "reset": "Reset pencarian",
     "edit": "Edit",
+    "submit": "Ajukan persetujuan",
+    "publish": "Terbitkan",
+    "unpublish": "Batalkan terbit",
     "delete": "Hapus"
   },
   "form": {
@@ -103,11 +126,17 @@
     "countryEmpty": "Negara tidak ditemukan.",
     "statePlaceholder": "Pilih negara bagian",
     "stateSearch": "Cari negara bagian...",
+    "stateSearchCreate": "Cari atau tambah negara bagian...",
+    "stateAdd": "Tambah \"{{name}}\"",
+    "stateCreating": "Menambahkan...",
     "stateEmpty": "Negara bagian tidak ditemukan.",
     "stateSelectCountry": "Pilih negara terlebih dahulu",
     "city": "Kota",
     "cityPlaceholder": "Pilih kota",
     "citySearch": "Cari kota...",
+    "citySearchCreate": "Cari atau tambah kota...",
+    "cityAdd": "Tambah \"{{name}}\"",
+    "cityCreating": "Menambahkan...",
     "cityEmpty": "Kota tidak ditemukan.",
     "citySelectState": "Pilih negara bagian terlebih dahulu"
   },
@@ -125,6 +154,7 @@
   },
   "workflow": {
     "requested": "Network ini menunggu persetujuan",
+    "draft": "Network ini masih draf — Anda dapat langsung menerbitkannya",
     "approve": "Setujui",
     "reject": "Tolak"
   },
@@ -138,6 +168,15 @@
     "approved": "Permintaan network berhasil disetujui",
     "approveFailed": "Gagal menyetujui permintaan network",
     "rejected": "Permintaan network berhasil ditolak",
-    "rejectFailed": "Gagal menolak permintaan network"
+    "rejectFailed": "Gagal menolak permintaan network",
+    "submitted": "Network berhasil diajukan untuk persetujuan",
+    "submitFailed": "Gagal mengajukan network untuk persetujuan",
+    "published": "Network berhasil diterbitkan",
+    "publishFailed": "Gagal menerbitkan network",
+    "unpublished": "Network berhasil dibatalkan terbit dan kembali ke draf",
+    "unpublishFailed": "Gagal membatalkan terbit network",
+    "bulkUpdated": "Status {{count}} network berhasil diperbarui",
+    "bulkUpdateFailed": "Gagal memperbarui status network",
+    "bulkSelectAllFailed": "Gagal memuat semua network yang cocok"
   }
 }

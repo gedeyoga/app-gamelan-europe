@@ -6,7 +6,7 @@ Menu: [rbac.md](./rbac.md) (master) · [country.md](./country.md) · [region.md]
 
 ## 1. Deskripsi & Lokasi
 
-Modul `state` menyediakan data referensi provinsi/state, sumber [dr5hn/countries-states-cities-database](https://github.com/dr5hn/countries-states-cities-database). Read-only: tidak ada endpoint create/update/delete.
+Modul `state` menyediakan data referensi provinsi/state, sumber [dr5hn/countries-states-cities-database](https://github.com/dr5hn/countries-states-cities-database). Sebagian besar read-only; tersedia **satu** endpoint write: `POST /states` untuk inline-create state (idempoten) dari form network (dan form lain) — pola sama dengan `POST /cities`.
 
 State dimiliki oleh satu Country (`countryId` non-null, 1 : N dari Country, `onDelete: Cascade`). `parentId` disimpan sebagai scalar (tanpa self-relation). Data diisi seeder `libs/prisma/seed-geo.ts` (`pnpm prisma:seed:geo`).
 
@@ -17,6 +17,8 @@ libs/src/modules/state/
 ├── state.repository.ts
 ├── state.service.ts
 ├── state.module.ts
+├── dto/
+│   └── create-state.dto.ts
 └── entities/
     └── state.entity.ts
 apps/app/src/controllers/states.controller.ts   ← controller di apps/, bukan libs (RULES bab 3)
@@ -55,6 +57,7 @@ model State {
 ```
 
 - `id` = id upstream (eksplisit, tanpa autoincrement) → dipakai seeder replace penuh.
+- State hasil inline-create (`POST /states`) memakai **id negatif** (`Math.min(_min.id, 0) - 1`) agar import dataset GeoDB (id positif) tidak pernah tabrakan; `countryCode` diisi dari `country.iso2`. Kalau nanti butuh urutan id manual, tambah kolom sequence/autoincrement khusus saat itu.
 - `countryCode` (ISO-2) disimpan untuk query cepat; `countryId` = relasi lokal.
 - `countryId` + `countryCode` diindeks.
 
@@ -136,11 +139,37 @@ Semua path memakai prefix **`/api/v1`**. Respon sukses `{ data, message }`; list
 
 | Method | Path | Deskripsi | Akses |
 | --- | --- | --- | --- |
+| POST | `/api/v1/states` | Inline-create state (idempoten) | PERMISSION `state:create` |
 | GET | `/api/v1/states` | List state (pagination + search + sort) | PUBLIC (`@Public()`) |
 | GET | `/api/v1/states/:id` | Detail state by `id` (Int), + `country` | PUBLIC (`@Public()`) |
 
+- `POST /states` → **201** `{ data, message }`; idempoten: `name` sama (case-insensitive) + `countryId` mengembalikan baris existing (id sama, bukan 409). Tanpa token → 401; tanpa permission → 403.
 - Dipakai FE untuk dropdown pra-login → `@Public()`. Tanpa permission/RBAC.
 - `GET /states/:id` → 404 `NotFoundException('State not found')` bila tidak ada.
+
+### DTO `CreateStateDto`
+
+| Field | Validasi |
+| --- | --- |
+| `name` | trim, `@IsString` `@IsNotEmpty` `@MaxLength(150)` |
+| `countryId` | `@Type(() => Number)` `@IsInt` — wajib |
+
+### Contoh body `POST /states`
+
+```json
+{ "name": "Uji Provinsi XYZ", "countryId": 101 }
+```
+
+### Contoh respons `POST /states`
+
+```json
+{
+  "data": { "id": -1, "name": "Uji Provinsi XYZ", "countryCode": "ID", "countryId": 101, "iso2": null },
+  "message": "success"
+}
+```
+
+`countryCode` diambil dari `country.iso2` (uppercase seperti tersimpan) supaya `filter[countryCode]` pada list tetap menemukan state baru.
 
 ### Contoh query
 
@@ -178,8 +207,18 @@ Semua path memakai prefix **`/api/v1`**. Respon sukses `{ data, message }`; list
 
 | Endpoint | Exception | Status | Penyebab |
 | --- | --- | --- | --- |
+| `POST /states` | `UnprocessableEntityException` | 422 | `countryId` tidak ada → `{ field: "countryId", message: "countryId does not exist" }` |
+| `POST /states` | `UnauthorizedException` / `ForbiddenException` | 401 / 403 | tanpa token / tanpa permission `state:create` |
 | `GET /states/:id` | `NotFoundException` | 404 | `id` tidak ada |
 | `GET /states` | `UnprocessableEntityException` | 422 | `sortBy`/`filter` tak dikenal, `countryId`/`level` bukan integer, `limit` invalid |
 | `GET /states/:id` | `BadRequestException` | 400 | `:id` bukan integer (`ParseIntPipe`) |
 
 Format error standar: `{ statusCode, message, errors }` (RULES bab 5).
+
+---
+
+## 7. RBAC
+
+- Permission `state:create` didaftarkan di `libs/prisma/seed-data.ts`.
+- `seed.ts`: `state:create` masuk `MEMBER_PERMISSION_CODES` → role `member` & `author` bisa inline-create state dari form network (dan form lain); `admin` otomatis semua.
+- Jalankan `pnpm prisma:seed` (idempoten) setelah menambah permission.

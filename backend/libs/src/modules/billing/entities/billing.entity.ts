@@ -47,6 +47,34 @@ export function mapBilling(row: BillingPayload): BillingEntity {
   };
 }
 
+// Notifikasi lifecycle: hanya kolom yang dipakai email (id, owner, paket, tanggal akhir).
+export const subscriptionLifecycleSelect = {
+  id: true,
+  userId: true,
+  expiryDate: true,
+  subscription: { select: { name: true } },
+} satisfies Prisma.BillingSelect;
+
+export type SubscriptionLifecyclePayload = Prisma.BillingGetPayload<{ select: typeof subscriptionLifecycleSelect }>;
+
+export interface SubscriptionLifecycleRow {
+  id: string;
+  userId: string;
+  name: string;
+  // `null` hanya mungkin untuk billing CANCELED; query lifecycle memfilter PAID + expiryDate terisi.
+  expiryDate: Date | null;
+}
+
+export function mapSubscriptionLifecycle(row: SubscriptionLifecyclePayload): SubscriptionLifecycleRow {
+  return { id: row.id, userId: row.userId, name: row.subscription.name, expiryDate: row.expiryDate };
+}
+
+// Dua window job lifecycle (EXPIRING + EXPIRED) — dirakit BillingService, dikonsumsi NotificationService.
+export interface SubscriptionLifecycleRows {
+  expiring: SubscriptionLifecycleRow[];
+  expired: SubscriptionLifecycleRow[];
+}
+
 export type MemberStatus = 'ACTIVE' | 'INACTIVE' | 'NONE';
 
 // Satu baris member + billing TERBARU-nya (nested `take: 1`). `createdAt` user ikut demi sortBy

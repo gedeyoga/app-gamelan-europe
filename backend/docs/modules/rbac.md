@@ -159,15 +159,16 @@ Format: **lowercase** `resource:action`.
 | network | read | `network:read` |
 | network | update | `network:update` |
 | network | delete | `network:delete` |
-| network | approve | `network:approve` (REQUEST→PUBLISHED) |
+| network | approve | `network:approve` (DRAFT\|REQUEST→PUBLISHED) |
 | network | reject | `network:reject` (REQUEST→DRAFT) |
+| network | unpublish | `network:unpublish` (PUBLISHED→DRAFT) |
 | apikey | create | `apikey:create` |
 | apikey | read | `apikey:read` |
 | apikey | update | `apikey:update` |
 | apikey | delete | `apikey:delete` |
 | admin | access | `admin:access` (khusus gerbang manajemen user/role) |
 
-Selain CRUD, resource konten (`story`, `event`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (REQUEST→PUBLISHED), `reject` (REQUEST→DRAFT), `publish` (APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
+Selain CRUD, resource konten (`story`, `event`, `archive`) memakai `action` tambahan berupa transisi workflow: `submit` (DRAFT→REQUEST), `approve` (DRAFT|REQUEST→PUBLISHED), `reject` (REQUEST→DRAFT), `publish` (DRAFT|APPROVED→PUBLISHED), `unpublish` (PUBLISHED→DRAFT) → mis. `story:submit`, `event:publish` (lihat [story.md §6](./story.md#action--transisi) & [event.md §7](./event.md#7-tabel-endpoint--permission)).
 
 Aturan:
 
@@ -351,13 +352,13 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 
 | Konstanta | Isi |
 | --- | --- |
-| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 69 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 3 (`create,read,delete`), `city:*` 1 (`create`), `network:*` 6 (`create,read,update,delete,approve,reject`), `subscription:*` 4, `billing:*` 4, `subscription-request:*` 3 (`read,approve,reject`), `apikey:*` 4, `archive:*` 9, `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
-| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `member` (`story:read`, `story:create`, `story:update`, `story:submit`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `city:create`, `category:read`, `archive:read`, `archive:create`, `archive:update`, `archive:submit`), `author` (permission set **sama persis** dengan `member`, berbagi konstanta `MEMBER_PERMISSION_CODES`). Struktur array siap tambah role baru. |
+| `DEFAULT_PERMISSIONS` | Array `{ code, description }` — 71 code: RBAC 12 (`user/role/permission` × `create/read/update/delete`), `story:*` 9, `category:*` 4, `event:*` 9, `event-type:*` 3 (`create,read,delete`), `city:*` 1 (`create`), `state:*` 1 (`create`), `network:*` 7 (`create,read,update,delete,approve,reject,unpublish`), `subscription:*` 4, `billing:*` 4, `subscription-request:*` 3 (`read,approve,reject`), `apikey:*` 4, `archive:*` 9, `admin:access` 1 (**khusus gerbang manajemen user/role; hanya `admin`**). Format lowercase `resource:action`. |
+| `DEFAULT_ROLES` | Array `{ name, description, permissions: string[] }` — 3 role: `admin` (semua code), `member` (`story:read`, `story:create`, `story:update`, `story:submit`, `event:read`, `event:create`, `event:update`, `event:submit`, `event-type:read`, `city:create`, `state:create`, `category:read`, `archive:read`, `archive:create`, `archive:update`, `archive:submit`), `author` (permission set **sama persis** dengan `member`, berbagi konstanta `MEMBER_PERMISSION_CODES`). Struktur array siap tambah role baru. |
 | User admin | Dari env `ADMIN_EMAIL` / `ADMIN_FULL_NAME` / `ADMIN_PASSWORD` → role `admin`, status `ACTIVE`. |
 
 ### Matriks role → permission
 
-69 permission dibagi ke 3 role. `admin` = seluruh 69 code; `member` = 15 code; `author` = 15 code (sama dengan `member`).
+71 permission dibagi ke 3 role. `admin` = seluruh 71 code; `member` = 16 code; `author` = 16 code (sama dengan `member`).
 
 | Resource | Code | admin | member | author |
 | --- | --- | :---: | :---: | :---: |
@@ -391,9 +392,10 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 | category | `category:create` | ✅ | — | — |
 | category | `category:read` | ✅ | ✅ | ✅ |
 | city | `city:create` | ✅ | ✅ | ✅ |
+| state | `state:create` | ✅ | ✅ | ✅ |
 | category | `category:update` | ✅ | — | — |
 | category | `category:delete` | ✅ | — | — |
-| network | `network:create/read/update/delete/approve/reject` (6) | ✅ | — | — |
+| network | `network:create/read/update/delete/approve/reject/unpublish` (7) | ✅ | — | — |
 | subscription | `subscription:create/read/update/delete` (4) | ✅ | — | — |
 | billing | `billing:create/read/update/delete` (4) | ✅ | — | — |
 | subscription-request | `subscription-request:read/approve/reject` (3) | ✅ | — | — |
@@ -416,12 +418,11 @@ Lokasi tunggal: `libs/prisma/seed.ts` (sumber deklaratif `DEFAULT_PERMISSIONS` /
 // libs/prisma/seed.ts (ringkas) — deklaratif + upsert dalam satu $transaction
 const DEFAULT_PERMISSIONS = [
   { code: 'user:create', description: 'Membuat user baru' },
-  // ... 69 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 3 + city 1 + network 6 + subscription 4 + billing 4 + subscription-request 3 + apikey 4 + archive 9 + admin:access 1
+  // ... 71 code: RBAC 12 + story 9 + category 4 + event 9 + event-type 3 + city 1 + state 1 + network 7 + subscription 4 + billing 4 + subscription-request 3 + apikey 4 + archive 9 + admin:access 1
 ];
 
-// Permission set bersama `member` & `author` (identik).
-const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'category:read',
-  'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
+// Permission set bersama `member` & `author` (identik, 16 code).
+const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'city:create', 'state:create', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
 
 const DEFAULT_ROLES = [
   { name: 'admin', description: 'Admin dengan akses penuh RBAC',
@@ -578,9 +579,9 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | PATCH | `/api/v1/posts/:id` | Update story | PERMISSION: `story:update` |
 | DELETE | `/api/v1/posts/:id` | Hapus story (+ row `images` & objek S3) | PERMISSION: `story:delete` |
 | POST | `/api/v1/posts/:id/submit` | Ajukan story review (`DRAFT`→`REQUEST`) | PERMISSION: `story:submit` |
-| POST | `/api/v1/posts/:id/approve` | Setujui & terbitkan story (`REQUEST`→`PUBLISHED`) | PERMISSION: `story:approve` |
+| POST | `/api/v1/posts/:id/approve` | Setujui & terbitkan story (`DRAFT\|REQUEST`→`PUBLISHED`) | PERMISSION: `story:approve` |
 | POST | `/api/v1/posts/:id/reject` | Tolak story (`REQUEST`→`DRAFT`) | PERMISSION: `story:reject` |
-| POST | `/api/v1/posts/:id/publish` | Terbitkan story (`APPROVED`→`PUBLISHED`) | PERMISSION: `story:publish` |
+| POST | `/api/v1/posts/:id/publish` | Terbitkan story (`DRAFT\|APPROVED`→`PUBLISHED`) | PERMISSION: `story:publish` |
 | POST | `/api/v1/posts/:id/unpublish` | Tarik story (`PUBLISHED`→`DRAFT`) | PERMISSION: `story:unpublish` |
 | POST | `/api/v1/categories` | Buat kategori (idempoten) | PERMISSION: `category:create` |
 | GET | `/api/v1/categories` | List kategori | PERMISSION: `category:read` |
@@ -594,6 +595,21 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 > **Permission action story (`story:submit`, `story:approve`, `story:reject`, `story:publish`, `story:unpublish`) kini di-enforce** oleh endpoint `POST /api/v1/posts/:id/<action>` (lihat [story.md](./story.md#action--transisi)). Transisi status tak valid → **409**. `PATCH /api/v1/posts/:id` (`story:update`) tetap untuk update konten.
 >
 > ⚠️ **Bypass workflow ditutup untuk non-admin.** Hanya scope `all` (permission moderator) yang masih bisa memaksa `status`/`publishedAt` via `PATCH`/`POST`; untuk `network`/`own`/`published`, `create` dipaksa `status=DRAFT` (+ `publishedAt` dibuang) dan `update` mengabaikan `status`/`publishedAt` — **kecuali** pemilik (`network`/`own`) boleh mengirim `status: DRAFT` untuk menarik kontennya sendiri yang `PUBLISHED` kembali ke `DRAFT` (lihat [§10](#10-row-level-scoping)). Follow-up: hapus `status`/`publishedAt` dari DTO setelah FE migrasi ke endpoint action.
+>
+> Scope `all` saja **tidak cukup** untuk terbit via `PATCH`: `status: PUBLISHED` / `publishedAt` (string ISO) wajib `*:approve` **atau** `*:publish` → selain itu **403**. `publishedAt: null` = jangan sentuh (bukan epoch).
+
+### Bulk Actions Konten (sinkron dengan [story.md](./story.md), [event.md](./event.md), [archive.md](./archive.md))
+
+| Method | Path | Deskripsi | Akses |
+| --- | --- | --- | --- |
+| POST | `/api/v1/posts/bulk-status` | Bulk ubah status story (max 100 id, target `DRAFT\|REQUEST\|PUBLISHED`; `APPROVED` → 400) | PERMISSION: `story:update` **+** transisi per target (`story:approve` / `story:publish` / `story:reject` / `story:unpublish` / `story:submit`) |
+| POST | `/api/v1/posts/bulk-delete` | Bulk hapus story (max 100 id) | PERMISSION: `story:delete` |
+| POST | `/api/v1/events/bulk-status` | Bulk ubah status event (max 100 id, target `DRAFT\|REQUEST\|PUBLISHED`; `APPROVED` → 400) | PERMISSION: `event:update` **+** transisi per target (`event:approve` / `event:publish` / `event:reject` / `event:unpublish` / `event:submit`) |
+| POST | `/api/v1/events/bulk-delete` | Bulk hapus event (max 100 id) | PERMISSION: `event:delete` |
+| POST | `/api/v1/archives/bulk-status` | Bulk ubah status archive (max 100 id, target `DRAFT\|REQUEST\|PUBLISHED`; `APPROVED` → 400) | PERMISSION: `archive:update` **+** transisi per target (`archive:approve` / `archive:publish` / `archive:reject` / `archive:unpublish` / `archive:submit`) |
+| POST | `/api/v1/archives/bulk-delete` | Bulk hapus archive (max 100 id) | PERMISSION: `archive:delete` |
+
+> Respons bulk status `{ updated, skipped, failed }`; bulk delete `{ deleted, failed }`. Per-id lewat service `transition`/`remove` → aturan transisi & scope tetap berlaku.
 
 ### Network (sinkron dengan [network.md](./network.md))
 
@@ -604,8 +620,13 @@ Modul `story` mengelola `Post` (resource backend `post`, label FE Story) + `Cate
 | GET | `/api/v1/networks/:id` | Detail network | PERMISSION: `network:read` |
 | PATCH | `/api/v1/networks/:id` | Update network | PERMISSION: `network:update` |
 | DELETE | `/api/v1/networks/:id` | Hapus network | PERMISSION: `network:delete` |
-| POST | `/api/v1/networks/:id/approve` | Setujui usulan network (REQUEST→PUBLISHED) | PERMISSION: `network:approve` |
+| POST | `/api/v1/networks/:id/approve` | Setujui usulan network (DRAFT\|REQUEST→PUBLISHED) | PERMISSION: `network:approve` |
 | POST | `/api/v1/networks/:id/reject` | Tolak usulan network (REQUEST→DRAFT) | PERMISSION: `network:reject` |
+| POST | `/api/v1/networks/:id/submit` | Ajukan network (DRAFT→REQUEST) | PERMISSION: `network:update` |
+| POST | `/api/v1/networks/:id/unpublish` | Tarik network dari publikasi (PUBLISHED→DRAFT) | PERMISSION: `network:unpublish` |
+| POST | `/api/v1/networks/bulk-status` | Bulk ubah status (max 100 id, target `DRAFT\|REQUEST\|PUBLISHED`) | PERMISSION: `network:update` **+** transisi per target (`network:approve` / `network:reject` / `network:unpublish`) |
+
+> `submit` sengaja tetap memakai `network:update` (bukan `network:submit`) — mengajukan network = mengubahnya, dan belum ada code `network:submit` di `DEFAULT_PERMISSIONS`. `unpublish` memakai code sendiri (`network:unpublish`) agar `network:approve` tak bisa menghasilkan efek `reject`. Bulk `DRAFT` butuh `network:reject` **atau** `network:unpublish` (bukan `network:approve`); detail di [network.md §6](./network.md#6-endpoint--permission).
 
 ### Geographic Reference (sinkron dengan [country.md](./country.md), [region.md](./region.md) & [state.md](./state.md))
 

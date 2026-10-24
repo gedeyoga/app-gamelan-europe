@@ -400,7 +400,7 @@ export class UploadDocumentDto {
 ## 5. Aturan Status
 
 - Default `status` = `DRAFT` (schema `@default(DRAFT)`).
-- **Workflow approval** (mirror event): `DRAFT → REQUEST → {PUBLISHED | DRAFT}` dan `APPROVED → PUBLISHED`, `PUBLISHED → DRAFT`. Aturan tunggal ada di `ARCHIVE_TRANSITIONS` (`libs/src/modules/archive/archive.service.ts`).
+- **Workflow approval** (mirror event): `DRAFT → REQUEST → {PUBLISHED | DRAFT}`, `DRAFT → PUBLISHED` (approve/publish langsung oleh approver), dan `APPROVED → PUBLISHED` (legacy), `PUBLISHED → DRAFT`. Aturan tunggal ada di `ARCHIVE_TRANSITIONS` (`libs/src/modules/archive/archive.service.ts`).
 - **Tidak ada penjadwalan otomatis.** Tidak ada worker/cron. Bila `publishedAt` masa depan dikirim, backend hanya menyimpannya; predikat publik (`isPublished`) mensyaratkan `status = PUBLISHED` **dan** `publishedAt <= now`, jadi konten terjadwal belum terlihat publik sampai waktunya.
 
 ### `ARCHIVE_TRANSITIONS` (identik dengan `EVENT_TRANSITIONS`)
@@ -408,13 +408,14 @@ export class UploadDocumentDto {
 | Action | Endpoint | From → To | Permission |
 | --- | --- | --- | --- |
 | `submit` | `POST /archives/:id/submit` | `DRAFT → REQUEST` | `archive:submit` |
-| `approve` | `POST /archives/:id/approve` | `REQUEST → PUBLISHED` | `archive:approve` |
+| `approve` | `POST /archives/:id/approve` | `DRAFT\|REQUEST → PUBLISHED` | `archive:approve` |
 | `reject` | `POST /archives/:id/reject` | `REQUEST → DRAFT` | `archive:reject` |
-| `publish` | `POST /archives/:id/publish` | `APPROVED → PUBLISHED` | `archive:publish` |
+| `publish` | `POST /archives/:id/publish` | `DRAFT\|APPROVED → PUBLISHED` | `archive:publish` |
 | `unpublish` | `POST /archives/:id/unpublish` | `PUBLISHED → DRAFT` | `archive:unpublish` |
 
 - Status saat ini tidak cocok dengan `from` → **409** `Cannot <action> archive in status <STATUS>`.
-- Update atomik via `archiveRepository.updateStatusIf(id, from, to, extra)` (`updateMany` conditional); kalah balapan → 409 (status di-fetch ulang).
+- Update atomik via `archiveRepository.updateStatusIf(id, from, to, extra)` (`updateMany` conditional); `from` = status aktual hasil baca (bukan array) sehingga kalah balapan → 409 (status di-fetch ulang).
+- **Siapa yang boleh publish.** `archive:approve` dan `archive:publish` sama-sama gate publish: approver boleh menerbitkan langsung dari `DRAFT` (tanpa `submit`), atau dari `REQUEST` (jalur usulan/review). `submit` (`archive:submit`) tetap jalur minta-review; `archive:update` **tidak** bisa publish.
 - `approve`/`publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }`: `publishedAt = body ? new Date(body) : (existing ?? now)`; `approvedAt` diisi `existing ?? now` (server-managed). `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish).
 - `submit`/`reject`/`unpublish` tidak menerima body.
 
@@ -431,12 +432,12 @@ export class UploadDocumentDto {
 
 ```typescript
 // libs/src/modules/archive/archive.service.ts
-export const ARCHIVE_TRANSITIONS: Record<ArchiveAction, { from: ArchiveStatus; to: ArchiveStatus }> = {
-  submit: { from: ArchiveStatus.DRAFT, to: ArchiveStatus.REQUEST },
-  approve: { from: ArchiveStatus.REQUEST, to: ArchiveStatus.PUBLISHED },
-  reject: { from: ArchiveStatus.REQUEST, to: ArchiveStatus.DRAFT },
-  publish: { from: ArchiveStatus.APPROVED, to: ArchiveStatus.PUBLISHED },
-  unpublish: { from: ArchiveStatus.PUBLISHED, to: ArchiveStatus.DRAFT },
+export const ARCHIVE_TRANSITIONS: Record<ArchiveAction, { from: ArchiveStatus[]; to: ArchiveStatus }> = {
+  submit: { from: [ArchiveStatus.DRAFT], to: ArchiveStatus.REQUEST },
+  approve: { from: [ArchiveStatus.DRAFT, ArchiveStatus.REQUEST], to: ArchiveStatus.PUBLISHED },
+  reject: { from: [ArchiveStatus.REQUEST], to: ArchiveStatus.DRAFT },
+  publish: { from: [ArchiveStatus.DRAFT, ArchiveStatus.APPROVED], to: ArchiveStatus.PUBLISHED },
+  unpublish: { from: [ArchiveStatus.PUBLISHED], to: ArchiveStatus.DRAFT },
 };
 ```
 
@@ -669,7 +670,7 @@ Permission code baru (lowercase `resource:action`), [rbac.md §4](./rbac.md#4-ko
 | archive | publish | `archive:publish` |
 | archive | unpublish | `archive:unpublish` |
 
-- **Workflow status via endpoint action** ([§5](#5-aturan-status)): `archive:submit` (DRAFT→REQUEST), `archive:approve` (REQUEST→PUBLISHED), `archive:reject` (REQUEST→DRAFT), `archive:publish` (APPROVED→PUBLISHED), `archive:unpublish` (PUBLISHED→DRAFT). `PATCH` (`archive:update`) tetap untuk update konten; scope `all` masih boleh set status/publishedAt langsung.
+- **Workflow status via endpoint action** ([§5](#5-aturan-status)): `archive:submit` (DRAFT→REQUEST), `archive:approve` (DRAFT|REQUEST→PUBLISHED), `archive:reject` (REQUEST→DRAFT), `archive:publish` (DRAFT|APPROVED→PUBLISHED), `archive:unpublish` (PUBLISHED→DRAFT). `PATCH` (`archive:update`) tetap untuk update konten; scope `all` masih boleh set status/publishedAt langsung.
 - **`archive:read`**: baris yang terlihat dibatasi row-level scope ([§6](#6-scoping-baca--tulis)) — `all` → semua; reporter (`create/update/submit`) → miliknya/organisasinya + konten terbit; read-only → hanya konten terbit. `type` (`MEMBER`/`PUBLIC`) **bukan** gerbang row-level; `MEMBER` hanya menyembunyikan payload (`externalLinks`/`documents` → `null`) bila `canViewPrivate=false` **dan** `isMember=false` ([§1](#1-deskripsi--lokasi)).
 
 ### Tabel endpoint
@@ -722,9 +723,9 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 { code: 'archive:update', description: 'Mengubah archive' },
 { code: 'archive:delete', description: 'Menghapus archive' },
 { code: 'archive:submit', description: 'Mengajukan archive untuk review (DRAFT -> REQUEST)' },
-{ code: 'archive:approve', description: 'Menyetujui & menerbitkan archive (REQUEST -> PUBLISHED)' },
+{ code: 'archive:approve', description: 'Menyetujui & menerbitkan archive (DRAFT|REQUEST -> PUBLISHED)' },
 { code: 'archive:reject', description: 'Menolak archive (REQUEST -> DRAFT)' },
-{ code: 'archive:publish', description: 'Menerbitkan archive (APPROVED -> PUBLISHED)' },
+{ code: 'archive:publish', description: 'Menerbitkan archive (DRAFT|APPROVED -> PUBLISHED)' },
 { code: 'archive:unpublish', description: 'Menarik archive dari publikasi (PUBLISHED -> DRAFT)' },
 ```
 
@@ -875,3 +876,32 @@ Categories endpoints **tidak berubah** (`category:*`, shared).
 - Upload dokumen PDF lewat **`POST /documents`** (field `file`, mime `application/pdf`, max 10 MB) → kirim `id` di `documentIds` saat create/update archive (bind + urutan); render link dari `url`. Response `DocumentResponse = { id, url, key, filename, mimeType, size }` (tanpa `width`/`height`/`variants`).
 - Thumbnail: upload gambar lewat `POST /images` (**tak berubah**), lalu set `thumbnail` = **URL** hasil upload (string). **Tidak ada `imageIds`**. Upload membutuhkan permission image existing (`story:*`/`event:*`; admin memegang semua).
 - Menu "Archives" gate `admin:access`; route gate `archive:read`.
+
+## Bulk actions
+
+Bulk routes dideklarasikan sebelum route berparameter `POST /archives/:id/...` dan memakai `@HttpCode(200)`.
+
+| Endpoint | Permission (controller) | Body | Response |
+| --- | --- | --- | --- |
+| `POST /archives/bulk-status` | `archive:update` | `{ ids: uuid[1..100], status: DRAFT|REQUEST|PUBLISHED }` | `{ updated, skipped, failed }` |
+| `POST /archives/bulk-delete` | `archive:delete` | `{ ids: uuid[1..100] }` | `{ deleted, failed }` |
+
+Target status yang diterima hanya `DRAFT`, `REQUEST`, `PUBLISHED`. `APPROVED` ditolak **400** (tak ada transisi yang menghasilkannya; `approve` langsung ke `PUBLISHED`).
+
+Permission transisi (salah satu, dicek di service; di atas `archive:update` di controller):
+
+| Target | Permission | Aksi yang dijalankan |
+| --- | --- | --- |
+| `REQUEST` | `archive:submit` | `submit` (DRAFT -> REQUEST) |
+| `PUBLISHED` | `archive:approve` atau `archive:publish` | `approve` (DRAFT|REQUEST -> PUBLISHED), lalu `publish` (DRAFT|APPROVED -> PUBLISHED) |
+| `DRAFT` | `archive:reject` atau `archive:unpublish` | `reject` (REQUEST -> DRAFT), lalu `unpublish` (PUBLISHED -> DRAFT) |
+
+Kandidat aksi dibangun dari permission yang benar-benar dipegang: `reject` hanya bila `archive:reject`, `unpublish` hanya bila `archive:unpublish` (idem `approve`/`publish`). Jadi bulk tidak pernah lebih longgar dari endpoint tunggal `POST /archives/:id/<action>`.
+
+Permission tak memenuhi -> **403**. Setiap id tetap lewat `transition()` (aturan transisi, scope, dan timestamp `approvedAt`/`publishedAt` berlaku).
+
+- `updated`: row benar-benar berubah.
+- `skipped`: 404 (row hilang) atau 409 (transisi tidak valid dari status saat ini, termasuk row yang sudah berada di status target) - row tidak diubah.
+- `failed`: 403 (scope/izin) atau error lain per-row - row tidak diubah; batch lanjut.
+
+`POST /archives/bulk-delete` memakai `remove()` per id (scope + cleanup storage tetap jalan): `deleted` = berhasil, `failed` = 404/403/error lain. Tidak ada `skipped` karena delete tidak punya konsep "sudah di status target".

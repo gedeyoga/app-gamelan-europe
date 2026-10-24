@@ -12,6 +12,9 @@ export const CONTENT_RESOURCES = ['story', 'event', 'archive'] as const;
 export const CONTENT_MODERATOR_ACTIONS = ['approve', 'publish', 'reject', 'unpublish'] as const;
 // Action tulis konten (create/update/submit) → penanda "pengelola konten".
 export const CONTENT_WRITE_ACTIONS = ['create', 'update', 'submit'] as const;
+// Action yang boleh menerbitkan langsung. Dipakai `PATCH /<domain>/:id` (status/publishedAt):
+// scope `all` saja TIDAK cukup — `reject`/`unpublish` juga memberikannya.
+export const CONTENT_PUBLISH_ACTIONS = ['approve', 'publish'] as const;
 
 function hasActions(
   codes: readonly string[],
@@ -19,6 +22,11 @@ function hasActions(
   actions: readonly string[],
 ): boolean {
   return actions.some((action) => codes.includes(`${resource}:${action}`));
+}
+
+// Terbit langsung (via update/patch) wajib `*:approve` ATAU `*:publish`.
+export function canPublishFromCodes(codes: readonly string[], resource: ContentResource): boolean {
+  return hasActions(codes, resource, CONTENT_PUBLISH_ACTIONS);
 }
 
 // canViewPrivate: HANYA content manager / status-manager (punya permission tulis/status konten),

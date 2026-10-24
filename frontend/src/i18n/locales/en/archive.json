@@ -16,6 +16,29 @@
     "allTypes": "All types",
     "allStatuses": "All statuses"
   },
+  "bulk": {
+    "selectAll": "Select all archives",
+    "selectAllLabel": "Select all",
+    "selectRow": "Select {{name}}",
+    "selected_one": "{{count}} selected",
+    "selected": "{{count}} selected",
+    "regionLabel": "Bulk actions",
+    "statusLabel": "Change status to",
+    "apply": "Apply",
+    "delete": "Delete",
+    "clear": "Clear selection",
+    "confirmTitle": "Change archive status",
+    "confirmDescription": "Change the status of {{count}} archives to {{status}}?",
+    "publishWarning": "Archives set to Published become publicly visible immediately.",
+    "deleteTitle": "Delete archives",
+    "deleteDescription": "Delete {{count}} archives? This action cannot be undone.",
+    "confirm": "Apply",
+    "cancel": "Cancel",
+    "skipped_one": "{{count}} item skipped because its status does not allow this change",
+    "skipped": "{{count}} items skipped because their status does not allow this change",
+    "failed_one": "{{count}} item failed due to a permission or server error",
+    "failed": "{{count}} items failed due to a permission or server error"
+  },
   "table": {
     "thumbnail": "Thumbnail",
     "title": "Title",
@@ -83,6 +106,7 @@
   },
   "workflow": {
     "requested": "Awaiting approval",
+    "draft": "This archive is still a draft — you can publish it directly",
     "approve": "Approve",
     "reject": "Reject"
   },
@@ -155,6 +179,11 @@
     "approveFailed": "Failed to approve archive",
     "rejectFailed": "Failed to reject archive",
     "categoryDeleted": "Category deleted successfully",
-    "categoryDeleteFailed": "Failed to delete category"
+    "categoryDeleteFailed": "Failed to delete category",
+    "bulkUpdated": "Status updated for {{count}} archives",
+    "bulkDeleted": "{{count}} archives deleted",
+    "bulkUpdateFailed": "Failed to update archive status",
+    "bulkDeleteFailed": "Failed to delete archives",
+    "bulkSelectAllFailed": "Failed to load all matching archives"
   }
 }

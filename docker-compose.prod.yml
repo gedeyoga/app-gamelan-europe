@@ -52,6 +52,8 @@ services:
       - 'traefik.http.routers.gamelan-api.tls=true'
       - 'traefik.http.routers.gamelan-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}'
       - 'traefik.http.services.gamelan-api.loadbalancer.server.port=3001'
+      - 'traefik.http.middlewares.gamelan-api-compress.compress=true'
+      - 'traefik.http.routers.gamelan-api.middlewares=gamelan-api-compress'
       # Optional HTTP->HTTPS redirect (Traefik often handles this globally):
       # - 'traefik.http.routers.gamelan-api.middlewares=gamelan-redirect'
       # - 'traefik.http.middlewares.gamelan-redirect.redirectscheme.scheme=https'
@@ -94,6 +96,8 @@ services:
       - 'traefik.http.routers.gamelan-web.tls=true'
       - 'traefik.http.routers.gamelan-web.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}'
       - 'traefik.http.services.gamelan-web.loadbalancer.server.port=80'
+      - 'traefik.http.middlewares.gamelan-compress.compress=true'
+      - 'traefik.http.routers.gamelan-web.middlewares=gamelan-compress'
       # Optional HTTP->HTTPS redirect (Traefik often handles this globally):
       # - 'traefik.http.routers.gamelan-web.middlewares=gamelan-redirect'
       # - 'traefik.http.middlewares.gamelan-redirect.redirectscheme.scheme=https'

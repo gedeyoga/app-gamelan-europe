@@ -6,7 +6,11 @@
   "type": {
     "CONTENT_PUBLISHED": "Content published",
     "CONTENT_SUBMITTED": "New content submission",
-    "SUBSCRIPTION_REQUEST_SUBMITTED": "New subscription request"
+    "SUBSCRIPTION_REQUEST_SUBMITTED": "New subscription request",
+    "SUBSCRIPTION_ACTIVE": "Membership activated",
+    "SUBSCRIPTION_EXPIRING": "Membership expiring soon",
+    "SUBSCRIPTION_EXPIRED": "Membership expired",
+    "SUBSCRIPTION_CANCELED": "Membership canceled"
   },
   "preferences": {
     "title": "Email notifications",

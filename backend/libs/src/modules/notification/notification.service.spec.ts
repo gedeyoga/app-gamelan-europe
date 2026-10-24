@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   BillingStatus,
   NotificationChannel,
@@ -8,7 +9,12 @@ import {
 import { NotificationRepository, buildRecipientWhere } from './notification.repository';
 import { NotificationService } from './notification.service';
 
-function makeService(overrides: { repository?: Record<string, unknown>; queue?: Record<string, unknown> } = {}) {
+function makeService(
+  overrides: {
+    repository?: Record<string, unknown>;
+    queue?: Record<string, unknown>;
+  } = {},
+) {
   const repository = {
     findAuthorIds: jest.fn().mockResolvedValue([]),
     findRecipientIds: jest.fn().mockResolvedValue(['u1']),
@@ -204,6 +210,27 @@ describe('NotificationService.notifyAdmins', () => {
     expect(queue.enqueuePending).toHaveBeenCalledWith(input.entityType, 's1');
   });
 
+  it('detail disimpan sebagai baris Label: value (HTML di-strip, newline dipertahankan)', async () => {
+    const { service, repository } = makeService();
+    await service.notifyAdmins({
+      ...input,
+      details: [
+        { label: 'Full name', value: '  <b>Budi</b>  ' },
+        { label: 'Phone', value: null },
+        { label: 'Email', value: 'a@b.c' },
+      ],
+    });
+    const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+    expect(rows[0].body).toBe('Full name: Budi\nEmail: a@b.c');
+  });
+
+  it('details kosong → fallback excerpt body', async () => {
+    const { service, repository } = makeService();
+    await service.notifyAdmins({ ...input, body: '<p>Isi</p>', details: [] });
+    const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+    expect(rows[0].body).toBe('Isi');
+  });
+
   it('tanpa admin → tidak membuat row / enqueue', async () => {
     const { service, repository, queue } = makeService({
       repository: { findAdminRecipientIds: jest.fn().mockResolvedValue([]) },
@@ -216,6 +243,150 @@ describe('NotificationService.notifyAdmins', () => {
   it('DB/queue gagal → tidak melempar', async () => {
     const { service } = makeService({ repository: { transaction: jest.fn().mockRejectedValue(new Error('db down')) } });
     await expect(service.notifyAdmins(input)).resolves.toBeUndefined();
+  });
+});
+
+describe('NotificationService.notifySubscriptionActive', () => {
+  const billing = {
+    id: 'b1',
+    userId: 'u1',
+    subscription: { name: 'Gold' },
+    expiryDate: new Date('2026-12-31T00:00:00.000Z'),
+  };
+
+  it('membuat row ACTIVE owner + detail paket/tanggal lalu enqueue', async () => {
+    const { service, repository, queue } = makeService();
+    await service.notifySubscriptionActive(billing as never);
+
+    const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+    expect(rows[0]).toMatchObject({
+      userId: 'u1',
+      type: NotificationType.SUBSCRIPTION_ACTIVE,
+      entityType: NotificationEntityType.SUBSCRIPTION,
+      entityId: 'b1',
+      title: 'Gold',
+      body: 'Package: Gold\nActive until: 2026-12-31',
+      linkPath: '/my-billings',
+    });
+    expect(queue.enqueuePending).toHaveBeenCalledWith(NotificationEntityType.SUBSCRIPTION, 'b1');
+  });
+
+  it('duplikat (createMany 0) → tidak enqueue', async () => {
+    const { service, repository, queue } = makeService({ repository: { createMany: jest.fn().mockResolvedValue(0) } });
+    await service.notifySubscriptionActive(billing as never);
+    expect(queue.enqueuePending).not.toHaveBeenCalled();
+  });
+
+  it('DB gagal → tidak melempar', async () => {
+    const { service } = makeService({ repository: { createMany: jest.fn().mockRejectedValue(new Error('db down')) } });
+    await expect(service.notifySubscriptionActive(billing as never)).resolves.toBeUndefined();
+  });
+});
+
+describe('NotificationService.notifySubscriptionCanceled', () => {
+  const billing = {
+    id: 'b1',
+    userId: 'u1',
+    subscription: { name: 'Gold' },
+    canceledAt: new Date('2026-10-24T00:00:00.000Z'),
+  };
+
+  it('membuat row CANCELED owner + entityId billing.id lalu enqueue', async () => {
+    const { service, repository, queue } = makeService();
+    await service.notifySubscriptionCanceled(billing as never);
+
+    const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+    expect(rows[0]).toMatchObject({
+      userId: 'u1',
+      type: NotificationType.SUBSCRIPTION_CANCELED,
+      entityType: NotificationEntityType.SUBSCRIPTION,
+      entityId: 'b1',
+      title: 'Gold',
+      body: 'Package: Gold\nCanceled on: 2026-10-24',
+      linkPath: '/my-billings',
+    });
+    expect(queue.enqueuePending).toHaveBeenCalledWith(NotificationEntityType.SUBSCRIPTION, 'b1');
+  });
+
+  it('canceledAt null → pakai hari ini (UTC)', async () => {
+    jest.useFakeTimers().setSystemTime(now);
+    try {
+      const { service, repository } = makeService();
+      await service.notifySubscriptionCanceled({ ...billing, canceledAt: null } as never);
+      const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+      expect(rows[0].body).toBe('Package: Gold\nCanceled on: 2026-10-19');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('duplikat (createMany 0) → tidak enqueue', async () => {
+    const { service, queue } = makeService({ repository: { createMany: jest.fn().mockResolvedValue(0) } });
+    await service.notifySubscriptionCanceled(billing as never);
+    expect(queue.enqueuePending).not.toHaveBeenCalled();
+  });
+
+  it('DB gagal → tidak melempar', async () => {
+    const { service } = makeService({ repository: { createMany: jest.fn().mockRejectedValue(new Error('db down')) } });
+    await expect(service.notifySubscriptionCanceled(billing as never)).resolves.toBeUndefined();
+  });
+});
+
+describe('NotificationService.enqueueSubscriptionLifecycle', () => {
+  const expiring = { id: 'b1', userId: 'u1', name: 'Gold', expiryDate: new Date('2026-10-22T00:00:00.000Z') };
+  const expired = { id: 'b2', userId: 'u2', name: 'Silver', expiryDate: new Date('2026-10-01T00:00:00.000Z') };
+
+  it('EXPIRING + EXPIRED dari dua window, Days left dihitung, enqueue per billing', async () => {
+    const { service, repository, queue } = makeService({
+      repository: { createMany: jest.fn().mockResolvedValue(2) },
+    });
+
+    await expect(
+      service.enqueueSubscriptionLifecycle({ expiring: [expiring], expired: [expired] }, now),
+    ).resolves.toBe(2);
+
+    const [, rows] = repository.createMany.mock.calls[0] as [unknown, Record<string, unknown>[]];
+    expect(rows[0]).toMatchObject({
+      userId: 'u1',
+      type: NotificationType.SUBSCRIPTION_EXPIRING,
+      entityId: 'b1',
+      body: 'Package: Gold\nExpires on: 2026-10-22\nDays left: 3',
+    });
+    expect(rows[1]).toMatchObject({
+      userId: 'u2',
+      type: NotificationType.SUBSCRIPTION_EXPIRED,
+      entityId: 'b2',
+      body: 'Package: Silver\nExpires on: 2026-10-01',
+    });
+    expect(queue.enqueuePending).toHaveBeenCalledTimes(2);
+    expect(queue.enqueuePending).toHaveBeenCalledWith(NotificationEntityType.SUBSCRIPTION, 'b1');
+  });
+
+  it('tanpa baris → 0, tidak create/enqueue', async () => {
+    const { service, repository, queue } = makeService();
+    await expect(service.enqueueSubscriptionLifecycle({ expiring: [], expired: [] }, now)).resolves.toBe(0);
+    expect(repository.createMany).not.toHaveBeenCalled();
+    expect(queue.enqueuePending).not.toHaveBeenCalled();
+  });
+
+  it('expiryDate null dibuang', async () => {
+    const { service, repository, queue } = makeService({
+      repository: { createMany: jest.fn().mockResolvedValue(1) },
+    });
+    await expect(
+      service.enqueueSubscriptionLifecycle({ expiring: [{ ...expiring, expiryDate: null }], expired: [] }, now),
+    ).resolves.toBe(0);
+    expect(repository.createMany).not.toHaveBeenCalled();
+    expect(queue.enqueuePending).not.toHaveBeenCalled();
+  });
+
+  it('insert gagal → 0 tanpa melempar', async () => {
+    const { service } = makeService({
+      repository: { createMany: jest.fn().mockRejectedValue(new Error('db down')) },
+    });
+    await expect(
+      service.enqueueSubscriptionLifecycle({ expiring: [expiring], expired: [] }, now),
+    ).resolves.toBe(0);
   });
 });
 
@@ -289,5 +460,30 @@ describe('NotificationRepository.createMany', () => {
     expect(createMany).toHaveBeenCalledWith(
       expect.objectContaining({ skipDuplicates: true, data: [{ userId: 'u1' }] }),
     );
+  });
+});
+
+describe('NotificationService.errorTag (observability)', () => {
+  it('PrismaClientUnknownRequestError → pesan asli ikut dilog, tanpa nama/body row', async () => {
+    const error = Object.assign(
+      new Error('Invalid `notification.createMany()` invocation\n\ninvalid input value for enum "NotificationType"'),
+      { name: 'PrismaClientUnknownRequestError' },
+    );
+    const { service } = makeService({ repository: { createMany: jest.fn().mockRejectedValue(error) } });
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      await service.notifySubscriptionActive({
+        id: 'b1',
+        userId: 'u1',
+        subscription: { name: 'Paket' },
+        expiryDate: new Date('2027-01-01T00:00:00.000Z'),
+      } as never);
+      const message = warn.mock.calls[0][0] as string;
+      expect(message).toContain('PrismaClientUnknownRequestError');
+      expect(message).toContain('invalid input value for enum');
+      expect(message).not.toContain('Paket');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

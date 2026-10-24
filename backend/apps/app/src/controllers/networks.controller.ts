@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
+  AuthenticatedUser,
   CreateNetworkDto,
+  BulkUpdateNetworkStatusDto,
+  CurrentUser,
   ListNetworksQueryDto,
   NetworkService,
   Permissions,
@@ -27,6 +30,13 @@ export class NetworksController {
       data: items,
       meta: { page: query.page, limit: Math.min(query.limit ?? 20, 100), total },
     };
+  }
+
+  @Post('bulk-status')
+  @Permissions('network:update')
+  @HttpCode(200)
+  bulkUpdateStatus(@Body() dto: BulkUpdateNetworkStatusDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.networkService.bulkUpdateStatus(dto.ids, dto.status, user.permissions ?? []);
   }
 
   @Get(':id')
@@ -59,5 +69,19 @@ export class NetworksController {
   @HttpCode(200)
   reject(@Param('id', ParseUUIDPipe) id: string) {
     return this.networkService.reject(id);
+  }
+
+  @Post(':id/submit')
+  @Permissions('network:update')
+  @HttpCode(200)
+  submit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.networkService.submit(id);
+  }
+
+  @Post(':id/unpublish')
+  @Permissions('network:unpublish')
+  @HttpCode(200)
+  unpublish(@Param('id', ParseUUIDPipe) id: string) {
+    return this.networkService.unpublish(id);
   }
 }

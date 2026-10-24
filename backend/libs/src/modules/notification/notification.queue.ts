@@ -8,7 +8,10 @@ import { NotificationQueueRow } from './entities/notification.entity';
 export const NOTIFICATION_QUEUE = 'notifications';
 export const NOTIFICATION_JOB_SEND = 'send';
 export const NOTIFICATION_JOB_RECOVER = 'recover';
+export const NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE = 'subscription-lifecycle';
 export const NOTIFICATION_RECOVERY_EVERY_MS = 300_000;
+// EXPIRING/EXPIRED: cukup tiap 6 jam (jendela 7 hari, toleransi keterlambatan kecil).
+export const NOTIFICATION_SUBSCRIPTION_LIFECYCLE_EVERY_MS = 21_600_000;
 
 export const NOTIFICATION_QUEUE_CLIENT = 'NOTIFICATION_QUEUE_CLIENT';
 export const NOTIFICATION_QUEUE_CONNECTION = 'NOTIFICATION_QUEUE_CONNECTION';
@@ -83,6 +86,18 @@ export class NotificationQueue implements OnModuleDestroy {
     } catch (e) {
       // Redis mati tidak boleh menggagalkan boot; scheduler dibuat ulang saat worker restart.
       this.logger.warn(`Notification recovery scheduler not registered: ${(e as Error).message}`);
+    }
+  }
+
+  async enqueueSubscriptionLifecycle(): Promise<void> {
+    try {
+      await this.queue.upsertJobScheduler(
+        `${NOTIFICATION_QUEUE}-subscription-lifecycle`,
+        { every: NOTIFICATION_SUBSCRIPTION_LIFECYCLE_EVERY_MS },
+        { name: NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE, data: {}, opts: { removeOnComplete: true } },
+      );
+    } catch (e) {
+      this.logger.warn(`Notification lifecycle scheduler not registered: ${(e as Error).message}`);
     }
   }
 

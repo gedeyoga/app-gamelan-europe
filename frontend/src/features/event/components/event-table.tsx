@@ -1,8 +1,9 @@
-import { MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,19 @@ export interface EventTableProps {
   canDelete?: boolean
   /** Gate `event:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
   canCreate?: boolean
+  /** ID event terpilih (bulk action). */
+  selectedIds: string[]
+  onSelectionChange: (ids: string[]) => void
+  /** Seluruh baris cocok kriteria (lintas halaman) terpilih. */
+  allSelected: boolean
+  /** Select-all lintas halaman / clear. */
+  onToggleAll: () => void
+  /** Sedang mengambil semua ID (select-all). */
+  isSelectingAll?: boolean
+  /** Mutasi bulk sedang berjalan — checkbox di-disable. */
+  isBulkPending?: boolean
+  /** Tampilkan kolom checkbox. Default `true`. */
+  canBulkUpdate?: boolean
 }
 
 export function EventTable({
@@ -57,17 +71,48 @@ export function EventTable({
   canUpdate = true,
   canDelete = true,
   canCreate = true,
+  selectedIds,
+  onSelectionChange,
+  allSelected,
+  onToggleAll,
+  isSelectingAll = false,
+  isBulkPending = false,
+  canBulkUpdate = true,
 }: EventTableProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 10 : 9
+  const columnCount = (showActions ? 10 : 9) + (canBulkUpdate ? 1 : 0)
+  const someSelected = selectedIds.length > 0 && !allSelected
+  const bulkDisabled = isSelectingAll || isBulkPending
+
+  function toggleRow(id: string, checked: boolean) {
+    onSelectionChange(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+  }
 
   return (
     <div className="rounded-xl border">
       <Table>
         <TableHeader>
           <TableRow>
+            {canBulkUpdate && (
+              <TableHead className="w-10">
+                <span className="flex items-center gap-1">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    onCheckedChange={onToggleAll}
+                    disabled={bulkDisabled}
+                    aria-label={t('event:bulk.selectAll')}
+                  />
+                  {isSelectingAll && (
+                    <Loader2
+                      className="size-3.5 animate-spin text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
+                </span>
+              </TableHead>
+            )}
             {/* Pengecualian terdokumentasi: `thumbnail`/`eventTypes`/`dates`/`location` tak ada di whitelist sortBy backend. */}
             <TableHead>{t('event:table.thumbnail')}</TableHead>
             <TableHead>
@@ -151,6 +196,16 @@ export function EventTable({
           ) : (
             items.map((event) => (
               <TableRow key={event.id}>
+                {canBulkUpdate && (
+                  <TableCell className="w-10">
+                    <Checkbox
+                      checked={selectedIds.includes(event.id)}
+                      onCheckedChange={(checked) => toggleRow(event.id, checked === true)}
+                      disabled={bulkDisabled}
+                      aria-label={t('event:bulk.selectRow', { name: event.name })}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   {event.thumbnail ? (
                     <img

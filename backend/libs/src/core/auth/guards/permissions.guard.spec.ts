@@ -113,6 +113,22 @@ describe('PermissionsGuard (deny-by-default)', () => {
     expect(getPermissionCodesByUserId).toHaveBeenCalledWith('user-2');
   });
 
+  it('JWT principal: resolved codes ditempel ke request.user.permissions', async () => {
+    mockMetadata(false, ['user:read']);
+    getPermissionCodesByUserId.mockResolvedValue(['user:read']);
+    const user = authenticatedUser('user-3');
+    const request: { user?: AuthenticatedUser } = { user };
+    const context = {
+      getHandler: () => function handler(): void {},
+      getClass: () => class TestController {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user?.permissions).toEqual(['user:read']);
+    expect(getPermissionCodesByUserId).toHaveBeenCalledTimes(1);
+  });
+
   it('API key principal without @Permissions metadata → 403 Permission required (no LOGIN-only exception)', async () => {
     mockMetadata(false, undefined);
     await expect(guard.canActivate(buildContext(apiKeyUser(['user:read'])))).rejects.toThrow(

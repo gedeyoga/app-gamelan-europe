@@ -11,8 +11,14 @@ import {
   buildOrderBy,
 } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
 import { BillingRepository } from './billing.repository';
-import { BillingEntity, MemberSubscription, mapMemberSubscription } from './entities/billing.entity';
+import {
+  BillingEntity,
+  MemberSubscription,
+  SubscriptionLifecycleRows,
+  mapMemberSubscription,
+} from './entities/billing.entity';
 import { CreateBillingDto } from './dto/create-billing.dto';
 import { UpdateBillingDto } from './dto/update-billing.dto';
 import { BillingLineDto } from './dto/billing-line.dto';
@@ -75,6 +81,10 @@ export const BILLING_FILTER_FIELDS = [
 ];
 export const BILLING_DATE_FIELDS = ['paidAt', 'canceledAt', 'startDate', 'expiryDate', 'createdAt', 'updatedAt'];
 
+const DAY_MS = 86_400_000;
+// Jendela EXPIRING notifikasi: 7 hari ke depan.
+export const SUBSCRIPTION_EXPIRY_WINDOW_MS = 7 * DAY_MS;
+
 // List /billings/members: cari di user, sort kolom komputasi.
 const MEMBER_SEARCHABLE_FIELDS = ['fullName', 'email'];
 export const MEMBER_SORT_FIELDS = [
@@ -133,7 +143,29 @@ export class BillingService {
     private readonly billingRepository: BillingRepository,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly notificationService: NotificationService,
   ) {}
+
+  // Best-effort: billing PAID + expiryDate terisi → email SUBSCRIPTION_ACTIVE (dedupe unique key DB).
+  // Gagal notifikasi tidak boleh membatalkan write billing.
+  private async notifyIfActive(billing: BillingEntity): Promise<BillingEntity> {
+    if (billing.status === 'PAID' && billing.expiryDate) {
+      await this.notificationService.notifySubscriptionActive(billing).catch(() => undefined);
+    }
+    return billing;
+  }
+
+  // Dua window job lifecycle (EXPIRING + EXPIRED); query tetap di BillingRepository.
+  async findSubscriptionLifecycleRows(now: Date): Promise<SubscriptionLifecycleRows> {
+    const [expiring, expired] = await Promise.all([
+      this.billingRepository.findExpiringSubscriptions(
+        now,
+        new Date(now.getTime() + SUBSCRIPTION_EXPIRY_WINDOW_MS),
+      ),
+      this.billingRepository.findExpiredSubscriptions(now),
+    ]);
+    return { expiring, expired };
+  }
 
   private invalid(message: string): UnprocessableEntityException {
     return new UnprocessableEntityException({
@@ -247,33 +279,38 @@ export class BillingService {
     }
     const now = new Date();
     const expiryDate = new Date(now.getTime() + subscription.durationInDays * 86_400_000);
-    return this.billingRepository.subscribe({
-      userId: dto.userId,
-      subscriptionId: dto.subscriptionId,
-      subscriptionType: subscription.subscriptionType,
-      currency: subscription.currency,
-      total: Number(subscription.price),
-      startDate: now,
-      expiryDate,
-      now,
-      paymentProofUrl: dto.paymentProofUrl,
-      paymentProofName: dto.paymentProofName,
-    });
+    return this.notifyIfActive(
+      await this.billingRepository.subscribe({
+        userId: dto.userId,
+        subscriptionId: dto.subscriptionId,
+        subscriptionType: subscription.subscriptionType,
+        currency: subscription.currency,
+        total: Number(subscription.price),
+        startDate: now,
+        expiryDate,
+        now,
+        paymentProofUrl: dto.paymentProofUrl,
+        paymentProofName: dto.paymentProofName,
+      }),
+    );
   }
 
   hasActiveMembership(userId: string): Promise<boolean> {
     return this.billingRepository.hasActiveByUser(userId, new Date());
   }
 
-  cancel(id: string): Promise<BillingEntity> {
-    return this.billingRepository.cancel(id);
+  // Admin membatalkan billing → email member setelah write sukses (best-effort, jangan gagalkan cancel).
+  async cancel(id: string): Promise<BillingEntity> {
+    const billing = await this.billingRepository.cancel(id);
+    await this.notificationService.notifySubscriptionCanceled(billing).catch(() => undefined);
+    return billing;
   }
 
   findOne(id: string): Promise<BillingEntity> {
     return this.billingRepository.findById(id);
   }
 
-  create(dto: CreateBillingDto): Promise<BillingEntity> {
+  async create(dto: CreateBillingDto): Promise<BillingEntity> {
     const data: Prisma.BillingCreateInput = {
       user: { connect: { id: dto.userId } },
       subscription: { connect: { id: dto.subscriptionId } },
@@ -288,10 +325,10 @@ export class BillingService {
     if (dto.tax !== undefined) data.tax = dto.tax;
     if (dto.paidAt !== undefined) data.paidAt = dto.paidAt === null ? null : new Date(dto.paidAt);
     if (dto.canceledAt !== undefined) data.canceledAt = dto.canceledAt === null ? null : new Date(dto.canceledAt);
-    return this.billingRepository.create(data);
+    return this.notifyIfActive(await this.billingRepository.create(data));
   }
 
-  update(id: string, dto: UpdateBillingDto): Promise<BillingEntity> {
+  async update(id: string, dto: UpdateBillingDto): Promise<BillingEntity> {
     const data: Prisma.BillingUpdateInput = {};
     if (dto.userId !== undefined) data.user = { connect: { id: dto.userId } };
     if (dto.subscriptionId !== undefined) data.subscription = { connect: { id: dto.subscriptionId } };
@@ -307,9 +344,9 @@ export class BillingService {
 
     const lines = dto.lines !== undefined ? dto.lines.map((line) => this.toLineData(line)) : undefined;
     if (Object.keys(data).length === 0 && lines === undefined) {
-      return this.findOne(id);
+      return this.notifyIfActive(await this.findOne(id));
     }
-    return this.billingRepository.update(id, data, lines);
+    return this.notifyIfActive(await this.billingRepository.update(id, data, lines));
   }
 
   remove(id: string): Promise<BillingEntity> {

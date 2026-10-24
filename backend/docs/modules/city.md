@@ -6,7 +6,7 @@ Menu: [state.md](./state.md) · [country.md](./country.md) · [event.md](./event
 
 ## 1. Deskripsi & Lokasi
 
-Modul `city` menyediakan data referensi kota, sumber [dr5hn/countries-states-cities-database](https://github.com/dr5hn/countries-states-cities-database). Sebagian besar read-only; tersedia **satu** endpoint write: `POST /cities` untuk inline-create kota (idempoten) dari form event.
+Modul `city` menyediakan data referensi kota, sumber [dr5hn/countries-states-cities-database](https://github.com/dr5hn/countries-states-cities-database). Sebagian besar read-only; tersedia **satu** endpoint write: `POST /cities` untuk inline-create kota (idempoten) dari form network (dan form lain). Pola sama dipakai `POST /states` ([state.md](./state.md)).
 
 City dimiliki satu Country (`countryId` non-null, FK `onDelete: Cascade`) dan opsional satu State (`stateId` nullable, FK `onDelete: SetNull`). Data diisi seeder `libs/prisma/seed-geo.ts` (`pnpm prisma:seed:geo`). Seeder **hanya menulis ulang id dataset** cities (`deleteMany` per-id + `createMany`) dan **meng-upsert** states (bukan `deleteMany`), sehingga city hasil inline-create user (id di luar dataset) beserta `stateId`-nya tidak hilang — FK `event_locations.city_id` & `cities.state_id` `ON DELETE SET NULL` akan mencabut referensi bila tabel di-truncate.
 
@@ -153,5 +153,5 @@ Format error standar: `{ statusCode, message, errors }` (RULES bab 5).
 ## 7. RBAC
 
 - Permission baru `city:create` didaftarkan di `libs/prisma/seed-data.ts`.
-- `seed.ts`: `city:create` masuk `MEMBER_PERMISSION_CODES` → role `member` & `author` bisa inline-create city dari form event; `admin` otomatis semua.
+- `seed.ts`: `city:create` masuk `MEMBER_PERMISSION_CODES` → role `member` & `author` bisa inline-create city dari form network (dan form lain); `admin` otomatis semua.
 - Jalankan `pnpm prisma:seed` (idempoten) setelah menambah permission.

@@ -104,12 +104,19 @@ tags:
       No create/update/delete; served from the seeded `Country` table.
   - name: States
     description: |
-      Public geo reference data (read-only, source dr5hn/countries-states-cities-database).
-      No create/update/delete; served from the seeded `State` table.
+      Geo reference data (source dr5hn/countries-states-cities-database). Public
+      list/detail. Rows come from the seeder and from `POST /states`, which is
+      idempotent (`state:create`) untuk find-or-create dari form network (dan
+      form lain). Custom rows created inline get **negative ids**; seeded rows
+      keep positive upstream ids. Only `name`, `countryCode`, `countryId`, `id`
+      and timestamps are always set — the rest (`iso2`, `iso3166_2`, `type`,
+      `level`, `native`, `latitude`, `longitude`, `timezone`, `wikiDataId`) are
+      nullable.
   - name: Cities
     description: |
       Geo reference data (read-only list/detail, source dr5hn). `POST /cities`
-      idempotent (`city:create`) untuk find-or-create dari form event.
+      idempotent (`city:create`) untuk find-or-create dari form network (dan
+      form lain).
   - name: Stats
     description: "Ringkasan publik: event published, user aktif, jumlah negara terlibat."
   - name: Subscriptions
@@ -309,7 +316,7 @@ paths:
     post:
       tags: [Story]
       operationId: approvePost
-      summary: Approve & publish post (REQUEST → PUBLISHED)
+      summary: Approve & publish post (DRAFT|REQUEST → PUBLISHED)
       description: Permission `story:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -373,7 +380,7 @@ paths:
     post:
       tags: [Story]
       operationId: publishPost
-      summary: Publish post (APPROVED → PUBLISHED)
+      summary: Publish post (DRAFT|APPROVED → PUBLISHED)
       description: Permission `story:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -430,6 +437,76 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/bulk-status:
+    post:
+      tags: [Story]
+      operationId: bulkUpdatePostStatus
+      summary: Bulk update story status
+      description: |
+        Baseline permission `story:update`, **plus** a per-target transition
+        permission: target `PUBLISHED` requires `story:approve` or `story:publish`;
+        target `REQUEST` requires `story:submit` (action `submit`); target `DRAFT`
+        accepts `reject` (needs `story:reject`) or `unpublish` (needs `story:unpublish`).
+        Missing permission → **403** (checked before any row is processed). Target
+        `APPROVED` → **400** (`Bulk status target <status> is not supported`).
+
+        Each id goes through the same transition rules as the single-row
+        endpoints. Response `{ updated, skipped, failed }`: `skipped` = row missing
+        (404) or already in the target status (409); `failed` = other HTTP errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkContentStatusRequest'
+      responses:
+        '200':
+          description: Bulk status applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkContentStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/bulk-delete:
+    post:
+      tags: [Story]
+      operationId: bulkDeletePosts
+      summary: Bulk delete stories
+      description: |
+        Permission `story:delete`. Each id is removed through the single-row
+        `remove` (scope still applies). Response `{ deleted, failed }`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteContentRequest'
+      responses:
+        '200':
+          description: Bulk delete applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteContentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -762,7 +839,7 @@ paths:
     post:
       tags: [Events]
       operationId: approveEvent
-      summary: Approve & publish event (REQUEST → PUBLISHED)
+      summary: Approve & publish event (DRAFT|REQUEST → PUBLISHED)
       description: Permission `event:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -826,7 +903,7 @@ paths:
     post:
       tags: [Events]
       operationId: publishEvent
-      summary: Publish event (APPROVED → PUBLISHED)
+      summary: Publish event (DRAFT|APPROVED → PUBLISHED)
       description: Permission `event:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409; invalid body → 422.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -883,6 +960,76 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /events/bulk-status:
+    post:
+      tags: [Events]
+      operationId: bulkUpdateEventStatus
+      summary: Bulk update event status
+      description: |
+        Baseline permission `event:update`, **plus** a per-target transition
+        permission: target `PUBLISHED` requires `event:approve` or `event:publish`;
+        target `REQUEST` requires `event:submit` (action `submit`); target `DRAFT`
+        accepts `reject` (needs `event:reject`) or `unpublish` (needs `event:unpublish`).
+        Missing permission → **403** (checked before any row is processed). Target
+        `APPROVED` → **400** (`Bulk status target <status> is not supported`).
+
+        Each id goes through the same transition rules as the single-row
+        endpoints. Response `{ updated, skipped, failed }`: `skipped` = row missing
+        (404) or already in the target status (409); `failed` = other HTTP errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkContentStatusRequest'
+      responses:
+        '200':
+          description: Bulk status applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkContentStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /events/bulk-delete:
+    post:
+      tags: [Events]
+      operationId: bulkDeleteEvents
+      summary: Bulk delete events
+      description: |
+        Permission `event:delete`. Each id is removed through the single-row
+        `remove` (scope still applies). Response `{ deleted, failed }`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteContentRequest'
+      responses:
+        '200':
+          description: Bulk delete applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteContentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1458,6 +1605,53 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /networks/bulk-status:
+    post:
+      tags: [Networks]
+      operationId: bulkUpdateNetworkStatus
+      summary: Bulk update network status
+      description: |
+        Baseline permission `network:update`, **plus** a per-target transition
+        permission: target `PUBLISHED` requires `network:approve` (action
+        `approve`, accepted from `DRAFT` as well as `REQUEST`); target `REQUEST`
+        requires `network:update` (action `submit`); target `DRAFT` accepts action
+        `reject` (needs `network:reject`) or `unpublish` (needs `network:unpublish`) —
+        at least one of the two is required (`network:approve` alone is **not**
+        enough). Missing permission → **403** (checked
+        before any row is processed). Target `APPROVED` → **400**
+        (`Bulk status target <status> is not supported`): no transition produces it.
+
+        Each id goes through the same transition rules as the single-row
+        `submit`/`approve`/`reject`/`unpublish` endpoints (`approvedAt`/`publishedAt`
+        are stamped only when publishing).
+
+        Response `{ updated, skipped, failed }`: `skipped` = row missing (404) or
+        already in the target status (409); `failed` = other HTTP errors. Repeating
+        the request yields `updated: 0`, `skipped: ids.length`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUpdateNetworkStatusRequest'
+      responses:
+        '200':
+          description: Bulk status applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkUpdateNetworkStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /networks/{id}:
     get:
       tags: [Networks]
@@ -1544,11 +1738,18 @@ paths:
     post:
       tags: [Networks]
       operationId: approveNetwork
-      summary: Approve & publish a network submission (REQUEST → PUBLISHED)
+      summary: Approve & publish a network (DRAFT or REQUEST → PUBLISHED)
       description: |
-        Permission `network:approve`. Transitions `status` `REQUEST → PUBLISHED`,
-        stamping `publishedAt` (from the optional body, else now) and `approvedAt`
-        (first time only). Wrong current status → **409**; unknown id → **404**.
+        Permission `network:approve` — the only gate that publishes a network.
+        Transitions `status` `DRAFT → PUBLISHED` (approver may skip `submit`)
+        or `REQUEST → PUBLISHED` (request-for-review path), stamping
+        `publishedAt` (from the optional body, else now) and `approvedAt`
+        (first time only).
+
+        Wrong current status (anything other than `DRAFT`/`REQUEST`, e.g. an
+        already `PUBLISHED` row) → **409**; a concurrent status change also
+        yields **409** (conditional update guarded by the row's actual current
+        status). `network:update` cannot publish. Unknown id → **404**.
         Optional JSON body `{ publishedAt? }` (ISO 8601); invalid body → **422**.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -1586,6 +1787,64 @@ paths:
       operationId: rejectNetwork
       summary: Reject a network submission (REQUEST → DRAFT)
       description: Permission `network:reject`. Transitions `status` `REQUEST → DRAFT`. Wrong current status → **409**; unknown id → **404**.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Network transitioned (draft).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /networks/{id}/submit:
+    post:
+      tags: [Networks]
+      operationId: submitNetwork
+      summary: Submit a network for review (DRAFT → REQUEST)
+      description: Permission `network:update`. Transitions `status` `DRAFT → REQUEST` (no timestamps written). Wrong current status → **409**; unknown id → **404**.
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Network transitioned (request).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /networks/{id}/unpublish:
+    post:
+      tags: [Networks]
+      operationId: unpublishNetwork
+      summary: Unpublish a published network (PUBLISHED → DRAFT)
+      description: Permission `network:unpublish` (dedicated — `network:approve` alone must not produce the effect of `network:reject`). Transitions `status` `PUBLISHED → DRAFT` (no timestamps written). Wrong current status → **409**; unknown id → **404**.
       parameters:
         - $ref: '#/components/parameters/IdPath'
       responses:
@@ -1925,7 +2184,7 @@ paths:
     post:
       tags: [Archives]
       operationId: approveArchive
-      summary: Approve & publish archive (REQUEST → PUBLISHED)
+      summary: Approve & publish archive (DRAFT|REQUEST → PUBLISHED)
       description: Permission `archive:approve`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -1989,7 +2248,7 @@ paths:
     post:
       tags: [Archives]
       operationId: publishArchive
-      summary: Publish archive (APPROVED → PUBLISHED)
+      summary: Publish archive (DRAFT|APPROVED → PUBLISHED)
       description: Permission `archive:publish`. Optional JSON body `{ publishedAt? }` (ISO8601). Invalid current status → 409.
       parameters:
         - $ref: '#/components/parameters/IdPath'
@@ -2046,6 +2305,76 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/bulk-status:
+    post:
+      tags: [Archives]
+      operationId: bulkUpdateArchiveStatus
+      summary: Bulk update archive status
+      description: |
+        Baseline permission `archive:update`, **plus** a per-target transition
+        permission: target `PUBLISHED` requires `archive:approve` or `archive:publish`;
+        target `REQUEST` requires `archive:submit` (action `submit`); target `DRAFT`
+        accepts `reject` (needs `archive:reject`) or `unpublish` (needs `archive:unpublish`).
+        Missing permission → **403** (checked before any row is processed). Target
+        `APPROVED` → **400** (`Bulk status target <status> is not supported`).
+
+        Each id goes through the same transition rules as the single-row
+        endpoints. Response `{ updated, skipped, failed }`: `skipped` = row missing
+        (404) or already in the target status (409); `failed` = other HTTP errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkContentStatusRequest'
+      responses:
+        '200':
+          description: Bulk status applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkContentStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /archives/bulk-delete:
+    post:
+      tags: [Archives]
+      operationId: bulkDeleteArchives
+      summary: Bulk delete archives
+      description: |
+        Permission `archive:delete`. Each id is removed through the single-row
+        `remove` (scope and S3 cleanup still apply). Response `{ deleted, failed }`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteContentRequest'
+      responses:
+        '200':
+          description: Bulk delete applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteContentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -2129,6 +2458,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StateListResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [States]
+      operationId: createState
+      summary: Create state (find-or-create, idempotent)
+      description: |
+        Permission `state:create`. Idempotent: an existing `name`
+        (case-insensitive) for the same `countryId` returns the existing row
+        (`201`) instead of creating a duplicate. `422` when `countryId` does not
+        exist (per-field `errors`). Custom rows get negative ids (dataset rows
+        keep positive upstream ids) and inherit `countryCode` from the country's
+        `iso2`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStateRequest'
+      responses:
+        '201':
+          description: State created — or the existing row (idempotent).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateStateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '500':
@@ -3485,6 +3846,121 @@ components:
                 $ref: '#/components/schemas/Network'
             meta:
               $ref: '#/components/schemas/PaginationMeta'
+    BulkUpdateNetworkStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [ids, status]
+      description: |
+        Bulk status payload for `POST /networks/bulk-status`. `ids` holds 1–100
+        UUID v4 values. `status` must be `DRAFT`, `REQUEST` or `PUBLISHED`;
+        `APPROVED` is rejected with 400.
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+        status:
+          type: string
+          enum: [DRAFT, REQUEST, PUBLISHED]
+          description: '`APPROVED` is rejected with 400.'
+    BulkUpdateNetworkStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [updated, skipped, failed]
+              properties:
+                updated:
+                  type: integer
+                  minimum: 0
+                  description: Number of rows transitioned successfully.
+                skipped:
+                  type: integer
+                  minimum: 0
+                  description: Rows missing (404) or already in the target status (409).
+                failed:
+                  type: integer
+                  minimum: 0
+                  description: Rows rejected by another HTTP error (e.g. 403/422).
+    BulkContentStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [ids, status]
+      description: |
+        Bulk status payload for `POST /posts|/events|/archives/bulk-status`.
+        `ids` holds 1–100 UUID v4 values. `status` must be `DRAFT`, `REQUEST` or
+        `PUBLISHED`; `APPROVED` is rejected with 400.
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+        status:
+          type: string
+          enum: [DRAFT, REQUEST, PUBLISHED]
+          description: '`APPROVED` is rejected with 400.'
+    BulkContentStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [updated, skipped, failed]
+              properties:
+                updated:
+                  type: integer
+                  minimum: 0
+                  description: Number of rows transitioned successfully.
+                skipped:
+                  type: integer
+                  minimum: 0
+                  description: Rows missing (404) or already in the target status (409).
+                failed:
+                  type: integer
+                  minimum: 0
+                  description: Rows rejected by another HTTP error (e.g. 403/422).
+    BulkDeleteContentRequest:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      description: Bulk delete payload for `POST /posts|/events|/archives/bulk-delete`. `ids` holds 1–100 UUID v4 values.
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+    BulkDeleteContentResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [deleted, failed]
+              properties:
+                deleted:
+                  type: integer
+                  minimum: 0
+                  description: Number of rows deleted.
+                failed:
+                  type: integer
+                  minimum: 0
+                  description: Rows rejected (missing, forbidden, or another HTTP error).
     CreateNetworkRequest:
       type: object
       additionalProperties: false
@@ -4923,9 +5399,13 @@ components:
     State:
       type: object
       description: |
-        Seeded geo reference row (source dr5hn, read-only). List view — no
-        `country` relation. `latitude`/`longitude` are Prisma `Decimal`
-        serialized as strings.
+        Geo reference row (source dr5hn), seeded and/or created inline via
+        `POST /states` — not read-only. List view — no `country` relation.
+        Seeded rows carry positive upstream ids; inline-created custom rows get
+        negative ids (`Math.min(min(id), 0) - 1`). Every column except `id`,
+        `name`, `countryCode`, `countryId`, `createdAt`, `updatedAt` is
+        nullable. `latitude`/`longitude` are Prisma `Decimal` serialized as
+        strings.
       required:
         - id
         - name
@@ -4945,6 +5425,7 @@ components:
       properties:
         id:
           type: integer
+          description: Positive upstream id (seeded) or negative id (inline-created custom row).
         name:
           type: string
         countryCode:
@@ -5015,6 +5496,25 @@ components:
                 $ref: '#/components/schemas/State'
             meta:
               $ref: '#/components/schemas/PaginationMeta'
+    CreateStateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, countryId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        countryId:
+          type: integer
+    CreateStateResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessMessage'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/State'
 
     # ---------- cities ----------
     City:

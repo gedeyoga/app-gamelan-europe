@@ -11,9 +11,9 @@ export class UpdateArchiveDto extends PartialType(
   @MaxLength(2048)
   thumbnail?: string | null;
 
-  // `undefined` = jangan sentuh; `null` = kosongkan tanggal publish (tanpa paksa PUBLISHED);
+  // `undefined`/`null` = jangan sentuh (null diabaikan service, bukan epoch);
   // ISO string = set tanggal + paksa PUBLISHED.
   @IsOptional()
   @IsISO8601()
-  publishedAt?: string | null;
+  publishedAt?: string;
 }

@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
   AuthenticatedUser,
+  BulkDeleteEventsDto,
+  BulkUpdateEventStatusDto,
   CreateEventDto,
   CurrentUser,
   EventService,
@@ -38,6 +40,21 @@ export class EventsController {
     return this.eventService.findOneBySlug(params.slug, user.id);
   }
 
+  // Bulk route dideklarasikan sebelum `@Post(':id/...')` agar tidak tertangkap route berparameter.
+  @Post('bulk-status')
+  @Permissions('event:update')
+  @HttpCode(200)
+  bulkUpdateStatus(@Body() dto: BulkUpdateEventStatusDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.eventService.bulkUpdateStatus(dto.ids, dto.status, user.permissions ?? [], user.id);
+  }
+
+  @Post('bulk-delete')
+  @Permissions('event:delete')
+  @HttpCode(200)
+  bulkDelete(@Body() dto: BulkDeleteEventsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.eventService.bulkDelete(dto.ids, user.id);
+  }
+
   @Get(':id')
   @Permissions('event:read')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
@@ -47,7 +64,7 @@ export class EventsController {
   @Patch(':id')
   @Permissions('event:update')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEventDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.eventService.update(id, dto, user.id);
+    return this.eventService.update(id, dto, user.id, user.permissions ?? []);
   }
 
   @Delete(':id')

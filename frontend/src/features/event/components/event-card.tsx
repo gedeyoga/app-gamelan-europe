@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 
 import { formatEventDate, getEventCreditName } from '../lib/format'
@@ -34,6 +35,15 @@ export interface EventCardProps {
   canDelete?: boolean
   /** Gate `event:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
   canCreate?: boolean
+  /** ID event terpilih (bulk action). */
+  selectedIds: string[]
+  onSelectionChange: (ids: string[]) => void
+  /** Sedang mengambil semua ID (select-all). */
+  isSelectingAll?: boolean
+  /** Mutasi bulk sedang berjalan — checkbox di-disable. */
+  isBulkPending?: boolean
+  /** Tampilkan checkbox. Default `true`. */
+  canBulkUpdate?: boolean
 }
 
 export function EventCard({
@@ -46,10 +56,20 @@ export function EventCard({
   canUpdate = true,
   canDelete = true,
   canCreate = true,
+  selectedIds,
+  onSelectionChange,
+  isSelectingAll = false,
+  isBulkPending = false,
+  canBulkUpdate = true,
 }: EventCardProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
+  const bulkDisabled = isSelectingAll || isBulkPending
+
+  function toggleRow(id: string, checked: boolean) {
+    onSelectionChange(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+  }
 
   return (
     <div className={CARD_GRID_CLASS}>
@@ -96,7 +116,18 @@ export function EventCard({
                   <span className="sr-only">{t('event:card.noThumbnail')}</span>
                 </div>
               )}
-              <div className="absolute left-2 top-2 z-10 flex flex-wrap items-center gap-1">
+              <div className="absolute left-2 top-2 z-20 flex flex-wrap items-center gap-1">
+                {canBulkUpdate && (
+                  <span className="rounded bg-background/90 p-1 shadow-sm">
+                    <Checkbox
+                      checked={selectedIds.includes(event.id)}
+                      onCheckedChange={(checked) => toggleRow(event.id, checked === true)}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={bulkDisabled}
+                      aria-label={t('event:bulk.selectRow', { name: event.name })}
+                    />
+                  </span>
+                )}
                 <Badge className="shadow-sm" variant={STATUS_VARIANT[event.status]}>
                   {t(`event:statusOptions.${event.status}`, { defaultValue: event.status })}
                 </Badge>

@@ -1,6 +1,6 @@
-import { ConflictException, ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ContentSource, ContentStatus, ContentVisibility, EventEntry, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
-import { AccessScope, AccessScopeService, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
+import { AccessScope, AccessScopeService, canPublishFromCodes, ownReadWhere } from '@app/libs/core/auth/access-scope.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { escapeHtml } from '@app/libs/common/utils/html.util';
 import { CountryRepository } from '@app/libs/modules/country/country.repository';
@@ -27,13 +27,21 @@ export const EVENT_SORT_FIELDS = ['name', 'slug', 'status', 'visibility', 'publi
 export const EVENT_FILTER_FIELDS = ['status', 'publishedAt', 'createdAt', 'updatedAt'];
 export const EVENT_DATE_FIELDS = ['publishedAt', 'createdAt', 'updatedAt'];
 
+// Bulk status wajib punya permission transisi sesuai status target (cegah eskalasi via `event:update`).
+// APPROVED sengaja tak ada: tak ada transisi yang menghasilkan APPROVED (approve → PUBLISHED).
+export const EVENT_BULK_STATUS_PERMISSIONS: Partial<Record<ContentStatus, string[]>> = {
+  [ContentStatus.PUBLISHED]: ['event:approve', 'event:publish'],
+  [ContentStatus.REQUEST]: ['event:submit'],
+  [ContentStatus.DRAFT]: ['event:reject', 'event:unpublish'],
+};
+
 export type EventAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpublish';
 
 // Sumber tunggal aturan transisi status event. Pure & mudah diaudit.
-// `from` array: `publish` menerima DRAFT (jalur approve submission) maupun APPROVED (legacy).
+// `from` array: `approve` boleh langsung dari DRAFT (tanpa `submit`); `publish` menerima DRAFT|APPROVED (legacy).
 export const EVENT_TRANSITIONS: Record<EventAction, { from: ContentStatus[]; to: ContentStatus }> = {
   submit: { from: [ContentStatus.DRAFT], to: ContentStatus.REQUEST },
-  approve: { from: [ContentStatus.REQUEST], to: ContentStatus.PUBLISHED },
+  approve: { from: [ContentStatus.DRAFT, ContentStatus.REQUEST], to: ContentStatus.PUBLISHED },
   reject: { from: [ContentStatus.REQUEST], to: ContentStatus.DRAFT },
   publish: { from: [ContentStatus.DRAFT, ContentStatus.APPROVED], to: ContentStatus.PUBLISHED },
   unpublish: { from: [ContentStatus.PUBLISHED], to: ContentStatus.DRAFT },
@@ -366,7 +374,8 @@ export class EventService {
   ): CreateEventData {
     const now = new Date();
     // Tanggal publish manual → pakai tanggal user + paksa PUBLISHED. Tanpa itu, perilaku lama.
-    const autoPublish = dto.publishedAt !== undefined;
+    // `null` = jangan sentuh (bukan epoch).
+    const autoPublish = typeof dto.publishedAt === 'string';
     return {
       name: dto.name,
       slug,
@@ -538,6 +547,11 @@ export class EventService {
           entityType: NotificationEntityType.EVENT,
           entityId: event.id,
           title: dto.title,
+          details: [
+            { label: 'Submitted by', value: dto.author.fullName },
+            { label: 'Email', value: dto.author.email },
+            { label: 'Type', value: 'Event' },
+          ],
           imageUrl: null,
           linkPath: '/dashboard',
         });
@@ -550,7 +564,12 @@ export class EventService {
     throw new ConflictException('Slug already exists');
   }
 
-  async update(id: string, dto: UpdateEventDto, userId: string): Promise<EventResponse> {
+  async update(
+    id: string,
+    dto: UpdateEventDto,
+    userId: string,
+    permissions: string[] = [],
+  ): Promise<EventResponse> {
     const existing = await this.eventRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'event');
     this.assertWritable(existing, scope);
@@ -598,8 +617,17 @@ export class EventService {
     if (dto.entry !== undefined) data.entry = dto.entry;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
+    // Scope `all` saja tidak cukup untuk terbit: `*:reject`/`*:unpublish` juga memberi scope `all`,
+    // jadi niat terbit via PATCH wajib `*:approve` atau `*:publish` (403 bila tidak punya).
+    // `publishedAt: null` = jangan sentuh (bukan epoch); hanya string ISO yang diterima.
+    const publishing =
+      typeof dto.publishedAt === 'string' ||
+      (dto.status === ContentStatus.PUBLISHED && existing.status !== ContentStatus.PUBLISHED);
     if (scope.kind === 'all') {
-      if (dto.publishedAt !== undefined) {
+      if (publishing && !canPublishFromCodes(permissions, 'event')) {
+        throw new ForbiddenException('Publishing requires permission event:approve or event:publish');
+      }
+      if (typeof dto.publishedAt === 'string') {
         // Tanggal publish manual: timpa nilai lama (ubah/backdate) + paksa PUBLISHED.
         data.publishedAt = new Date(dto.publishedAt);
         data.status = ContentStatus.PUBLISHED;
@@ -618,14 +646,14 @@ export class EventService {
     }
 
     const event = await this.eventRepository.update(id, data);
-    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ContentStatus.PUBLISHED)) {
+    if (scope.kind === 'all' && (typeof dto.publishedAt === 'string' || dto.status === ContentStatus.PUBLISHED)) {
       await this.notifyPublished(event, userId, dto.notify);
     }
     return this.toResponse(event);
   }
 
   // Transisi status terkontrol; `PATCH /events/:id` tetap untuk update konten.
-  // `approve` langsung PUBLISHED (+ `publishedAt`); `publish` legacy (APPROVED → PUBLISHED) tetap ada.
+  // `approve` langsung PUBLISHED dari DRAFT|REQUEST (+ `publishedAt`); `publish` menerima DRAFT|APPROVED (legacy).
   async transition(
     id: string,
     action: EventAction,
@@ -650,8 +678,9 @@ export class EventService {
     }
     const publishing = action === 'approve' || action === 'publish';
     // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    // Predikat = status aktual hasil baca (bukan seluruh array) → balapan tetap 409.
     const updated = await this.eventRepository.transaction(async (tx) => {
-      const ok = await this.eventRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      const ok = await this.eventRepository.updateStatusIf(id, existing.status, rule.to, extra, tx);
       if (!ok) return false;
       if (publishing && existing.visibility === ContentVisibility.PUBLIC) {
         await this.notificationService.enqueueContentPublished(tx, {
@@ -686,5 +715,73 @@ export class EventService {
     const scope = await this.accessScope.resolve(userId, 'event');
     if (!options?.skipScopeCheck) this.assertWritable(existing, scope);
     return this.toResponse(await this.eventRepository.delete(id));
+  }
+
+  // Bulk status: per-id lewat `transition` (aturan transisi + scope tetap berlaku → timestamp ikut).
+  // APPROVED ditolak 400: tak ada transisi yang menghasilkan APPROVED. Kandidat aksi hanya yang
+  // permission-nya dipegang (bulk tak boleh lebih longgar dari endpoint tunggal).
+  // 404/409 → `skipped` (row hilang / sudah di status target); 403 & error lain → `failed`.
+  async bulkUpdateStatus(
+    ids: string[],
+    status: ContentStatus,
+    permissions: string[] = [],
+    userId: string,
+  ): Promise<{ updated: number; skipped: number; failed: number }> {
+    const required = EVENT_BULK_STATUS_PERMISSIONS[status];
+    if (!required) {
+      throw new BadRequestException(`Bulk status target ${status} is not supported`);
+    }
+    if (!required.some((permission) => permissions.includes(permission))) {
+      throw new ForbiddenException(`Bulk status ${status} requires permission ${required.join(' or ')}`);
+    }
+    const candidates: EventAction[] =
+      status === ContentStatus.PUBLISHED
+        ? [
+            ...(permissions.includes('event:approve') ? (['approve'] as const) : []),
+            ...(permissions.includes('event:publish') ? (['publish'] as const) : []),
+          ]
+        : status === ContentStatus.REQUEST
+          ? ['submit']
+          : [
+              ...(permissions.includes('event:reject') ? (['reject'] as const) : []),
+              ...(permissions.includes('event:unpublish') ? (['unpublish'] as const) : []),
+            ];
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      let outcome: 'updated' | 'skipped' | 'failed' = 'skipped';
+      for (const action of candidates) {
+        try {
+          await this.transition(id, action, userId);
+          outcome = 'updated';
+          break;
+        } catch (e) {
+          if (!(e instanceof HttpException)) throw e;
+          if (!(e instanceof NotFoundException || e instanceof ConflictException)) outcome = 'failed';
+        }
+      }
+      if (outcome === 'updated') updated++;
+      else if (outcome === 'failed') failed++;
+      else skipped++;
+    }
+    return { updated, skipped, failed };
+  }
+
+  // Hapus massal: per-id `remove` (scope tetap jalan). Row hilang/terlarang = `failed`
+  // (tak ada konsep "sudah di status target" untuk delete).
+  async bulkDelete(ids: string[], userId: string): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await this.remove(id, userId);
+        deleted++;
+      } catch (e) {
+        if (!(e instanceof HttpException)) throw e;
+        failed++;
+      }
+    }
+    return { deleted, failed };
   }
 }

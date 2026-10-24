@@ -677,13 +677,14 @@ Selain `PATCH /posts/:id` (update konten + `status`/`publishedAt` legacy), terda
 | Action | Endpoint | Permission | Dari | Ke |
 | --- | --- | --- | --- | --- |
 | `submit` | `POST /posts/:id/submit` | `story:submit` | `DRAFT` | `REQUEST` |
-| `approve` | `POST /posts/:id/approve` | `story:approve` | `REQUEST` | `PUBLISHED` |
+| `approve` | `POST /posts/:id/approve` | `story:approve` | `DRAFT` **atau** `REQUEST` | `PUBLISHED` |
 | `reject` | `POST /posts/:id/reject` | `story:reject` | `REQUEST` | `DRAFT` |
-| `publish` | `POST /posts/:id/publish` | `story:publish` | `APPROVED` | `PUBLISHED` |
+| `publish` | `POST /posts/:id/publish` | `story:publish` | `DRAFT` **atau** `APPROVED` (legacy) | `PUBLISHED` |
 | `unpublish` | `POST /posts/:id/unpublish` | `story:unpublish` | `PUBLISHED` | `DRAFT` |
 
-- **`approve` langsung menerbitkan** (`REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy). `approvedAt` = audit marker **"pertama kali terbit"**, di-set `existing.approvedAt ?? now` pada `approve`/`publish`; **bukan** penanda status `APPROVED`.
-- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string }` (`@IsOptional() @IsISO8601()`): bila dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `publish` tetap ada untuk kompatibilitas (APPROVED→PUBLISHED; baris APPROVED lama).
+- **`approve` langsung menerbitkan** (`DRAFT|REQUEST → PUBLISHED`) dengan `publishedAt` yang dipilih. Approver boleh menerbitkan story buatan admin langsung dari `DRAFT` (tanpa `submit`); `submit` tetap jalur minta-review. Status `APPROVED` **deprecated** — tidak lagi diproduksi oleh transisi mana pun (enum Prisma tetap ada untuk kompatibilitas DB/legacy). `approvedAt` = audit marker **"pertama kali terbit"**, di-set `existing.approvedAt ?? now` pada `approve`/`publish`; **bukan** penanda status `APPROVED`.
+- `approve` & `publish` menerima **body opsional** `PublishContentDto` `{ publishedAt?: string, notify?: boolean }` (`@IsOptional() @IsISO8601()` / `@IsBoolean()`): bila `publishedAt` dikirim → `publishedAt = new Date(publishedAt)`; bila tidak → `publishedAt` existing, else `now`. `notify` default `true`; `false` → tidak enqueue notifikasi (juga berlaku di `create`/`update` auto-publish). `publish` tetap ada untuk kompatibilitas (DRAFT|APPROVED→PUBLISHED; termasuk baris APPROVED lama).
+- **Siapa yang boleh publish.** `story:approve` dan `story:publish` sama-sama gate publish: approver boleh menerbitkan langsung dari `DRAFT` (tanpa `submit`), atau dari `REQUEST` (jalur usulan/review). `submit` (`story:submit`) tetap jalur minta-review; `story:update` **tidak** bisa publish.
 - `submit`/`reject`/`unpublish`: **tetap tanpa body**, hanya path `id` UUID (`ParseUUIDPipe` → 422 bila invalid). Response `200 { data: <post + gallery + flyer>, message }`.
 - Status saat ini **tidak cocok** dengan `from` → **409** `ConflictException` dengan pesan `Cannot <action> post in status <STATUS>`.
 - **Penyisaan timestamp disengaja (m3).** `unpublish` (`PUBLISHED`→`DRAFT`) **tidak** menghapus `publishedAt`; karena `publish`/`approve` memakai `existing.publishedAt ?? now`, publish berikutnya **tidak mengubah** `publishedAt` (tetap tanggal publish pertama) kecuali `publishedAt` eksplisit dikirim di body.
@@ -1095,9 +1096,9 @@ const DEFAULT_PERMISSIONS = [
   { code: 'story:update', description: 'Mengubah story' },
   { code: 'story:delete', description: 'Menghapus story' },
   { code: 'story:submit', description: 'Mengajukan story untuk review (DRAFT -> REQUEST)' },
-  { code: 'story:approve', description: 'Menyetujui & menerbitkan story (REQUEST -> PUBLISHED)' },
+  { code: 'story:approve', description: 'Menyetujui & menerbitkan story (DRAFT|REQUEST -> PUBLISHED)' },
   { code: 'story:reject', description: 'Menolak story (REQUEST -> DRAFT)' },
-  { code: 'story:publish', description: 'Menerbitkan story (APPROVED -> PUBLISHED)' },
+  { code: 'story:publish', description: 'Menerbitkan story (DRAFT|APPROVED -> PUBLISHED)' },
   { code: 'story:unpublish', description: 'Menarik story dari publikasi (PUBLISHED -> DRAFT)' },
   { code: 'category:create', description: 'Membuat kategori baru' },
   { code: 'category:read', description: 'Melihat daftar/detail kategori' },
@@ -1228,3 +1229,32 @@ Format error standar: `{ statusCode, message, errors }` (RULES bab 5).
 - **Galeri**: kirim `galleryImageIds: string[]` (urutan = urutan galeri) di body `POST/PATCH`; `PATCH` **replace** seluruh array. Response `GET /posts` & `GET /posts/:id` mengembalikan `gallery: ImageResponse[]` berurut (bentuk sama dengan respons `POST /images`); field mentah `galleryImageIds` tidak dikembalikan.
 - **GIF tidak didukung**: mime upload hanya `image/png`, `image/jpeg`, `image/webp`; GIF → 422.
 - Gambar: upload ke `POST /images` (multipart `file`) → response `url` absolut S3; sisipkan `url` di `content`/`thumbnail`; kirim id `Image` via `imageIds` (konten/thumbnail) dan `galleryImageIds` (galeri) saat create/update post agar ter-bind; render `<img src>` langsung (bucket public-read).
+
+## Bulk actions
+
+Bulk routes dideklarasikan sebelum route berparameter `POST /posts/:id/...` dan memakai `@HttpCode(200)`.
+
+| Endpoint | Permission (controller) | Body | Response |
+| --- | --- | --- | --- |
+| `POST /posts/bulk-status` | `story:update` | `{ ids: uuid[1..100], status: DRAFT|REQUEST|PUBLISHED }` | `{ updated, skipped, failed }` |
+| `POST /posts/bulk-delete` | `story:delete` | `{ ids: uuid[1..100] }` | `{ deleted, failed }` |
+
+Target status yang diterima hanya `DRAFT`, `REQUEST`, `PUBLISHED`. `APPROVED` ditolak **400** (tak ada transisi yang menghasilkannya; `approve` langsung ke `PUBLISHED`).
+
+Permission transisi (salah satu, dicek di service; di atas `story:update` di controller):
+
+| Target | Permission | Aksi yang dijalankan |
+| --- | --- | --- |
+| `REQUEST` | `story:submit` | `submit` (DRAFT -> REQUEST) |
+| `PUBLISHED` | `story:approve` atau `story:publish` | `approve` (DRAFT|REQUEST -> PUBLISHED), lalu `publish` (DRAFT|APPROVED -> PUBLISHED) |
+| `DRAFT` | `story:reject` atau `story:unpublish` | `reject` (REQUEST -> DRAFT), lalu `unpublish` (PUBLISHED -> DRAFT) |
+
+Kandidat aksi dibangun dari permission yang benar-benar dipegang: `reject` hanya bila `story:reject`, `unpublish` hanya bila `story:unpublish` (idem `approve`/`publish`). Jadi bulk tidak pernah lebih longgar dari endpoint tunggal `POST /posts/:id/<action>`.
+
+Permission tak memenuhi -> **403**. Setiap id tetap lewat `transition()` (aturan transisi, scope, dan timestamp `approvedAt`/`publishedAt` berlaku).
+
+- `updated`: row benar-benar berubah.
+- `skipped`: 404 (row hilang) atau 409 (transisi tidak valid dari status saat ini, termasuk row yang sudah berada di status target) - row tidak diubah.
+- `failed`: 403 (scope/izin) atau error lain per-row - row tidak diubah; batch lanjut.
+
+`POST /posts/bulk-delete` memakai `remove()` per id (scope + cleanup storage tetap jalan): `deleted` = berhasil, `failed` = 404/403/error lain. Tidak ada `skipped` karena delete tidak punya konsep "sudah di status target".

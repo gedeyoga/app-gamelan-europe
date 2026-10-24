@@ -30,4 +30,36 @@ export class StateRepository {
     ]);
     return { items, total };
   }
+
+  // Inline-add state: name sama (case-insensitive) + countryId → kembalikan existing (bukan 409).
+  // ponytail: custom row pakai id negatif (`Math.min(_min.id, 0) - 1`) supaya import dataset GeoDB
+  // (id positif) tidak pernah tabrakan; kalau nanti butuh urutan id manual, tambah kolom
+  // sequence/autoincrement khusus saat itu.
+  async createIdempotent(data: {
+    name: string;
+    countryId: number;
+    countryCode: string;
+  }): Promise<StateEntity> {
+    const existing = await this.prisma.state.findFirst({
+      where: {
+        name: { equals: data.name, mode: 'insensitive' },
+        countryId: data.countryId,
+      },
+      select: stateSelect,
+    });
+    if (existing) return existing;
+    const { _min } = await this.prisma.state.aggregate({ _min: { id: true } });
+    const id = Math.min(_min.id ?? 0, 0) - 1;
+    try {
+      return await this.prisma.state.create({ data: { ...data, id }, select: stateSelect });
+    } catch (error) {
+      // Dua inline-create paralel bisa menghitung id negatif yang sama → P2002 pada PK.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const { _min: recomputed } = await this.prisma.state.aggregate({ _min: { id: true } });
+      return this.prisma.state.create({
+        data: { ...data, id: Math.min(recomputed.id ?? 0, 0) - 1 },
+        select: stateSelect,
+      });
+    }
+  }
 }

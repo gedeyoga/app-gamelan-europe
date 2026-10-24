@@ -9,6 +9,7 @@ import {
 } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
 import { BillingService } from '@app/libs/modules/billing/billing.service';
+import { BillingEntity } from '@app/libs/modules/billing/entities/billing.entity';
 import { UserService } from '@app/libs/modules/user/user.service';
 import { NotificationService } from '@app/libs/modules/notification/notification.service';
 import { SubscriptionRequestRepository, SubscriptionRequestReviewRow } from './subscription-request.repository';
@@ -70,6 +71,15 @@ export class SubscriptionRequestService {
       entityType: NotificationEntityType.SUBSCRIPTION_REQUEST,
       entityId: created.id,
       title: `${created.fullName} - ${subscription.name}`,
+      details: [
+        { label: 'Full name', value: created.fullName },
+        { label: 'Email', value: created.email },
+        { label: 'Phone', value: created.phone },
+        { label: 'Organisation', value: created.organisation },
+        { label: 'Package', value: subscription.name },
+        { label: 'Request type', value: created.requestType },
+        { label: 'Reason', value: created.reason },
+      ],
       imageUrl: null,
       linkPath: `/subscription-requests/${created.id}`,
     });
@@ -102,6 +112,15 @@ export class SubscriptionRequestService {
       entityType: NotificationEntityType.SUBSCRIPTION_REQUEST,
       entityId: created.id,
       title: `${created.fullName} - ${subscription.name}`,
+      details: [
+        { label: 'Full name', value: created.fullName },
+        { label: 'Email', value: created.email },
+        { label: 'Phone', value: created.phone },
+        { label: 'Organisation', value: created.organisation },
+        { label: 'Package', value: subscription.name },
+        { label: 'Request type', value: created.requestType },
+        { label: 'Reason', value: created.reason },
+      ],
       imageUrl: null,
       linkPath: `/subscription-requests/${created.id}`,
     });
@@ -176,14 +195,16 @@ export class SubscriptionRequestService {
       const subscription = await this.subscriptionRequestRepository.findActiveSubscription(review.subscriptionId);
       if (!subscription) throw new NotFoundException('Subscription not found');
       const userId = await this.resolveApproverUserId(review);
-      const billing = await this.billingService.subscribe({
+      const billing: BillingEntity = await this.billingService.subscribe({
         userId,
         subscriptionId: review.subscriptionId,
         ...(input.paymentProofUrl
           ? { paymentProofUrl: input.paymentProofUrl, paymentProofName: input.paymentProofName }
           : {}),
       });
-      return await this.subscriptionRequestRepository.setBillingId(id, billing.id);
+      const updated = await this.subscriptionRequestRepository.setBillingId(id, billing.id);
+      // SUBSCRIPTION_ACTIVE diemit BillingService.subscribe (sekali, best-effort).
+      return updated;
     } catch (e) {
       // Compensating rollback: jangan tinggalkan request APPROVED tapi billing orphan/gagal.
       // ponytail: claim + create billing belum satu transaksi; upgrade ke prisma.$transaction bila perlu atomik penuh.

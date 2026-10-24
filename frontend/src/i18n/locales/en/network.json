@@ -16,13 +16,33 @@
     "status": "Status",
     "allStatuses": "All statuses"
   },
+  "bulk": {
+    "selectAll": "Select all networks",
+    "selectRow": "Select {{name}}",
+    "selected_one": "{{count}} selected",
+    "selected": "{{count}} selected",
+    "statusLabel": "Change status to",
+    "apply": "Apply",
+    "clear": "Clear selection",
+    "confirmTitle": "Change network status",
+    "confirmDescription": "Change the status of {{count}} networks to {{status}}?",
+    "publishWarning": "Networks set to Published become publicly visible immediately.",
+    "confirm": "Apply",
+    "cancel": "Cancel",
+    "skipped_one": "{{count}} item skipped because its status does not allow this change",
+    "skipped": "{{count}} items skipped because their status does not allow this change",
+    "failed_one": "{{count}} item failed due to a permission or server error",
+    "failed": "{{count}} items failed due to a permission or server error"
+  },
   "errors": {
     "loadData": "Failed to load network data. Please try again.",
     "loadDetail": "Failed to load network detail.",
     "forbidden": "You don't have access to view network data.",
     "uploadFailed": "Failed to upload image. Please try again.",
     "noCreatePermission": "You don't have permission to create a network.",
-    "noUpdatePermission": "You don't have permission to edit a network."
+    "noUpdatePermission": "You don't have permission to edit a network.",
+    "createStateFailed": "Failed to create state.",
+    "createCityFailed": "Failed to create city."
   },
   "table": {
     "name": "Name",
@@ -35,6 +55,9 @@
     "notFound": "No results for \"{{term}}\".",
     "reset": "Reset search",
     "edit": "Edit",
+    "submit": "Submit for approval",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
     "delete": "Delete"
   },
   "form": {
@@ -103,11 +126,17 @@
     "countryEmpty": "No country found.",
     "statePlaceholder": "Select state",
     "stateSearch": "Search state...",
+    "stateSearchCreate": "Search or add state...",
+    "stateAdd": "Add \"{{name}}\"",
+    "stateCreating": "Adding...",
     "stateEmpty": "No state found.",
     "stateSelectCountry": "Select a country first",
     "city": "City",
     "cityPlaceholder": "Select city",
     "citySearch": "Search city...",
+    "citySearchCreate": "Search or add city...",
+    "cityAdd": "Add \"{{name}}\"",
+    "cityCreating": "Adding...",
     "cityEmpty": "No city found.",
     "citySelectState": "Select a state first"
   },
@@ -125,6 +154,7 @@
   },
   "workflow": {
     "requested": "This network is awaiting approval",
+    "draft": "This network is still a draft — you can publish it directly",
     "approve": "Approve",
     "reject": "Reject"
   },
@@ -138,6 +168,15 @@
     "approved": "Network request approved successfully",
     "approveFailed": "Failed to approve network request",
     "rejected": "Network request rejected successfully",
-    "rejectFailed": "Failed to reject network request"
+    "rejectFailed": "Failed to reject network request",
+    "submitted": "Network submitted for approval",
+    "submitFailed": "Failed to submit network for approval",
+    "published": "Network published successfully",
+    "publishFailed": "Failed to publish network",
+    "unpublished": "Network unpublished and moved back to draft",
+    "unpublishFailed": "Failed to unpublish network",
+    "bulkUpdated": "Status updated for {{count}} networks",
+    "bulkUpdateFailed": "Failed to update network status",
+    "bulkSelectAllFailed": "Failed to load all matching networks"
   }
 }

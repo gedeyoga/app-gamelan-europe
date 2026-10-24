@@ -16,6 +16,29 @@
     "category": "Filter by category",
     "allCategories": "All categories"
   },
+  "bulk": {
+    "selectAll": "Select all stories",
+    "selectAllLabel": "Select all",
+    "selectRow": "Select {{name}}",
+    "selected_one": "{{count}} selected",
+    "selected": "{{count}} selected",
+    "regionLabel": "Bulk actions",
+    "statusLabel": "Change status to",
+    "apply": "Apply",
+    "delete": "Delete",
+    "clear": "Clear selection",
+    "confirmTitle": "Change story status",
+    "confirmDescription": "Change the status of {{count}} stories to {{status}}?",
+    "publishWarning": "Stories set to Published become publicly visible immediately.",
+    "deleteTitle": "Delete stories",
+    "deleteDescription": "Delete {{count}} stories? This action cannot be undone.",
+    "confirm": "Apply",
+    "cancel": "Cancel",
+    "skipped_one": "{{count}} item skipped because its status does not allow this change",
+    "skipped": "{{count}} items skipped because their status does not allow this change",
+    "failed_one": "{{count}} item failed due to a permission or server error",
+    "failed": "{{count}} items failed due to a permission or server error"
+  },
   "errors": {
     "loadData": "Failed to load story data. Please try again.",
     "forbidden": "You don't have access to view story data.",
@@ -97,6 +120,7 @@
   },
   "workflow": {
     "requested": "Awaiting approval",
+    "draft": "This story is still a draft — you can publish it directly",
     "approve": "Approve",
     "reject": "Reject"
   },
@@ -215,6 +239,11 @@
     "approveFailed": "Failed to approve story",
     "rejectFailed": "Failed to reject story",
     "categoryDeleted": "Category deleted successfully",
-    "categoryDeleteFailed": "Failed to delete category"
+    "categoryDeleteFailed": "Failed to delete category",
+    "bulkUpdated": "Status updated for {{count}} stories",
+    "bulkDeleted": "{{count}} stories deleted",
+    "bulkUpdateFailed": "Failed to update story status",
+    "bulkDeleteFailed": "Failed to delete stories",
+    "bulkSelectAllFailed": "Failed to load all matching stories"
   }
 }

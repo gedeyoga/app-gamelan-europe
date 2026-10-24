@@ -60,9 +60,10 @@ export class AppModule implements OnModuleInit, OnModuleDestroy {
     private readonly notificationQueue: NotificationQueue,
   ) {}
 
-  // Job recovery repeatable (5 menit) didaftarkan sekali saat bootstrap.
+  // Job repeatable (recovery 5 menit + lifecycle 6 jam) didaftarkan sekali saat bootstrap.
   async onModuleInit(): Promise<void> {
     await this.notificationQueue.enqueueRecovery();
+    await this.notificationQueue.enqueueSubscriptionLifecycle();
   }
 
   async onModuleDestroy(): Promise<void> {

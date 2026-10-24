@@ -1,9 +1,16 @@
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
-import { ListQueryDto, Public, StateService } from '@app/libs';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { CreateStateDto, ListQueryDto, Permissions, Public, StateService } from '@app/libs';
 
 @Controller('states')
 export class StatesController {
   constructor(private readonly stateService: StateService) {}
+
+  // Idempoten: name sama (case-insensitive) + countryId → kembalikan existing.
+  @Post()
+  @Permissions('state:create')
+  create(@Body() dto: CreateStateDto) {
+    return this.stateService.create(dto);
+  }
 
   @Public()
   @Get()

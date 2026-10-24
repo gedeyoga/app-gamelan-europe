@@ -33,8 +33,6 @@
   "eventAddressMax": "Alamat maksimal {{count}} karakter",
   "eventMapsUrlMax": "Link Google Maps maksimal {{count}} karakter",
   "eventMapsUrlInvalid": "Link Google Maps harus berupa URL yang valid",
-  "phoneCodeRequired": "Pilih kode negara",
-  "phoneInvalid": "Nomor telepon harus 7-15 digit",
   "contactInvalid": "Kontak harus berupa email atau nomor telepon",
   "addressMax": "Alamat maksimal {{count}} karakter",
   "websiteMax": "Website maksimal {{count}} karakter",

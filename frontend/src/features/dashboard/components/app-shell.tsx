@@ -1,5 +1,5 @@
 import { Archive, Building2, CalendarDays, CreditCard, Home, KeyRound, Newspaper, Receipt, Shield, Users } from 'lucide-react'
-import { useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
@@ -28,6 +28,11 @@ import { AppSidebar, type NavItem } from './app-sidebar'
 import type { SidebarUserInfo } from './sidebar-user'
 import { ThemeToggle } from './theme-toggle'
 import { useTheme } from '../hooks/use-theme'
+
+// Fallback lazy route: hanya area konten yang menunggu, shell tetap ter-render.
+const CONTENT_FALLBACK = (
+  <div className="p-6 text-sm text-muted-foreground">Loading... / Memuat...</div>
+)
 
 interface AppShellProps {
   user: SidebarUserInfo | null
@@ -139,7 +144,11 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
 
   // Route detail story/event: benar-benar kosong — tanpa sidebar, tanpa header/breadcrumb, tanpa padding.
   if (isStoryDetail || isEventDetail) {
-    return <Outlet />
+    return (
+      <Suspense fallback={CONTENT_FALLBACK}>
+        <Outlet />
+      </Suspense>
+    )
   }
 
   // Route editor story/event/network: tanpa sidebar, header ringkas + breadcrumb Dashboard / section / judul.
@@ -194,7 +203,9 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
             </div>
           </header>
           <main className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden">
-            <Outlet />
+            <Suspense fallback={CONTENT_FALLBACK}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </TooltipProvider>
@@ -245,7 +256,9 @@ export function AppShell({ user, onLogout, can = () => true }: AppShellProps) {
             </div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4">
-            <Outlet />
+            <Suspense fallback={CONTENT_FALLBACK}>
+              <Outlet />
+            </Suspense>
           </main>
         </SidebarInset>
       </SidebarProvider>

@@ -38,7 +38,7 @@ export function LoginForm() {
           .max(255, t('validation:emailMax', { count: 255 }))
           .email(t('validation:emailInvalid')),
         // Password login sengaja min(1) tanpa trim/max: hindari membocorkan policy
-        // password (min/max) lewat pesan validasi client; policy penuh tetap di backend/register.
+        // password (min/max) lewat pesan validasi client; policy penuh tetap di backend.
         password: z.string().min(1, t('validation:passwordRequired')),
       }),
     [t],

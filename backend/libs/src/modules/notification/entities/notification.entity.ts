@@ -39,6 +39,7 @@ export const notificationSendSelect = {
   user: {
     select: {
       email: true,
+      fullName: true,
       status: true,
       notificationPreferences: {
         where: { channel: NotificationChannel.EMAIL },

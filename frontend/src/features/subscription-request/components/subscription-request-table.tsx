@@ -2,6 +2,8 @@ import { Check, Eye, RotateCcw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { MobileRecordList } from '@/components/shared/mobile-record-list'
+import { MobileSortChips } from '@/components/shared/mobile-sort-chips'
 import {
   Table,
   TableBody,
@@ -36,6 +38,54 @@ export interface SubscriptionRequestTableProps {
   className?: string
 }
 
+interface RowActionsProps {
+  request: SubscriptionRequest
+  onView: (request: SubscriptionRequest) => void
+  onApprove: (request: SubscriptionRequest) => void
+  onReject: (request: SubscriptionRequest) => void
+  canApprove: boolean
+  canReject: boolean
+  busy: boolean
+}
+
+function RowActions({
+  request,
+  onView,
+  onApprove,
+  onReject,
+  canApprove,
+  canReject,
+  busy,
+}: RowActionsProps) {
+  const { t } = useTranslation('subscriptionRequest')
+  const pending = request.status === 'PENDING'
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <Button size="sm" variant="ghost" onClick={() => onView(request)}>
+        <Eye className="size-4" data-icon="inline-start" />
+        {t('actions.view')}
+      </Button>
+      {canApprove && (
+        <Button size="sm" disabled={!pending || busy} onClick={() => onApprove(request)}>
+          <Check className="size-4" data-icon="inline-start" />
+          {t('actions.approve')}
+        </Button>
+      )}
+      {canReject && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!pending || busy}
+          onClick={() => onReject(request)}
+        >
+          <X className="size-4" data-icon="inline-start" />
+          {t('actions.reject')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 // Tabel antrean request langganan (admin) — presentational, state di container.
 export function SubscriptionRequestTable({
   items,
@@ -56,159 +106,206 @@ export function SubscriptionRequestTable({
   const trimmedSearch = searchTerm?.trim() ?? ''
 
   return (
-    <div className={cn('overflow-x-auto rounded-xl border', className)}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              <SortableHeader
-                label={t('table.requester')}
-                field="fullName"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('table.email')}
-                field="email"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('table.plan')}
-                field="subscription.name"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('table.type')}
-                field="requestType"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('table.status')}
-                field="status"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead>
-              <SortableHeader
-                label={t('table.created')}
-                field="createdAt"
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-              />
-            </TableHead>
-            <TableHead className="text-right">{t('common:table.actions')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 ? (
+    <>
+      <div
+        className={cn(
+          'overflow-hidden rounded-xl border',
+          items.length > 0 && 'max-md:hidden',
+          className,
+        )}
+      >
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell
-                colSpan={7}
-                className="h-24 text-center text-sm text-muted-foreground"
-              >
-                {trimmedSearch.length > 0 ? (
-                  <>
-                    {t('table.notFound', { term: trimmedSearch })}{' '}
-                    {onResetSearch && (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 underline"
-                        onClick={onResetSearch}
-                      >
-                        <RotateCcw className="size-3.5" aria-hidden="true" />
-                        {t('table.reset')}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  t('table.empty')
-                )}
-              </TableCell>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.requester')}
+                  field="fullName"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.email')}
+                  field="email"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.plan')}
+                  field="subscription.name"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.type')}
+                  field="requestType"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.status')}
+                  field="status"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead>
+                <SortableHeader
+                  label={t('table.created')}
+                  field="createdAt"
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSort={onSort}
+                />
+              </TableHead>
+              <TableHead className="text-right">{t('common:table.actions')}</TableHead>
             </TableRow>
-          ) : (
-            items.map((request) => {
-              const busy = busyId === request.id
-              const pending = request.status === 'PENDING'
-              return (
-                <TableRow key={request.id} aria-busy={busy}>
-                  <TableCell>
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate font-medium">{request.fullName}</span>
-                      {request.organisation && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {request.organisation}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="truncate text-muted-foreground">
-                    {request.email}
-                  </TableCell>
-                  <TableCell>{request.subscription.name}</TableCell>
-                  <TableCell>
-                    {t(`requestTypeOptions.${request.requestType}`, {
-                      defaultValue: request.requestType,
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <SubscriptionRequestStatusBadge status={request.status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                    {formatDateTime(request.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => onView(request)}>
-                        <Eye className="size-4" data-icon="inline-start" />
-                        {t('actions.view')}
-                      </Button>
-                      {canApprove && (
-                        <Button
-                          size="sm"
-                          disabled={!pending || busy}
-                          onClick={() => onApprove(request)}
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                  className="h-24 text-center text-sm text-muted-foreground"
+                >
+                  {trimmedSearch.length > 0 ? (
+                    <>
+                      {t('table.notFound', { term: trimmedSearch })}{' '}
+                      {onResetSearch && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 underline"
+                          onClick={onResetSearch}
                         >
-                          <Check className="size-4" data-icon="inline-start" />
-                          {t('actions.approve')}
-                        </Button>
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          {t('table.reset')}
+                        </button>
                       )}
-                      {canReject && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!pending || busy}
-                          onClick={() => onReject(request)}
-                        >
-                          <X className="size-4" data-icon="inline-start" />
-                          {t('actions.reject')}
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
+                    </>
+                  ) : (
+                    t('table.empty')
+                  )}
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((request) => {
+                const busy = busyId === request.id
+                return (
+                  <TableRow key={request.id} aria-busy={busy}>
+                    <TableCell>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium">{request.fullName}</span>
+                        {request.organisation && (
+                          <span className="truncate text-xs text-muted-foreground">
+                            {request.organisation}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="truncate text-muted-foreground">
+                      {request.email}
+                    </TableCell>
+                    <TableCell>{request.subscription.name}</TableCell>
+                    <TableCell>
+                      {t(`requestTypeOptions.${request.requestType}`, {
+                        defaultValue: request.requestType,
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <SubscriptionRequestStatusBadge status={request.status} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                      {formatDateTime(request.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <RowActions
+                        request={request}
+                        onView={onView}
+                        onApprove={onApprove}
+                        onReject={onReject}
+                        canApprove={canApprove}
+                        canReject={canReject}
+                        busy={busy}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {items.length > 0 && (
+        <MobileSortChips
+          options={[
+            { field: 'fullName', label: t('table.requester') },
+            { field: 'email', label: t('table.email') },
+            { field: 'subscription.name', label: t('table.plan') },
+            { field: 'requestType', label: t('table.type') },
+            { field: 'status', label: t('table.status') },
+            { field: 'createdAt', label: t('table.created') },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={onSort}
+        />
+      )}
+
+      {items.length > 0 && (
+        <MobileRecordList
+          className={className}
+          items={items.map((request) => ({
+            id: request.id,
+            title: (
+              <div className="flex min-w-0 flex-col">
+                <span className="break-words font-medium">{request.fullName}</span>
+                {request.organisation && (
+                  <span className="text-xs break-words text-muted-foreground">
+                    {request.organisation}
+                  </span>
+                )}
+              </div>
+            ),
+            badge: <SubscriptionRequestStatusBadge status={request.status} />,
+            fields: [
+              { label: t('table.email'), value: request.email },
+              { label: t('table.plan'), value: request.subscription.name },
+              {
+                label: t('table.type'),
+                value: t(`requestTypeOptions.${request.requestType}`, {
+                  defaultValue: request.requestType,
+                }),
+              },
+              { label: t('table.created'), value: formatDateTime(request.createdAt) },
+            ],
+            actions: (
+              <RowActions
+                request={request}
+                onView={onView}
+                onApprove={onApprove}
+                onReject={onReject}
+                canApprove={canApprove}
+                canReject={canReject}
+                busy={busyId === request.id}
+              />
+            ),
+          }))}
+        />
+      )}
+    </>
   )
 }

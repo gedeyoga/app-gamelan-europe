@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, List, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
+import { LayoutGrid, List, Loader2, Plus, ShieldAlert, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
 import {
@@ -33,13 +34,18 @@ import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { isForbiddenError } from '@/features/auth/lib/permissions'
 import { StoryCard } from '@/features/story/components/story-card'
 import { StoryTable } from '@/features/story/components/story-table'
+import { listAllPostIds, MAX_BULK_IDS } from '@/features/story/api/posts'
+import { useBulkDeleteStory } from '@/features/story/hooks/use-bulk-delete-story'
+import { useBulkUpdateStoryStatus } from '@/features/story/hooks/use-bulk-update-story-status'
 import { useDeleteStory } from '@/features/story/hooks/use-delete-story'
 import { useStories } from '@/features/story/hooks/use-stories'
 import { useCategories } from '@/features/story/hooks/use-categories'
 import { CONTENT_STATUSES } from '@/features/story/types'
-import type { Story } from '@/features/story/types'
+import type { ContentStatus, Story } from '@/features/story/types'
 
 const PAGE_LIMIT = 10
+/** Batas `ids` per request (`ArrayMaxSize(100)` backend). */
+const BULK_CHUNK_SIZE = 100
 const ALL = 'ALL'
 
 type ViewMode = 'card' | 'list'
@@ -71,7 +77,14 @@ function StoriesCardSkeleton() {
 export function StoriesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { can } = useAuthPermissions()
+  const { can, canAny } = useAuthPermissions()
+  // Target status bulk yang bisa dicapai user (hindari 403): DRAFT ← reject/unpublish,
+  // REQUEST ← submit, PUBLISHED ← approve/publish. APPROVED tidak ditawarkan (tanpa transisi).
+  const bulkStatusOptions: ContentStatus[] = [
+    ...(canAny(['story:reject', 'story:unpublish']) ? (['DRAFT'] as const) : []),
+    ...(can('story:submit') ? (['REQUEST'] as const) : []),
+    ...(canAny(['story:approve', 'story:publish']) ? (['PUBLISHED'] as const) : []),
+  ]
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<string | null>(null)
@@ -80,6 +93,10 @@ export function StoriesPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('card')
   const [deletingStory, setDeletingStory] = useState<Story | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkStatus, setBulkStatus] = useState<ContentStatus>('DRAFT')
+  const [bulkAction, setBulkAction] = useState<'status' | 'delete' | null>(null)
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
 
   const debouncedSearch = useDebouncedValue(search, 400)
 
@@ -102,10 +119,24 @@ export function StoriesPage() {
     filter,
   })
   const deleteStory = useDeleteStory()
+  const bulkUpdate = useBulkUpdateStoryStatus()
+  const bulkDelete = useBulkDeleteStory()
 
   const listTotal = storiesQuery.data?.total ?? 0
   const storiesForbidden = isForbiddenError(storiesQuery.error)
   const canCreateStory = can('story:create')
+  const canBulkUpdate = can('story:update')
+  const canBulkDelete = can('story:delete')
+  const canBulk = canBulkUpdate || canBulkDelete
+  const allSelected =
+    listTotal > 0 && selectedIds.length >= Math.min(listTotal, MAX_BULK_IDS)
+  // Default ke satu-satunya target yang bisa dicapai; fallback bila pilihan lama tak lagi valid.
+  const activeBulkStatus = bulkStatusOptions.includes(bulkStatus)
+    ? bulkStatus
+    : (bulkStatusOptions[0] ?? 'DRAFT')
+  const someSelected = selectedIds.length > 0 && !allSelected
+  const bulkPending = bulkUpdate.isPending || bulkDelete.isPending
+  const bulkBusy = bulkPending || isSelectingAll
 
   // Clamp pagination boundary setelah total berubah (mis. hapus item terakhir).
   useEffect(() => {
@@ -114,6 +145,13 @@ export function StoriesPage() {
       setPage(Math.max(1, Math.ceil(listTotal / PAGE_LIMIT)))
     }
   }, [listTotal, page])
+
+  // Pilihan lintas halaman dipertahankan saat pindah halaman; reset hanya saat
+  // kriteria berubah (search/filter/sort). ID usang aman — endpoint bulk idempotent.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds([])
+  }, [debouncedSearch, statusFilter, categoryFilter, sortBy, sortOrder])
 
   function handleSearchChange(value: string) {
     setSearch(value)
@@ -144,6 +182,85 @@ export function StoriesPage() {
         toastError(getApiErrorMessage(err, t('story:toast.deleteFailed')))
       },
     })
+  }
+
+  async function handleToggleAll() {
+    if (allSelected) {
+      setSelectedIds([])
+      return
+    }
+    setIsSelectingAll(true)
+    try {
+      const ids = await listAllPostIds({
+        search: debouncedSearch,
+        categoryId: categoryFilter || undefined,
+        filter,
+      })
+      setSelectedIds(ids)
+    } catch (err: unknown) {
+      toastError(getApiErrorMessage(err, t('story:toast.bulkSelectAllFailed')))
+    } finally {
+      setIsSelectingAll(false)
+    }
+  }
+
+  async function handleBulkApply() {
+    let updated = 0
+    let skipped = 0
+    let failed = 0
+    let error: unknown = null
+    // Backend membatasi `ids` maks 100 → kirim berurutan per batch, jumlahkan hasil.
+    for (let i = 0; i < selectedIds.length; i += BULK_CHUNK_SIZE) {
+      try {
+        const result = await bulkUpdate.mutateAsync({
+          ids: selectedIds.slice(i, i + BULK_CHUNK_SIZE),
+          status: activeBulkStatus,
+        })
+        updated += result.updated
+        skipped += result.skipped
+        failed += result.failed
+      } catch (err: unknown) {
+        // Chunk gagal: hentikan loop, laporkan counter yang sudah terkumpul.
+        error = err
+        break
+      }
+    }
+    if (updated > 0) toastSuccess(t('story:toast.bulkUpdated', { count: updated }))
+    if (skipped > 0) toastError(t('story:bulk.skipped', { count: skipped }))
+    if (failed > 0) toastError(t('story:bulk.failed', { count: failed }))
+    else if (error !== null) {
+      toastError(getApiErrorMessage(error, t('story:toast.bulkUpdateFailed')))
+    }
+    if (error !== null) return // Pilihan dipertahankan agar user bisa mengulang.
+    setBulkAction(null)
+    setSelectedIds([])
+  }
+
+  async function handleBulkDelete() {
+    let deleted = 0
+    let failed = 0
+    let error: unknown = null
+    for (let i = 0; i < selectedIds.length; i += BULK_CHUNK_SIZE) {
+      try {
+        const result = await bulkDelete.mutateAsync({
+          ids: selectedIds.slice(i, i + BULK_CHUNK_SIZE),
+        })
+        deleted += result.deleted
+        failed += result.failed
+      } catch (err: unknown) {
+        // Chunk gagal: hentikan loop, laporkan counter yang sudah terkumpul.
+        error = err
+        break
+      }
+    }
+    if (deleted > 0) toastSuccess(t('story:toast.bulkDeleted', { count: deleted }))
+    if (failed > 0) toastError(t('story:bulk.failed', { count: failed }))
+    else if (error !== null) {
+      toastError(getApiErrorMessage(error, t('story:toast.bulkDeleteFailed')))
+    }
+    if (error !== null) return
+    setBulkAction(null)
+    setSelectedIds([])
   }
 
   return (
@@ -224,7 +341,74 @@ export function StoriesPage() {
             <List className="size-4" />
           </Toggle>
         </div>
+        {canBulk && listTotal > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+              onCheckedChange={() => void handleToggleAll()}
+              disabled={bulkBusy}
+              aria-label={t('story:bulk.selectAll')}
+            />
+            <span className="text-sm text-muted-foreground">{t('story:bulk.selectAllLabel')}</span>
+            {isSelectingAll && (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+            )}
+          </span>
+        )}
       </div>
+
+      {canBulk && selectedIds.length > 0 && (
+        <div
+          role="region"
+          aria-label={t('story:bulk.regionLabel')}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <span className="text-sm text-muted-foreground">
+            {t('story:bulk.selected', { count: selectedIds.length })}
+          </span>
+          {canBulkUpdate && bulkStatusOptions.length > 0 && (
+            <>
+              <Select
+                value={activeBulkStatus}
+                onValueChange={(value) => setBulkStatus(value as ContentStatus)}
+                disabled={bulkBusy}
+              >
+                <SelectTrigger size="sm" aria-label={t('story:bulk.statusLabel')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkStatusOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(`story:statusOptions.${value}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={() => setBulkAction('status')} disabled={bulkBusy}>
+                {t('story:bulk.apply')}
+              </Button>
+            </>
+          )}
+          {canBulkDelete && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkAction('delete')}
+              disabled={bulkBusy}
+            >
+              {t('story:bulk.delete')}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelectedIds([])}
+            disabled={bulkBusy}
+          >
+            {t('story:bulk.clear')}
+          </Button>
+        </div>
+      )}
 
       {storiesQuery.isError ? (
         storiesForbidden ? (
@@ -256,6 +440,11 @@ export function StoriesPage() {
               canUpdate={can('story:update')}
               canDelete={can('story:delete')}
               canCreate={canCreateStory}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              isSelectingAll={isSelectingAll}
+              isBulkPending={bulkPending}
+              canBulkUpdate={canBulk}
             />
           ) : (
             <StoryTable
@@ -271,6 +460,13 @@ export function StoriesPage() {
               canUpdate={can('story:update')}
               canDelete={can('story:delete')}
               canCreate={canCreateStory}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              allSelected={allSelected}
+              onToggleAll={() => void handleToggleAll()}
+              isSelectingAll={isSelectingAll}
+              isBulkPending={bulkPending}
+              canBulkUpdate={canBulk}
             />
           )}
 
@@ -319,6 +515,75 @@ export function StoriesPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog
+        open={bulkAction === 'status'}
+        onOpenChange={(open) => {
+          if (!open && !bulkPending) setBulkAction(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('story:bulk.confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('story:bulk.confirmDescription', {
+                count: selectedIds.length,
+                status: t(`story:statusOptions.${activeBulkStatus}`),
+              })}
+              {activeBulkStatus === 'PUBLISHED' && (
+                <span className="mt-2 block font-medium text-destructive">
+                  {t('story:bulk.publishWarning')}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>{t('story:bulk.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                void handleBulkApply()
+              }}
+              disabled={bulkPending}
+            >
+              {t('story:bulk.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={bulkAction === 'delete'}
+        onOpenChange={(open) => {
+          if (!open && !bulkPending) setBulkAction(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('story:bulk.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('story:bulk.deleteDescription', { count: selectedIds.length })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>{t('story:bulk.cancel')}</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={bulkPending}
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleBulkDelete()
+                }}
+              >
+                <Trash2 className="size-4" data-icon="inline-start" />
+                {t('story:bulk.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

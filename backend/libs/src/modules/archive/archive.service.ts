@@ -1,6 +1,6 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ArchiveMaterialType, ArchiveStatus, ArchiveType, CategoryType, ContentSource, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
-import { AccessScope, AccessScopeService } from '@app/libs/core/auth/access-scope.service';
+import { AccessScope, AccessScopeService, canPublishFromCodes } from '@app/libs/core/auth/access-scope.service';
 import { StorageService } from '@app/libs/integrations/storage/storage.service';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListArchivesQueryDto } from './dto/list-archives-query.dto';
@@ -35,15 +35,24 @@ export const ARCHIVE_SORT_FIELDS = ['name', 'slug', 'type', 'status', 'published
 export const ARCHIVE_FILTER_FIELDS = ['type', 'status', 'publishedAt', 'createdAt', 'updatedAt'];
 export const ARCHIVE_DATE_FIELDS = ['publishedAt', 'createdAt', 'updatedAt'];
 
+// Bulk status wajib punya permission transisi sesuai status target (cegah eskalasi via `archive:update`).
+// APPROVED sengaja tak ada: tak ada transisi yang menghasilkan APPROVED (approve → PUBLISHED).
+export const ARCHIVE_BULK_STATUS_PERMISSIONS: Partial<Record<ArchiveStatus, string[]>> = {
+  [ArchiveStatus.PUBLISHED]: ['archive:approve', 'archive:publish'],
+  [ArchiveStatus.REQUEST]: ['archive:submit'],
+  [ArchiveStatus.DRAFT]: ['archive:reject', 'archive:unpublish'],
+};
+
 export type ArchiveAction = 'submit' | 'approve' | 'reject' | 'publish' | 'unpublish';
 
 // Sumber tunggal aturan transisi status archive. Pure & mudah diaudit.
-export const ARCHIVE_TRANSITIONS: Record<ArchiveAction, { from: ArchiveStatus; to: ArchiveStatus }> = {
-  submit: { from: ArchiveStatus.DRAFT, to: ArchiveStatus.REQUEST },
-  approve: { from: ArchiveStatus.REQUEST, to: ArchiveStatus.PUBLISHED },
-  reject: { from: ArchiveStatus.REQUEST, to: ArchiveStatus.DRAFT },
-  publish: { from: ArchiveStatus.APPROVED, to: ArchiveStatus.PUBLISHED },
-  unpublish: { from: ArchiveStatus.PUBLISHED, to: ArchiveStatus.DRAFT },
+// `from` berupa array (mirror network/event): `approve` boleh langsung dari DRAFT tanpa `submit`.
+export const ARCHIVE_TRANSITIONS: Record<ArchiveAction, { from: ArchiveStatus[]; to: ArchiveStatus }> = {
+  submit: { from: [ArchiveStatus.DRAFT], to: ArchiveStatus.REQUEST },
+  approve: { from: [ArchiveStatus.DRAFT, ArchiveStatus.REQUEST], to: ArchiveStatus.PUBLISHED },
+  reject: { from: [ArchiveStatus.REQUEST], to: ArchiveStatus.DRAFT },
+  publish: { from: [ArchiveStatus.DRAFT, ArchiveStatus.APPROVED], to: ArchiveStatus.PUBLISHED },
+  unpublish: { from: [ArchiveStatus.PUBLISHED], to: ArchiveStatus.DRAFT },
 };
 
 @Injectable()
@@ -427,6 +436,11 @@ export class ArchiveService {
           entityType: NotificationEntityType.ARCHIVE,
           entityId: archive.id,
           title: dto.name,
+          details: [
+            { label: 'Submitted by', value: dto.submitter.fullName },
+            { label: 'Email', value: dto.submitter.email },
+            { label: 'Type', value: 'Archive' },
+          ],
           imageUrl: dto.thumbnail ?? null,
           linkPath: '/dashboard',
         });
@@ -439,7 +453,12 @@ export class ArchiveService {
     throw new ConflictException('Slug already exists');
   }
 
-  async update(id: string, dto: UpdateArchiveDto, userId: string): Promise<ArchiveResponse> {
+  async update(
+    id: string,
+    dto: UpdateArchiveDto,
+    userId: string,
+    permissions: string[] = [],
+  ): Promise<ArchiveResponse> {
     const existing = await this.archiveRepository.findById(id);
     const scope = await this.accessScope.resolve(userId, 'archive');
     this.assertWritable(existing, scope);
@@ -458,17 +477,21 @@ export class ArchiveService {
     if (dto.documentIds !== undefined) data.documentIds = dto.documentIds;
 
     // Scope != all: status/publishedAt dari body diabaikan (tutup bypass workflow).
+    // Scope `all` saja tidak cukup untuk terbit: `*:reject`/`*:unpublish` juga memberi scope `all`,
+    // jadi niat terbit via PATCH wajib `*:approve` atau `*:publish` (403 bila tidak punya).
+    // `publishedAt: null` = jangan sentuh (bukan epoch); hanya string ISO yang diterima.
+    const publishing =
+      typeof dto.publishedAt === 'string' ||
+      (dto.status === ArchiveStatus.PUBLISHED && existing.status !== ArchiveStatus.PUBLISHED);
     if (scope.kind === 'all') {
-      if (dto.publishedAt !== undefined) {
-        if (dto.publishedAt === null) {
-          // `null` = kosongkan tanggal publish (status dibiarkan, tidak dipaksa PUBLISHED).
-          data.publishedAt = null;
-        } else {
-          // Tanggal publish manual menimpa nilai lama + paksa PUBLISHED (`publishedAt` menang atas `status`).
-          data.publishedAt = new Date(dto.publishedAt);
-          data.status = ArchiveStatus.PUBLISHED;
-          if (!existing.approvedAt) data.approvedAt = new Date();
-        }
+      if (publishing && !canPublishFromCodes(permissions, 'archive')) {
+        throw new ForbiddenException('Publishing requires permission archive:approve or archive:publish');
+      }
+      if (typeof dto.publishedAt === 'string') {
+        // Tanggal publish manual menimpa nilai lama + paksa PUBLISHED (`publishedAt` menang atas `status`).
+        data.publishedAt = new Date(dto.publishedAt);
+        data.status = ArchiveStatus.PUBLISHED;
+        if (!existing.approvedAt) data.approvedAt = new Date();
       } else if (dto.status !== undefined) {
         data.status = dto.status;
         // Naik ke PUBLISHED mengisi `publishedAt` hanya bila masih null (re-publish tidak mengubah waktu publish pertama).
@@ -484,14 +507,14 @@ export class ArchiveService {
 
     const archive = await this.archiveRepository.update(id, data);
     // Hanya update scope-all yang boleh menerbitkan; non-admin status/publishedAt diabaikan.
-    if (scope.kind === 'all' && (dto.publishedAt !== undefined || dto.status === ArchiveStatus.PUBLISHED)) {
+    if (scope.kind === 'all' && (typeof dto.publishedAt === 'string' || dto.status === ArchiveStatus.PUBLISHED)) {
       await this.notifyPublished(archive, userId, dto.notify);
     }
     return (await this.hydrate([archive], scope.canViewPrivate || scope.isMember))[0];
   }
 
   // Transisi status terkontrol; `PATCH /archives/:id` tetap untuk update konten.
-  // `approve` langsung PUBLISHED (+ `publishedAt`); `publish` legacy (APPROVED → PUBLISHED) tetap ada.
+  // `approve` langsung PUBLISHED dari DRAFT|REQUEST (+ `publishedAt`); `publish` menerima DRAFT|APPROVED (legacy).
   async transition(
     id: string,
     action: ArchiveAction,
@@ -502,7 +525,7 @@ export class ArchiveService {
     const scope = await this.accessScope.resolve(userId, 'archive');
     this.assertWritable(existing, scope);
     const rule = ARCHIVE_TRANSITIONS[action];
-    if (existing.status !== rule.from) {
+    if (!rule.from.includes(existing.status)) {
       throw new ConflictException(`Cannot ${action} archive in status ${existing.status}`);
     }
     // `updateStatusIf` conditional → dua request paralel dari status sama: hanya satu sukses.
@@ -516,8 +539,9 @@ export class ArchiveService {
     }
     const publishing = action === 'approve' || action === 'publish';
     // Outbox ditulis di transaksi yang sama; job BullMQ di-enqueue setelah commit.
+    // Predikat = status aktual hasil baca (bukan seluruh array) → balapan tetap 409.
     const updated = await this.archiveRepository.transaction(async (tx) => {
-      const row = await this.archiveRepository.updateStatusIf(id, rule.from, rule.to, extra, tx);
+      const row = await this.archiveRepository.updateStatusIf(id, existing.status, rule.to, extra, tx);
       if (!row) return false;
       if (publishing) {
         await this.notificationService.enqueueContentPublished(tx, {
@@ -564,5 +588,73 @@ export class ArchiveService {
       this.logger.warn(`S3 cleanup failed for archive ${id} (${keys.length} object(s)); continuing`);
     }
     return response;
+  }
+
+  // Bulk status: per-id lewat `transition` (aturan transisi + scope tetap berlaku → timestamp ikut).
+  // APPROVED ditolak 400: tak ada transisi yang menghasilkan APPROVED. Kandidat aksi hanya yang
+  // permission-nya dipegang (bulk tak boleh lebih longgar dari endpoint tunggal).
+  // 404/409 → `skipped` (row hilang / sudah di status target); 403 & error lain → `failed`.
+  async bulkUpdateStatus(
+    ids: string[],
+    status: ArchiveStatus,
+    permissions: string[] = [],
+    userId: string,
+  ): Promise<{ updated: number; skipped: number; failed: number }> {
+    const required = ARCHIVE_BULK_STATUS_PERMISSIONS[status];
+    if (!required) {
+      throw new BadRequestException(`Bulk status target ${status} is not supported`);
+    }
+    if (!required.some((permission) => permissions.includes(permission))) {
+      throw new ForbiddenException(`Bulk status ${status} requires permission ${required.join(' or ')}`);
+    }
+    const candidates: ArchiveAction[] =
+      status === ArchiveStatus.PUBLISHED
+        ? [
+            ...(permissions.includes('archive:approve') ? (['approve'] as const) : []),
+            ...(permissions.includes('archive:publish') ? (['publish'] as const) : []),
+          ]
+        : status === ArchiveStatus.REQUEST
+          ? ['submit']
+          : [
+              ...(permissions.includes('archive:reject') ? (['reject'] as const) : []),
+              ...(permissions.includes('archive:unpublish') ? (['unpublish'] as const) : []),
+            ];
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      let outcome: 'updated' | 'skipped' | 'failed' = 'skipped';
+      for (const action of candidates) {
+        try {
+          await this.transition(id, action, userId);
+          outcome = 'updated';
+          break;
+        } catch (e) {
+          if (!(e instanceof HttpException)) throw e;
+          if (!(e instanceof NotFoundException || e instanceof ConflictException)) outcome = 'failed';
+        }
+      }
+      if (outcome === 'updated') updated++;
+      else if (outcome === 'failed') failed++;
+      else skipped++;
+    }
+    return { updated, skipped, failed };
+  }
+
+  // Hapus massal: per-id `remove` (scope + S3 cleanup tetap jalan). Row hilang/terlarang = `failed`
+  // (tak ada konsep "sudah di status target" untuk delete).
+  async bulkDelete(ids: string[], userId: string): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await this.remove(id, userId);
+        deleted++;
+      } catch (e) {
+        if (!(e instanceof HttpException)) throw e;
+        failed++;
+      }
+    }
+    return { deleted, failed };
   }
 }

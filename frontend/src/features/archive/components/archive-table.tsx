@@ -1,10 +1,11 @@
-import { MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { MemberBadge, MemberLockBadge } from '@/components/shared/member-gate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,19 @@ export interface ArchiveTableProps {
   canDelete?: boolean
   /** Gate `archive:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
   canCreate?: boolean
+  /** ID arsip terpilih (bulk action). */
+  selectedIds: string[]
+  onSelectionChange: (ids: string[]) => void
+  /** Seluruh baris cocok kriteria (lintas halaman) terpilih. */
+  allSelected: boolean
+  /** Select-all lintas halaman / clear. */
+  onToggleAll: () => void
+  /** Sedang mengambil semua ID (select-all). */
+  isSelectingAll?: boolean
+  /** Mutasi bulk sedang berjalan — checkbox di-disable. */
+  isBulkPending?: boolean
+  /** Tampilkan kolom checkbox. Default `true`. */
+  canBulkUpdate?: boolean
 }
 
 export function ArchiveTable({
@@ -60,6 +74,13 @@ export function ArchiveTable({
   canUpdate = true,
   canDelete = true,
   canCreate = true,
+  selectedIds,
+  onSelectionChange,
+  allSelected,
+  onToggleAll,
+  isSelectingAll = false,
+  isBulkPending = false,
+  canBulkUpdate = true,
 }: ArchiveTableProps) {
   const { t } = useTranslation()
   const isMember = useMembership()
@@ -67,13 +88,37 @@ export function ArchiveTable({
   const unlocked = isMember || canViewPrivate
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
-  const columnCount = showActions ? 8 : 7
+  const columnCount = (showActions ? 8 : 7) + (canBulkUpdate ? 1 : 0)
+  const someSelected = selectedIds.length > 0 && !allSelected
+  const bulkDisabled = isSelectingAll || isBulkPending
+
+  function toggleRow(id: string, checked: boolean) {
+    onSelectionChange(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+  }
 
   return (
     <div className="rounded-xl border">
       <Table>
         <TableHeader>
           <TableRow>
+            {canBulkUpdate && (
+              <TableHead className="w-10">
+                <span className="flex items-center gap-1">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    onCheckedChange={onToggleAll}
+                    disabled={bulkDisabled}
+                    aria-label={t('archive:bulk.selectAll')}
+                  />
+                  {isSelectingAll && (
+                    <Loader2
+                      className="size-3.5 animate-spin text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
+                </span>
+              </TableHead>
+            )}
             {/* Pengecualian terdokumentasi: `thumbnail`/`categories` tak ada di whitelist sortBy backend. */}
             <TableHead>{t('archive:table.thumbnail')}</TableHead>
             <TableHead>
@@ -155,6 +200,16 @@ export function ArchiveTable({
           ) : (
             items.map((archive) => (
               <TableRow key={archive.id}>
+                {canBulkUpdate && (
+                  <TableCell className="w-10">
+                    <Checkbox
+                      checked={selectedIds.includes(archive.id)}
+                      onCheckedChange={(checked) => toggleRow(archive.id, checked === true)}
+                      disabled={bulkDisabled}
+                      aria-label={t('archive:bulk.selectRow', { name: archive.name })}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   {archive.thumbnail ? (
                     <img

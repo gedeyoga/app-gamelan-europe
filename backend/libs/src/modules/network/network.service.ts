@@ -1,4 +1,12 @@
-import { ConflictException, Injectable, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ContentSource, NetworkStatus, NotificationEntityType, NotificationType, Prisma } from '@prisma/client';
 import { buildWhere, assertAllowedSort, buildSearch, combineWhere, buildOrderBy } from '@app/libs/common/utils/list-filter.util';
 import { ListQueryDto } from '@app/libs/common/dto/list-query.dto';
@@ -21,12 +29,23 @@ export const NETWORK_SORT_FIELDS = ['name', 'ledBy', 'state', 'country', 'city',
 export const NETWORK_FILTER_FIELDS = ['name', 'state', 'country', 'website', 'contact', 'status', 'source', 'createdAt', 'updatedAt'];
 export const NETWORK_DATE_FIELDS = ['createdAt', 'updatedAt'];
 
-export type NetworkAction = 'approve' | 'reject';
+export type NetworkAction = 'submit' | 'approve' | 'reject' | 'unpublish';
 
-// Sumber tunggal aturan transisi status network (mirror ARCHIVE_TRANSITIONS).
-export const NETWORK_TRANSITIONS: Record<NetworkAction, { from: NetworkStatus; to: NetworkStatus }> = {
-  approve: { from: NetworkStatus.REQUEST, to: NetworkStatus.PUBLISHED },
-  reject: { from: NetworkStatus.REQUEST, to: NetworkStatus.DRAFT },
+// Target bulk status + permission yang cukup (salah satu) — cegah eskalasi via `network:update`.
+// APPROVED sengaja tak ada: tak ada transisi yang menghasilkan APPROVED (approve → PUBLISHED).
+export const NETWORK_BULK_STATUS: Partial<Record<NetworkStatus, string[]>> = {
+  [NetworkStatus.PUBLISHED]: ['network:approve'],
+  [NetworkStatus.REQUEST]: ['network:update'],
+  [NetworkStatus.DRAFT]: ['network:reject', 'network:unpublish'],
+};
+
+// Sumber tunggal aturan transisi status network (mirror EVENT_TRANSITIONS).
+// `from` berupa array: `approve` boleh langsung dari DRAFT (tanpa `submit`).
+export const NETWORK_TRANSITIONS: Record<NetworkAction, { from: NetworkStatus[]; to: NetworkStatus }> = {
+  submit: { from: [NetworkStatus.DRAFT], to: NetworkStatus.REQUEST },
+  approve: { from: [NetworkStatus.DRAFT, NetworkStatus.REQUEST], to: NetworkStatus.PUBLISHED },
+  reject: { from: [NetworkStatus.REQUEST], to: NetworkStatus.DRAFT },
+  unpublish: { from: [NetworkStatus.PUBLISHED], to: NetworkStatus.DRAFT },
 };
 
 @Injectable()
@@ -341,6 +360,11 @@ export class NetworkService {
       entityType: NotificationEntityType.NETWORK,
       entityId: network.id,
       title: dto.name,
+      details: [
+        { label: 'Submitted by', value: dto.name },
+        { label: 'Email', value: dto.submitter.email },
+        { label: 'Type', value: 'Network' },
+      ],
       imageUrl: null,
       linkPath: '/dashboard',
     });
@@ -356,7 +380,7 @@ export class NetworkService {
   ): Promise<NetworkEntity> {
     const existing = await this.networkRepository.findById(id); // 404 bila tak ada
     const rule = NETWORK_TRANSITIONS[action];
-    if (existing.status !== rule.from) {
+    if (!rule.from.includes(existing.status)) {
       throw new ConflictException(`Cannot ${action} network in status ${existing.status}`);
     }
     const extra: { approvedAt?: Date; publishedAt?: Date } = {};
@@ -366,10 +390,28 @@ export class NetworkService {
         : (existing.publishedAt ?? new Date());
       extra.approvedAt = existing.approvedAt ?? new Date();
     }
-    const updated = await this.networkRepository.updateStatusIf(id, rule.from, rule.to, extra);
+    // Predikat = status aktual hasil baca (bukan seluruh array) → balapan tetap 409.
+    const updated = await this.networkRepository.updateStatusIf(id, existing.status, rule.to, extra);
     if (!updated) {
       const current = await this.networkRepository.findById(id); // 404 bila terhapus
       throw new ConflictException(`Cannot ${action} network in status ${current.status}`);
+    }
+    // Submit (member/admin, termasuk bulk) → notifikasi admin, sama seperti jalur publik.
+    // `notifyAdmins` menelan error sendiri: kegagalan notifikasi tidak menggagalkan submit.
+    if (action === 'submit') {
+      await this.notificationService.notifyAdmins({
+        type: NotificationType.CONTENT_SUBMITTED,
+        entityType: NotificationEntityType.NETWORK,
+        entityId: updated.id,
+        title: updated.name,
+        details: [
+          { label: 'Submitted by', value: updated.name },
+          { label: 'Email', value: updated.submitterEmail },
+          { label: 'Type', value: 'Network' },
+        ],
+        imageUrl: null,
+        linkPath: '/networks',
+      });
     }
     return updated;
   }
@@ -380,5 +422,60 @@ export class NetworkService {
 
   reject(id: string): Promise<NetworkEntity> {
     return this.transition(id, 'reject');
+  }
+
+  submit(id: string): Promise<NetworkEntity> {
+    return this.transition(id, 'submit');
+  }
+
+  unpublish(id: string): Promise<NetworkEntity> {
+    return this.transition(id, 'unpublish');
+  }
+
+  // Bulk status: per-id lewat `transition` (aturan transisi + timestamp tetap berlaku).
+  // APPROVED ditolak 400: tak ada transisi yang menghasilkannya. Kandidat aksi hanya yang
+  // permission-nya dipegang (bulk tak boleh lebih longgar dari endpoint tunggal).
+  // 404/409 → `skipped` (row hilang / sudah di status target); 403 & error lain → `failed`.
+  async bulkUpdateStatus(
+    ids: string[],
+    status: NetworkStatus,
+    permissions: string[] = [],
+  ): Promise<{ updated: number; skipped: number; failed: number }> {
+    const required = NETWORK_BULK_STATUS[status];
+    if (!required) {
+      throw new BadRequestException(`Bulk status target ${status} is not supported`);
+    }
+    if (!required.some((permission) => permissions.includes(permission))) {
+      throw new ForbiddenException(`Bulk status ${status} requires permission ${required.join(' or ')}`);
+    }
+    const candidates: NetworkAction[] =
+      status === NetworkStatus.PUBLISHED
+        ? ['approve']
+        : status === NetworkStatus.REQUEST
+          ? ['submit']
+          : [
+              ...(permissions.includes('network:reject') ? (['reject'] as const) : []),
+              ...(permissions.includes('network:unpublish') ? (['unpublish'] as const) : []),
+            ];
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      let outcome: 'updated' | 'skipped' | 'failed' = 'skipped';
+      for (const action of candidates) {
+        try {
+          await this.transition(id, action);
+          outcome = 'updated';
+          break;
+        } catch (e) {
+          if (!(e instanceof HttpException)) throw e;
+          if (!(e instanceof NotFoundException || e instanceof ConflictException)) outcome = 'failed';
+        }
+      }
+      if (outcome === 'updated') updated++;
+      else if (outcome === 'failed') failed++;
+      else skipped++;
+    }
+    return { updated, skipped, failed };
   }
 }

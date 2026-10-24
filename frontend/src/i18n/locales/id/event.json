@@ -16,6 +16,29 @@
     "eventType": "Filter berdasarkan tipe event",
     "allEventTypes": "Semua tipe event"
   },
+  "bulk": {
+    "selectAll": "Pilih semua event",
+    "selectAllLabel": "Pilih semua",
+    "selectRow": "Pilih {{name}}",
+    "selected_one": "{{count}} dipilih",
+    "selected": "{{count}} dipilih",
+    "regionLabel": "Aksi massal",
+    "statusLabel": "Ubah status menjadi",
+    "apply": "Terapkan",
+    "delete": "Hapus",
+    "clear": "Kosongkan",
+    "confirmTitle": "Ubah status event",
+    "confirmDescription": "Ubah status {{count}} event menjadi {{status}}?",
+    "publishWarning": "Event yang menjadi Terbit akan langsung tampil publik.",
+    "deleteTitle": "Hapus event",
+    "deleteDescription": "Hapus {{count}} event? Tindakan ini tidak dapat dibatalkan.",
+    "confirm": "Terapkan",
+    "cancel": "Batal",
+    "skipped_one": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "skipped": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "failed_one": "{{count}} item gagal karena masalah izin atau server",
+    "failed": "{{count}} item gagal karena masalah izin atau server"
+  },
   "errors": {
     "loadData": "Gagal memuat data event. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data event.",
@@ -149,6 +172,7 @@
   },
   "workflow": {
     "requested": "Menunggu persetujuan",
+    "draft": "Event ini masih draf — Anda dapat langsung menerbitkannya",
     "approve": "Setujui",
     "reject": "Tolak"
   },
@@ -213,6 +237,11 @@
     "approveFailed": "Gagal menyetujui event",
     "rejectFailed": "Gagal menolak event",
     "eventTypeDeleted": "Tipe event berhasil dihapus",
-    "eventTypeDeleteFailed": "Gagal menghapus tipe event"
+    "eventTypeDeleteFailed": "Gagal menghapus tipe event",
+    "bulkUpdated": "Status {{count}} event berhasil diperbarui",
+    "bulkDeleted": "{{count}} event berhasil dihapus",
+    "bulkUpdateFailed": "Gagal memperbarui status event",
+    "bulkDeleteFailed": "Gagal menghapus event",
+    "bulkSelectAllFailed": "Gagal memuat semua event yang cocok"
   }
 }

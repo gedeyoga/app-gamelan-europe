@@ -27,9 +27,9 @@ export function DataTablePagination({
   const hasNextPage = total > page * limit
 
   return (
-    <div className="flex items-center justify-between text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
       <span>{t('common:pagination.total', { count: total, entity: entityName, page })}</span>
-      <div className="flex gap-2">
+      <div className="flex justify-end gap-2">
         <Button
           variant="outline"
           size="sm"

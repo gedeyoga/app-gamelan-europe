@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CARD_GRID_CLASS } from '@/components/shared/card-grid'
 import { formatDateTime } from '@/lib/datetime'
 
@@ -25,6 +26,15 @@ export interface StoryCardProps {
   canDelete?: boolean
   /** Gate `story:create` — CTA di empty state disembunyikan bila `false`. Default `true`. */
   canCreate?: boolean
+  /** ID story terpilih (bulk action). */
+  selectedIds: string[]
+  onSelectionChange: (ids: string[]) => void
+  /** Sedang mengambil semua ID (select-all). */
+  isSelectingAll?: boolean
+  /** Mutasi bulk sedang berjalan — checkbox di-disable. */
+  isBulkPending?: boolean
+  /** Tampilkan checkbox. Default `true`. */
+  canBulkUpdate?: boolean
 }
 
 export function StoryCard({
@@ -37,10 +47,20 @@ export function StoryCard({
   canUpdate = true,
   canDelete = true,
   canCreate = true,
+  selectedIds,
+  onSelectionChange,
+  isSelectingAll = false,
+  isBulkPending = false,
+  canBulkUpdate = true,
 }: StoryCardProps) {
   const { t } = useTranslation()
   const trimmedSearch = searchTerm?.trim() ?? ''
   const showActions = canUpdate || canDelete
+  const bulkDisabled = isSelectingAll || isBulkPending
+
+  function toggleRow(id: string, checked: boolean) {
+    onSelectionChange(checked ? [...selectedIds, id] : selectedIds.filter((x) => x !== id))
+  }
 
   return (
     <div className={CARD_GRID_CLASS}>
@@ -94,7 +114,18 @@ export function StoryCard({
                   </div>
                 )}
               </Link>
-              <div className="absolute left-2 top-2 z-10 flex flex-wrap items-center gap-1">
+              <div className="absolute left-2 top-2 z-20 flex flex-wrap items-center gap-1">
+                {canBulkUpdate && (
+                  <span className="rounded bg-background/90 p-1 shadow-sm">
+                    <Checkbox
+                      checked={selectedIds.includes(story.id)}
+                      onCheckedChange={(checked) => toggleRow(story.id, checked === true)}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={bulkDisabled}
+                      aria-label={t('story:bulk.selectRow', { name: story.name })}
+                    />
+                  </span>
+                )}
                 <Badge className="shadow-sm" variant={STATUS_VARIANT[story.status]}>
                   {t(`story:statusOptions.${story.status}`, { defaultValue: story.status })}
                 </Badge>

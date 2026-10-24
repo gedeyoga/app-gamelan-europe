@@ -9,8 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { MobileRecordList } from '@/components/shared/mobile-record-list'
+import { MobileSortChips } from '@/components/shared/mobile-sort-chips'
 import { SortableHeader, type SortOrder } from '@/components/shared/sortable-header'
 import { formatDateTime } from '@/lib/datetime'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -43,6 +46,41 @@ export interface UserTableProps {
   canDelete?: boolean
 }
 
+interface RowActionsProps {
+  user: User
+  onEdit: (user: User) => void
+  onDelete: (user: User) => void
+  canUpdate: boolean
+  canDelete: boolean
+}
+
+function RowActions({ user, onEdit, onDelete, canUpdate, canDelete }: RowActionsProps) {
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={t('common:table.actionsFor', { name: user.fullName })}>
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canUpdate && (
+          <DropdownMenuItem onClick={() => onEdit(user)}>
+            <Pencil />
+            {t('user:table.edit')}
+          </DropdownMenuItem>
+        )}
+        {canDelete && (
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(user)}>
+            <Trash2 />
+            {t('user:table.delete')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function UserTable({
   items,
   sortBy,
@@ -60,92 +98,123 @@ export function UserTable({
   const showActions = canUpdate || canDelete
   const columnCount = showActions ? 6 : 5
   return (
-    <div className="rounded-xl border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              <SortableHeader label={t('user:table.name')} field="fullName" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>
-              <SortableHeader label={t('user:table.email')} field="email" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>
-              <SortableHeader label={t('user:table.status')} field="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>
-              <SortableHeader label={t('user:table.role')} field="roleName" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>
-              <SortableHeader label={t('user:table.created')} field="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            {showActions && <TableHead className="text-right">{t('common:table.actions')}</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 ? (
+    <>
+      <div className={cn('overflow-hidden rounded-xl border', items.length > 0 && 'max-md:hidden')}>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={columnCount} className="h-24 text-center text-sm text-muted-foreground">
-                {trimmedSearch.length > 0 ? (
-                  <>
-                    {t('user:table.notFound', { term: trimmedSearch })}{' '}
-                    {onResetSearch && (
-                      <button
-                        className="inline-flex items-center gap-1 underline"
-                        onClick={onResetSearch}
-                      >
-                        <RotateCcw className="size-3.5" aria-hidden="true" />
-                        {t('user:table.reset')}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  t('user:table.empty')
-                )}
-              </TableCell>
+              <TableHead>
+                <SortableHeader label={t('user:table.name')} field="fullName" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label={t('user:table.email')} field="email" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label={t('user:table.status')} field="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label={t('user:table.role')} field="roleName" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label={t('user:table.created')} field="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              {showActions && <TableHead className="text-right">{t('common:table.actions')}</TableHead>}
             </TableRow>
-          ) : (
-            items.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.fullName}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[user.status]}>
-                    {t(`user:statusOptions.${user.status}`, { defaultValue: user.status })}
-                  </Badge>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="h-24 text-center text-sm text-muted-foreground">
+                  {trimmedSearch.length > 0 ? (
+                    <>
+                      {t('user:table.notFound', { term: trimmedSearch })}{' '}
+                      {onResetSearch && (
+                        <button
+                          className="inline-flex items-center gap-1 underline"
+                          onClick={onResetSearch}
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          {t('user:table.reset')}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    t('user:table.empty')
+                  )}
                 </TableCell>
-                <TableCell>{user.role?.name ?? '—'}</TableCell>
-                <TableCell>{formatDateTime(user.createdAt)}</TableCell>
-                {showActions && (
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={t('common:table.actionsFor', { name: user.fullName })}>
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canUpdate && (
-                          <DropdownMenuItem onClick={() => onEdit(user)}>
-                            <Pencil />
-                            {t('user:table.edit')}
-                          </DropdownMenuItem>
-                        )}
-                        {canDelete && (
-                          <DropdownMenuItem variant="destructive" onClick={() => onDelete(user)}>
-                            <Trash2 />
-                            {t('user:table.delete')}
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            ) : (
+              items.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">{user.fullName}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_VARIANT[user.status]}>
+                      {t(`user:statusOptions.${user.status}`, { defaultValue: user.status })}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{user.role?.name ?? '—'}</TableCell>
+                  <TableCell>{formatDateTime(user.createdAt)}</TableCell>
+                  {showActions && (
+                    <TableCell className="text-right">
+                      <RowActions
+                        user={user}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        canUpdate={canUpdate}
+                        canDelete={canDelete}
+                      />
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {items.length > 0 && (
+        <MobileSortChips
+          options={[
+            { field: 'fullName', label: t('user:table.name') },
+            { field: 'email', label: t('user:table.email') },
+            { field: 'status', label: t('user:table.status') },
+            { field: 'roleName', label: t('user:table.role') },
+            { field: 'createdAt', label: t('user:table.created') },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={onSort}
+        />
+      )}
+
+      {items.length > 0 && (
+        <MobileRecordList
+          items={items.map((user) => ({
+            id: user.id,
+            title: user.fullName,
+            badge: (
+              <Badge variant={STATUS_VARIANT[user.status]}>
+                {t(`user:statusOptions.${user.status}`, { defaultValue: user.status })}
+              </Badge>
+            ),
+            fields: [
+              { label: t('user:table.email'), value: user.email },
+              { label: t('user:table.role'), value: user.role?.name ?? '—' },
+              { label: t('user:table.created'), value: formatDateTime(user.createdAt) },
+            ],
+            actions: showActions ? (
+              <RowActions
+                user={user}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                canUpdate={canUpdate}
+                canDelete={canDelete}
+              />
+            ) : undefined,
+          }))}
+        />
+      )}
+    </>
   )
 }

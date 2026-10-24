@@ -16,6 +16,29 @@
     "allTypes": "Semua tipe",
     "allStatuses": "Semua status"
   },
+  "bulk": {
+    "selectAll": "Pilih semua arsip",
+    "selectAllLabel": "Pilih semua",
+    "selectRow": "Pilih {{name}}",
+    "selected_one": "{{count}} dipilih",
+    "selected": "{{count}} dipilih",
+    "regionLabel": "Aksi massal",
+    "statusLabel": "Ubah status menjadi",
+    "apply": "Terapkan",
+    "delete": "Hapus",
+    "clear": "Kosongkan",
+    "confirmTitle": "Ubah status arsip",
+    "confirmDescription": "Ubah status {{count}} arsip menjadi {{status}}?",
+    "publishWarning": "Arsip yang menjadi Terbit akan langsung tampil publik.",
+    "deleteTitle": "Hapus arsip",
+    "deleteDescription": "Hapus {{count}} arsip? Tindakan ini tidak dapat dibatalkan.",
+    "confirm": "Terapkan",
+    "cancel": "Batal",
+    "skipped_one": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "skipped": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "failed_one": "{{count}} item gagal karena masalah izin atau server",
+    "failed": "{{count}} item gagal karena masalah izin atau server"
+  },
   "table": {
     "thumbnail": "Thumbnail",
     "title": "Judul",
@@ -83,6 +106,7 @@
   },
   "workflow": {
     "requested": "Menunggu persetujuan",
+    "draft": "Arsip ini masih draf — Anda dapat langsung menerbitkannya",
     "approve": "Setujui",
     "reject": "Tolak"
   },
@@ -155,6 +179,11 @@
     "approveFailed": "Gagal menyetujui archive",
     "rejectFailed": "Gagal menolak archive",
     "categoryDeleted": "Kategori berhasil dihapus",
-    "categoryDeleteFailed": "Gagal menghapus kategori"
+    "categoryDeleteFailed": "Gagal menghapus kategori",
+    "bulkUpdated": "Status {{count}} arsip berhasil diperbarui",
+    "bulkDeleted": "{{count}} arsip berhasil dihapus",
+    "bulkUpdateFailed": "Gagal memperbarui status arsip",
+    "bulkDeleteFailed": "Gagal menghapus arsip",
+    "bulkSelectAllFailed": "Gagal memuat semua arsip yang cocok"
   }
 }

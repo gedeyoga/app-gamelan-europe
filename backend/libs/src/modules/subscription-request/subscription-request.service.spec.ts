@@ -40,7 +40,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
   };
   const billing = { subscribe: jest.fn().mockResolvedValue({ id: 'b1' }) };
   const user = { findOrCreatePublicUser: jest.fn() };
-  const notification = { notifyAdmins: jest.fn().mockResolvedValue(undefined) };
+  const notification = {
+    notifyAdmins: jest.fn().mockResolvedValue(undefined),
+    notifySubscriptionActive: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new SubscriptionRequestService(
     repo as unknown as SubscriptionRequestRepository,
     billing as unknown as BillingService,
@@ -93,5 +96,24 @@ describe('SubscriptionRequestService.approve', () => {
     await expect(service.approve(REQUEST_ID, REVIEWER_ID)).rejects.toThrow('billing boom');
     expect(repo.revertPending).toHaveBeenCalledWith(REQUEST_ID);
     expect(repo.setBillingId).not.toHaveBeenCalled();
+  });
+
+  it('emits SUBSCRIPTION_ACTIVE once, via BillingService.subscribe', async () => {
+    const { service, billing, notification } = makeService();
+    await service.approve(REQUEST_ID, REVIEWER_ID);
+
+    expect(billing.subscribe).toHaveBeenCalledTimes(1);
+    expect(notification.notifySubscriptionActive).not.toHaveBeenCalled();
+  });
+
+  it('still approves when the ACTIVE notification path fails inside billing (no PENDING revert)', async () => {
+    const { service, repo, notification } = makeService();
+    notification.notifySubscriptionActive.mockRejectedValue(new Error('queue down'));
+
+    await expect(service.approve(REQUEST_ID, REVIEWER_ID)).resolves.toMatchObject({
+      status: 'APPROVED',
+      billingId: 'b1',
+    });
+    expect(repo.revertPending).not.toHaveBeenCalled();
   });
 });

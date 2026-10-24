@@ -5,11 +5,13 @@ import {
   UserStatus,
 } from '@prisma/client';
 import { NotificationProcessor, safeErrorName } from './notification.processor';
-import { NOTIFICATION_JOB_RECOVER, NOTIFICATION_JOB_SEND } from '@app/libs/modules/notification/notification.queue';
+import { NOTIFICATION_JOB_RECOVER, NOTIFICATION_JOB_SEND, NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE } from '@app/libs/modules/notification/notification.queue';
 
 function makeProcessor(overrides: {
   repository?: Record<string, unknown>;
   smtp?: Record<string, unknown>;
+  notification?: Record<string, unknown>;
+  billing?: Record<string, unknown>;
 } = {}) {
   const repository = {
     findByIdForSend: jest.fn(),
@@ -25,14 +27,24 @@ function makeProcessor(overrides: {
     ...overrides.smtp,
   };
   const queue = { enqueueDue: jest.fn().mockResolvedValue(undefined) };
+  const notification = {
+    enqueueSubscriptionLifecycle: jest.fn().mockResolvedValue(0),
+    ...overrides.notification,
+  };
+  const billing = {
+    findSubscriptionLifecycleRows: jest.fn().mockResolvedValue({ expiring: [], expired: [] }),
+    ...overrides.billing,
+  };
   const config = { get: jest.fn().mockReturnValue('https://app.example.com') };
   const processor = new NotificationProcessor(
     repository as never,
     queue as never,
+    notification as never,
+    billing as never,
     smtp as never,
     config as never,
   );
-  return { processor, repository, smtp, queue, config };
+  return { processor, repository, smtp, queue, notification, billing, config };
 }
 
 function makeRow(overrides: Record<string, unknown> = {}) {
@@ -47,6 +59,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     status: NotificationStatus.PENDING,
     user: {
       email: 'member@example.com',
+      fullName: 'Yoga',
       status: UserStatus.ACTIVE,
       notificationPreferences: [],
     },
@@ -75,10 +88,19 @@ describe('NotificationProcessor.send', () => {
     expect(smtp.send).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'member@example.com',
-        subject: 'Story baru: Judul',
+        subject: 'New Story "Judul" is now live',
+        text: expect.stringContaining('Hello Yoga,'),
+        html: expect.stringContaining('Hello Yoga,'),
+      }),
+    );
+    expect(smtp.send).toHaveBeenCalledWith(
+      expect.objectContaining({
         text: expect.stringContaining('https://app.example.com/stories/judul'),
         html: expect.stringContaining('src="https://cdn.example.com/a.jpg"'),
       }),
+    );
+    expect(smtp.send).toHaveBeenCalledWith(
+      expect.objectContaining({ html: expect.stringContaining('src="https://app.example.com/logo.png"') }),
     );
     expect(repository.markSent).toHaveBeenCalledWith('n1', expect.any(Date));
   });
@@ -152,7 +174,7 @@ describe('NotificationProcessor.send', () => {
     });
     await processor.handle(makeJob() as never);
     expect(smtp.send).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: 'Pengajuan Event baru: Judul' }),
+      expect.objectContaining({ subject: 'New Event "Judul" is waiting for your review' }),
     );
   });
 
@@ -196,6 +218,20 @@ describe('NotificationProcessor.recover', () => {
 
     expect(repository.findDue).toHaveBeenCalledWith(100);
     expect(queue.enqueueDue).toHaveBeenCalledWith(rows);
+  });
+});
+
+describe('NotificationProcessor.lifecycle', () => {
+  it('job lifecycle → BillingService query lalu NotificationService (worker tanpa Prisma)', async () => {
+    const rows = { expiring: [], expired: [] };
+    const { processor, notification, billing, repository } = makeProcessor({
+      billing: { findSubscriptionLifecycleRows: jest.fn().mockResolvedValue(rows) },
+    });
+    await processor.handle(makeJob({ name: NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE, data: {} }) as never);
+
+    expect(billing.findSubscriptionLifecycleRows).toHaveBeenCalledWith(expect.any(Date));
+    expect(notification.enqueueSubscriptionLifecycle).toHaveBeenCalledWith(rows, expect.any(Date));
+    expect(repository.findByIdForSend).not.toHaveBeenCalled();
   });
 });
 

@@ -33,8 +33,6 @@
   "eventAddressMax": "Address must be at most {{count}} characters",
   "eventMapsUrlMax": "Google Maps link must be at most {{count}} characters",
   "eventMapsUrlInvalid": "Google Maps link must be a valid URL",
-  "phoneCodeRequired": "Select a country code",
-  "phoneInvalid": "Phone number must be 7-15 digits",
   "addressMax": "Address must be at most {{count}} characters",
   "websiteMax": "Website must be at most {{count}} characters",
   "contactMax": "Contact must be at most {{count}} characters",

@@ -73,7 +73,14 @@ model Network {
   lat         Decimal?  @db.Decimal(10, 7)
   lng         Decimal?  @db.Decimal(10, 7)
   embedUrl    String?   @map("embed_url")
-  mapsUrl     String?   @map("maps_url")
+  status           NetworkStatus            @default(DRAFT)
+  source           ContentSource            @default(REGISTERED)
+  publishedAt      DateTime?                @map("published_at")
+  approvedAt       DateTime?                @map("approved_at")
+  organisationType NetworkOrganisationType? @map("organisation_type")
+  ledBy            String?                  @map("led_by")
+  mapsUrl          String?                  @map("maps_url")
+  activityType     String?                  @map("activity_type")
   submitterEmail    String? @map("submitter_email")
   cityId      Int?      @map("city_id")
   city        City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
@@ -89,6 +96,9 @@ model Network {
 - `events Event[]` — back-relation dari `Event.networkId` (nullable, `onDelete: SetNull`; event.md §2). Menghapus network tidak menghapus event, hanya melepas `networkId`.
 - `content` `String?` (`@db.Text`) — rich HTML profil/deskripsi network, nullable. Disimpan **sudah disanitasi** (`sanitizeStoryContent`, [§5](#5-repository--service)); TIDAK di-resolve ke gambar/`Image` (beda dari story) — URL gambar di dalam HTML sudah absolut ke S3/CDN.
 - `website`/`contact` `String?` nullable (bebas teks; URL/telepon disimpan apa adanya).
+- `status` `NetworkStatus` default `DRAFT` (`DRAFT|REQUEST|APPROVED|PUBLISHED`); `source` `ContentSource` default `REGISTERED` (`PUBLIC|REGISTERED`). Perubahan status **hanya** lewat `transition` ([§6](#6-endpoint--permission)); `APPROVED` tak pernah dihasilkan transisi mana pun.
+- `approvedAt`/`publishedAt` `DateTime?` (`@map("approved_at")`/`published_at`) — diisi `approve` (`approvedAt` hanya bila masih null; `publishedAt` dari body atau `existing.publishedAt ?? now` sehingga re-approve **mempertahankan** waktu terbit pertama). Transisi lain tidak menyentuh timestamp.
+- `organisationType` `NetworkOrganisationType?` (`@map("organisation_type")`), `ledBy` `String?` (`@map("led_by")`), `activityType` `String?` (`@map("activity_type")`) — profil opsional, nullable, ditulis apa adanya (tanpa sanitasi).
 - `socialMedia` `Json?` (`@map("social_media")`) nullable — array `[{ platform, url }]`, maksimum **10** entri. `null` = belum diisi.
 - `mapsUrl` `String?` nullable (`@map("maps_url")`) — link Google Maps opsional. Divalidasi `@IsUrl()` (URL invalid → 422). Bila diisi, server **me-resolve** link (mengikuti shortlink) menjadi `lat`/`lng` + `embedUrl`; link yang tidak dapat di-resolve → 422 `mapsUrl`. `null` eksplisit = kosongkan saat update (koordinat lama dipertahankan).
 - `embedUrl` `String?` nullable (`@map("embed_url")`) — URL embed Google Maps keyless yang dibuat server dari koordinat hasil resolve (`https://www.google.com/maps?q=<lat>,<lng>&z=15&hl=en&output=embed`). Migration `20261010120000_network_embed_url` menambah kolom ini, mem-backfill `lat`/`lng` dari `mapsUrl` pada row lama (pin `!3d!4d` → viewport `@lat,lng`), lalu mem-backfill `embed_url` dari koordinat.
@@ -121,6 +131,14 @@ export const networkSelect = {
   lat: true,
   lng: true,
   embedUrl: true,
+  status: true,
+  source: true,
+  publishedAt: true,
+  approvedAt: true,
+  organisationType: true,
+  ledBy: true,
+  mapsUrl: true,
+  activityType: true,
   countryId: true,
   stateId: true,
   cityId: true,
@@ -305,7 +323,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | --- | --- |
 | `NETWORK_SEARCHABLE_FIELDS` | `['name', 'state', 'country', 'address', 'website', 'contact']` |
 | `NETWORK_SORT_FIELDS` | `['name', 'ledBy', 'state', 'country', 'city', 'address', 'website', 'contact', 'status', 'createdAt', 'updatedAt']` |
-| `NETWORK_FILTER_FIELDS` | `['name', 'state', 'country', 'website', 'contact', 'createdAt', 'updatedAt']` |
+| `NETWORK_FILTER_FIELDS` | `['name', 'state', 'country', 'website', 'contact', 'status', 'source', 'createdAt', 'updatedAt']` |
 | `NETWORK_DATE_FIELDS` | `['createdAt', 'updatedAt']` (ISO 8601; invalid → 422; `like` ditolak) |
 
 - `filter[<field>]` di luar whitelist → 422; `sortBy` di luar whitelist → 422 (`assertAllowedSort`).
@@ -340,6 +358,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 | `create(dto)` | Petakan field DTO → `repository.create`. Bila `dto.content !== undefined` → simpan hasil `sanitizeStoryContent(dto.content)`. `website`/`contact`/`organisationType`/`ledBy`/`activityType` → `?? null`; `socialMedia` → `dto.socialMedia ?? undefined` (biarkan DB default NULL bila tidak dikirim). Bila `dto.mapsUrl` ada → resolve server-side (`resolveGoogleMapsLink`, follow shortlink) → tulis `lat`/`lng`/`embedUrl` (**menimpa** `lat`/`lng` klien); gagal resolve → 422 `mapsUrl`. |
 | `update(id, dto)` | Kumpulkan hanya field yang `!== undefined`; `content` disanitasi via `sanitizeStoryContent` bila dikirim; `website`/`contact`/`organisationType`/`ledBy`/`activityType` ditulis apa adanya (termasuk `null` = kosongkan); `socialMedia`: `null` → `Prisma.DbNull`, selain itu array `[{ platform, url }]` apa adanya; body kosong → kembalikan `findOne(id)` tanpa update. `mapsUrl`: kosong → `null` (koordinat lama dipertahankan); berbeda dari nilai lama **atau** `lat`/`lng` masih null (row lama) → resolve → set `mapsUrl` + `lat`/`lng`/`embedUrl` (gagal → 422); tidak berubah (sudah berkoordinat) → set `mapsUrl` saja (tanpa jaringan). `mapsUrl` ter-resolve menang atas `lat`/`lng` eksplisit. |
 | `remove(id)` | `repository.remove`. |
+| `transition(id, action, { publishedAt? })` | Satu-satunya jalur ubah status: cek `NETWORK_TRANSITIONS[action].from` (`NetworkStatus[]`, `includes`) vs `status` saat ini (salah → 409; row hilang → 404), lalu `updateStatusIf(id, existing.status, to, extra)` (guard `status = <status aktual>` anti-TOCTOU, gagal → 409). Hanya `approve` menulis timestamp (`approvedAt`/`publishedAt`). |
 | `createPublicSubmission(dto)` | Submit publik tanpa JWT. `assertGeography` untuk `countryId`/`stateId` (negara wajib ada, state harus milik negara → 422 per-field); helper mengembalikan row hasil lookup sehingga nama dipakai tanpa query ulang. `cityId` bila dikirim: `CityRepository.findByIdOrNull` → harus ada, `city.countryId === dto.countryId`, dan bila `dto.stateId` dikirim `city.stateId === dto.stateId` → 422 `cityId`; persist `cityId: dto.cityId ?? null`. `content` disanitasi + wajib non-kosong (422); `mapsUrl` di-resolve **sebelum** insert. Menulis satu row `networks` (`status=REQUEST`, `source=PUBLIC`, `createdBy: null`) plus `submitterEmail: dto.submitter.email`. **Tidak** membuat `User`. Setelah row tersimpan → `NotificationService.notifyAdmins` (`CONTENT_SUBMITTED`, `entityType=NETWORK`, title `name`, link `/dashboard`) ke admin ACTIVE; kegagalan notifikasi tidak menggagalkan submission. Respons `{ id, status }`. |
 
 > **Handling `socialMedia` (Json nullable).** Create: `dto.socialMedia ?? undefined` (tidak mengirim → kolom dibiarkan `NULL` default; tanpa sentinel). Update: hanya bila `dto.socialMedia !== undefined`; `null` → `Prisma.DbNull` (set kolom `NULL`), array → disimpan apa adanya. Array di-map ke plain `{ platform, url }` agar assignable ke `Prisma.InputJsonValue`.
@@ -356,7 +375,7 @@ export class ListNetworksQueryDto extends ListQueryDto {}
 
 Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta: { page, limit, total }, message }`; error `{ statusCode, message, errors }`.
 
-> Dekorator permission: `network:create|read|update|delete|approve|reject` (rename RBAC v2; role bawaan `organization` dihapus — [rbac.md §7](./rbac.md#7-seed-default)). Usulan network publik (`POST /api/v1/network-submissions`) menulis langsung ke tabel `networks` (`status=REQUEST`, `source=PUBLIC`, `createdBy=null`, identitas pengirim di kolom `submitter_*` — **tanpa** membuat row `User`); review admin lewat filter `filter[status]=REQUEST` + endpoint `approve`/`reject`. Kolom `submitter*` ikut ter-expose di respons network (admin-only).
+> Dekorator permission: `network:create|read|update|delete|approve|reject|unpublish` (rename RBAC v2; role bawaan `organization` dihapus — [rbac.md §7](./rbac.md#7-seed-default)). Usulan network publik (`POST /api/v1/network-submissions`) menulis langsung ke tabel `networks` (`status=REQUEST`, `source=PUBLIC`, `createdBy=null`, identitas pengirim di kolom `submitter_*` — **tanpa** membuat row `User`); review admin lewat filter `filter[status]=REQUEST` + endpoint `approve`/`reject`. Network buatan admin mulai dari `DRAFT`; approver (`network:approve`) boleh menerbitkannya langsung (DRAFT → PUBLISHED) atau lewat `submit` dulu (DRAFT → REQUEST → PUBLISHED). `submit` tetap jalur minta-review. Kolom `submitter*` ikut ter-expose di respons network (admin-only).
 
 | Method | Path | Akses | Request | Response sukses | Error |
 | --- | --- | --- | --- | --- | --- |
@@ -365,8 +384,41 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta:
 | GET | `/api/v1/networks/:id` | PERMISSION `network:read` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 422 UUID invalid, 401/403 |
 | PATCH | `/api/v1/networks/:id` | PERMISSION `network:update` | path `id`, body `UpdateNetworkDto` | 200 `{ data: <network>, message }` | 404, 422, 401/403 |
 | DELETE | `/api/v1/networks/:id` | PERMISSION `network:delete` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 422 UUID invalid, 401/403 |
-| POST | `/api/v1/networks/:id/approve` | PERMISSION `network:approve` | path `id`, body `PublishContentDto` (`{ publishedAt? }`) | 200 `{ data: <network>, message }` | 404, 409 (status ≠ REQUEST), 422, 401/403 |
+| POST | `/api/v1/networks/:id/approve` | PERMISSION `network:approve` | path `id`, body `PublishContentDto` (`{ publishedAt? }`) | 200 `{ data: <network>, message }` | 404, 409 (status ∉ `{DRAFT, REQUEST}`), 422, 401/403 |
 | POST | `/api/v1/networks/:id/reject` | PERMISSION `network:reject` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 409 (status ≠ REQUEST), 422 UUID invalid, 401/403 |
+| POST | `/api/v1/networks/:id/submit` | PERMISSION `network:update` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 409 (status ≠ DRAFT), 422 UUID invalid, 401/403 |
+| POST | `/api/v1/networks/:id/unpublish` | PERMISSION `network:unpublish` | path `id` UUID | 200 `{ data: <network>, message }` | 404, 409 (status ≠ PUBLISHED), 422 UUID invalid, 401/403 |
+| POST | `/api/v1/networks/bulk-status` | PERMISSION `network:update` **+** permission transisi per target (`network:approve`/`network:reject`/`network:unpublish`) | body `BulkUpdateNetworkStatusDto` (`{ ids: string[] (1–100, UUID v4), status: DRAFT\|REQUEST\|PUBLISHED }`) | 200 `{ data: { updated, skipped, failed }, message }` | 400 (target `APPROVED`), 403 (permission transisi kurang), 422, 401/403 |
+
+### Tabel transisi (`NETWORK_TRANSITIONS`)
+
+| Aksi | Dari | Ke | Permission endpoint | Timestamp |
+| --- | --- | --- | --- | --- |
+| `submit` | `DRAFT` | `REQUEST` | `network:update` | — |
+| `approve` | `DRAFT` **atau** `REQUEST` | `PUBLISHED` | `network:approve` | `approvedAt` (hanya bila masih null), `publishedAt` (body atau `existing.publishedAt ?? now` — re-approve mempertahankan waktu terbit pertama) |
+| `reject` | `REQUEST` | `DRAFT` | `network:reject` | — |
+| `unpublish` | `PUBLISHED` | `DRAFT` | `network:unpublish` | — |
+
+Transisi di luar tabel → **409** (`Cannot <action> network in status <status>`); id tak ada → **404**. Update dieksekusi lewat `updateStatusIf` dengan predikat **status aktual** row hasil baca (`status = <existing.status>`), sehingga balapan/perubahan status konkuren tetap menghasilkan 409.
+
+**Siapa yang boleh publish.** `network:approve` satu-satunya gate publish: approver boleh menerbitkan langsung dari `DRAFT` (tanpa `submit`), atau dari `REQUEST` (jalur usulan/review). `submit` (`network:update`) tetap ada untuk jalur minta-review; `network:update` **tidak** bisa publish.
+
+### Bulk status (`POST /api/v1/networks/bulk-status`)
+
+- `ids` maks **100** (UUID v4); `status` ∈ `DRAFT|REQUEST|PUBLISHED`. Target `APPROVED` → **400** (`Bulk status target <status> is not supported`) karena tak ada transisi yang menghasilkannya. Validasi gagal → 422 standar.
+- **Aksi & permission per target** (cegah eskalasi lewat `network:update`):
+
+  | Target | Kandidat aksi | Permission (salah satu cukup untuk lolos cek awal) |
+  | --- | --- | --- |
+  | `PUBLISHED` | `approve` (dari `DRAFT` atau `REQUEST`) | `network:approve` |
+  | `REQUEST` | `submit` | `network:update` |
+  | `DRAFT` | `reject` (butuh `network:reject`), lalu `unpublish` (butuh `network:unpublish`) | `network:reject` **atau** `network:unpublish` |
+
+  Kandidat disaring per permission yang dipegang, jadi bulk tak pernah lebih longgar dari endpoint tunggal. `network:approve` **tidak** cukup untuk target `DRAFT` (dulu cukup, kini tidak — `approve` tak boleh menghasilkan efek `reject`). Kurang permission → **403** dengan pesan eksplisit (mis. `Bulk status DRAFT requires permission network:reject or network:unpublish`), dicek **sebelum** loop.
+- **Sumber permission:** `PermissionsGuard` me-resolve kode dari DB untuk principal JWT lalu menempelkannya ke `request.user.permissions`, sehingga controller/service membaca daftar yang sama tanpa query ulang. Principal API key sudah membawa `permissions` sendiri (guard tidak query DB).
+- Setiap id diproses lewat `transition(id, action)` (bukan tulis status langsung) → aturan `NETWORK_TRANSITIONS` + timestamp (`approvedAt`/`publishedAt` saat `approve`) ikut berlaku.
+- Respons `{ updated, skipped, failed }`: `updated` = transisi berhasil; `skipped` = row hilang (404) atau sudah di status target (409); `failed` = `HttpException` lain (mis. 403/422). Error non-HTTP di-rethrow. Idempoten: mengulang request → `updated: 0`, `skipped: ids.length`.
+- Endpoint ini tidak menerima `publishedAt` — jadwal publish hanya lewat `POST /networks/:id/approve`.
 
 ### Contoh query
 

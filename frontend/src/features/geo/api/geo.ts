@@ -24,9 +24,23 @@ export interface CreateCityInput {
   stateId: number
 }
 
+export interface CreateStateInput {
+  name: string
+  countryId: number
+}
+
 // Idempotent: nama sama (case-insensitive) + country/state sama → existing (bukan 409).
 export function createCity(payload: CreateCityInput): Promise<CityOption> {
   return request<CityOption>('/cities', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+// Idempotent: nama sama (case-insensitive) + countryId sama → existing (bukan 409).
+export function createState(payload: CreateStateInput): Promise<StateOption> {
+  return request<StateOption>('/states', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

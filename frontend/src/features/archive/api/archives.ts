@@ -1,7 +1,7 @@
 import { request, requestList, type ListResult } from '@/lib/api-client'
 import { appendListParams, type ListParams } from '@/lib/list-params'
 
-import type { Archive, CreateArchiveInput, UpdateArchiveInput } from '../types'
+import type { Archive, ArchiveStatus, CreateArchiveInput, UpdateArchiveInput } from '../types'
 
 export interface ListArchivesParams extends ListParams {
   /** `true` → hanya arsip milik user (diteruskan ke `GET /archives`). */
@@ -18,6 +18,55 @@ export function listArchives(params: ListArchivesParams): Promise<ListResult<Arc
     search.set(`filter[${key}]`, value)
   }
   return requestList<Archive>(`/archives?${search.toString()}`)
+}
+
+/** Batas keras ID yang dikumpulkan (select-all lintas halaman). */
+export const MAX_BULK_IDS = 2000
+/** Batas `limit` list backend. */
+const IDS_PAGE_LIMIT = 100
+
+/**
+ * Kumpulkan ID semua arsip yang cocok dengan `search`/`mine`/`filter`
+ * (lintas halaman), untuk select-all. Loop `limit: 100` sampai `total` atau cap 2000.
+ */
+export async function listAllArchiveIds({
+  search,
+  mine,
+  filter,
+}: Omit<ListArchivesParams, 'page' | 'limit'>): Promise<string[]> {
+  const ids: string[] = []
+  for (let page = 1; page <= Math.ceil(MAX_BULK_IDS / IDS_PAGE_LIMIT); page += 1) {
+    const result = await listArchives({ page, limit: IDS_PAGE_LIMIT, search, mine, filter })
+    ids.push(...result.items.map((item) => item.id))
+    if (ids.length >= result.total || result.items.length === 0) break
+  }
+  return ids.slice(0, MAX_BULK_IDS)
+}
+
+export function bulkUpdateArchiveStatus({
+  ids,
+  status,
+}: {
+  ids: string[]
+  status: ArchiveStatus
+}): Promise<{ updated: number; skipped: number; failed: number }> {
+  return request<{ updated: number; skipped: number; failed: number }>('/archives/bulk-status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, status }),
+  })
+}
+
+export function bulkDeleteArchives({
+  ids,
+}: {
+  ids: string[]
+}): Promise<{ deleted: number; failed: number }> {
+  return request<{ deleted: number; failed: number }>('/archives/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
 }
 
 export function getArchive(id: string): Promise<Archive> {

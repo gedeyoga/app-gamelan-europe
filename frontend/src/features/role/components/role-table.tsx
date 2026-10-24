@@ -8,8 +8,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { MobileRecordList } from '@/components/shared/mobile-record-list'
+import { MobileSortChips } from '@/components/shared/mobile-sort-chips'
 import { SortableHeader, type SortOrder } from '@/components/shared/sortable-header'
 import { formatDateTime } from '@/lib/datetime'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -36,6 +39,41 @@ export interface RoleTableProps {
   canDelete?: boolean
 }
 
+interface RowActionsProps {
+  role: Role
+  onEdit: (role: Role) => void
+  onDelete: (role: Role) => void
+  canUpdate: boolean
+  canDelete: boolean
+}
+
+function RowActions({ role, onEdit, onDelete, canUpdate, canDelete }: RowActionsProps) {
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={t('common:table.actionsFor', { name: role.name })}>
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canUpdate && (
+          <DropdownMenuItem onClick={() => onEdit(role)}>
+            <Pencil />
+            {t('role:table.edit')}
+          </DropdownMenuItem>
+        )}
+        {canDelete && (
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(role)}>
+            <Trash2 />
+            {t('role:table.delete')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function RoleTable({
   items,
   sortBy,
@@ -53,84 +91,111 @@ export function RoleTable({
   const showActions = canUpdate || canDelete
   const columnCount = showActions ? 5 : 4
   return (
-    <div className="rounded-xl border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              <SortableHeader label={t('role:table.name')} field="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>{t('role:table.code')}</TableHead>
-            <TableHead>
-              <SortableHeader label={t('role:table.description')} field="description" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            <TableHead>
-              <SortableHeader label={t('role:table.created')} field="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            </TableHead>
-            {showActions && <TableHead className="text-right">{t('common:table.actions')}</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 ? (
+    <>
+      <div className={cn('overflow-hidden rounded-xl border', items.length > 0 && 'max-md:hidden')}>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={columnCount} className="h-24 text-center text-sm text-muted-foreground">
-                {trimmedSearch.length > 0 ? (
-                  <>
-                    {t('role:table.notFound', { term: trimmedSearch })}{' '}
-                    {onResetSearch && (
-                      <button
-                        className="inline-flex items-center gap-1 underline"
-                        onClick={onResetSearch}
-                      >
-                        <RotateCcw className="size-3.5" aria-hidden="true" />
-                        {t('role:table.reset')}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  t('role:table.empty')
-                )}
-              </TableCell>
+              <TableHead>
+                <SortableHeader label={t('role:table.name')} field="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>{t('role:table.code')}</TableHead>
+              <TableHead>
+                <SortableHeader label={t('role:table.description')} field="description" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label={t('role:table.created')} field="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              </TableHead>
+              {showActions && <TableHead className="text-right">{t('common:table.actions')}</TableHead>}
             </TableRow>
-          ) : (
-            items.map((role) => (
-              <TableRow key={role.id}>
-                <TableCell className="font-medium">{role.name}</TableCell>
-                <TableCell>
-                  <code className="text-xs bg-muted px-1 rounded">{role.code}</code>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="h-24 text-center text-sm text-muted-foreground">
+                  {trimmedSearch.length > 0 ? (
+                    <>
+                      {t('role:table.notFound', { term: trimmedSearch })}{' '}
+                      {onResetSearch && (
+                        <button
+                          className="inline-flex items-center gap-1 underline"
+                          onClick={onResetSearch}
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden="true" />
+                          {t('role:table.reset')}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    t('role:table.empty')
+                  )}
                 </TableCell>
-                <TableCell>{role.description || '—'}</TableCell>
-                <TableCell>{formatDateTime(role.createdAt)}</TableCell>
-                {showActions && (
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={t('common:table.actionsFor', { name: role.name })}>
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canUpdate && (
-                          <DropdownMenuItem onClick={() => onEdit(role)}>
-                            <Pencil />
-                            {t('role:table.edit')}
-                          </DropdownMenuItem>
-                        )}
-                        {canDelete && (
-                          <DropdownMenuItem variant="destructive" onClick={() => onDelete(role)}>
-                            <Trash2 />
-                            {t('role:table.delete')}
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                )}
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            ) : (
+              items.map((role) => (
+                <TableRow key={role.id}>
+                  <TableCell className="font-medium">{role.name}</TableCell>
+                  <TableCell>
+                    <code className="text-xs bg-muted px-1 rounded">{role.code}</code>
+                  </TableCell>
+                  <TableCell>{role.description || '—'}</TableCell>
+                  <TableCell>{formatDateTime(role.createdAt)}</TableCell>
+                  {showActions && (
+                    <TableCell className="text-right">
+                      <RowActions
+                        role={role}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        canUpdate={canUpdate}
+                        canDelete={canDelete}
+                      />
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {items.length > 0 && (
+        <MobileSortChips
+          options={[
+            { field: 'name', label: t('role:table.name') },
+            { field: 'description', label: t('role:table.description') },
+            { field: 'createdAt', label: t('role:table.created') },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={onSort}
+        />
+      )}
+
+      {items.length > 0 && (
+        <MobileRecordList
+          items={items.map((role) => ({
+            id: role.id,
+            title: role.name,
+            fields: [
+              {
+                label: t('role:table.code'),
+                value: <code className="text-xs bg-muted px-1 rounded">{role.code}</code>,
+              },
+              { label: t('role:table.description'), value: role.description || '—' },
+              { label: t('role:table.created'), value: formatDateTime(role.createdAt) },
+            ],
+            actions: showActions ? (
+              <RowActions
+                role={role}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                canUpdate={canUpdate}
+                canDelete={canDelete}
+              />
+            ) : undefined,
+          }))}
+        />
+      )}
+    </>
   )
 }

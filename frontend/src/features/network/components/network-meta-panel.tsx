@@ -20,10 +20,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SearchSelect, type SearchSelectOption } from '@/components/shared/search-select'
+import { CreatableSelect } from '@/components/shared/creatable-select'
 import { cn } from '@/lib/utils'
+import { getApiErrorMessage, isValidationError, toastError } from '@/lib/toast'
 
+import { useAuthPermissions } from '@/features/auth/hooks/use-permissions'
 import { useCities } from '@/features/geo/hooks/use-cities'
 import { useCountries } from '@/features/geo/hooks/use-countries'
+import { useCreateCity } from '@/features/geo/hooks/use-create-city'
+import { useCreateState } from '@/features/geo/hooks/use-create-state'
 import { useStates } from '@/features/geo/hooks/use-states'
 
 import { ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_OTHER, ORGANISATION_TYPES } from '../lib/constants'
@@ -48,6 +53,7 @@ export function NetworkMetaPanel({
   showSubmitter = true,
 }: NetworkMetaPanelProps) {
   const { t } = useTranslation()
+  const { can } = useAuthPermissions()
 
   const countryIdValue = form.watch('countryId')
   const stateIdValue = form.watch('stateId')
@@ -79,6 +85,38 @@ export function NetworkMetaPanel({
   )
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'socialMedia' })
+
+  const createState = useCreateState()
+  const createCity = useCreateCity()
+  const canCreateState = can('state:create')
+  const canCreateCity = can('city:create')
+
+  // Create inline: opsi hasil create di-merge lokal oleh `CreatableSelect` (tanpa refetch gate).
+  async function handleCreateState(name: string): Promise<SearchSelectOption | undefined> {
+    if (!countryId) return undefined
+    try {
+      const created = await createState.mutateAsync({ name, countryId })
+      return { value: String(created.id), label: created.name }
+    } catch (err: unknown) {
+      if (!isValidationError(err)) {
+        toastError(getApiErrorMessage(err, t('network:errors.createStateFailed')))
+      }
+      return undefined
+    }
+  }
+
+  async function handleCreateCity(name: string): Promise<SearchSelectOption | undefined> {
+    if (!countryId || !stateId) return undefined
+    try {
+      const created = await createCity.mutateAsync({ name, countryId, stateId })
+      return { value: String(created.id), label: created.name }
+    } catch (err: unknown) {
+      if (!isValidationError(err)) {
+        toastError(getApiErrorMessage(err, t('network:errors.createCityFailed')))
+      }
+      return undefined
+    }
+  }
 
   // Ganti country -> reset state & city.
   function handleCountryChange(next: string, onChange: (value: string) => void) {
@@ -212,7 +250,7 @@ export function NetworkMetaPanel({
             <FormItem>
               <FormLabel>{t('network:form.state')}</FormLabel>
               <FormControl>
-                <SearchSelect
+                <CreatableSelect
                   options={stateOptions}
                   value={field.value}
                   onChange={(value) => handleStateChange(value, field.onChange)}
@@ -222,9 +260,14 @@ export function NetworkMetaPanel({
                       : t('network:form.stateSelectCountry')
                   }
                   searchPlaceholder={t('network:form.stateSearch')}
+                  createSearchPlaceholder={t('network:form.stateSearchCreate')}
                   emptyLabel={t('network:form.stateEmpty')}
+                  addLabel={(name) => t('network:form.stateAdd', { name })}
+                  creatingLabel={t('network:form.stateCreating')}
                   disabled={disabled || !iso2 || statesQuery.isLoading}
                   isLoading={statesQuery.isLoading}
+                  canCreate={canCreateState}
+                  onCreate={handleCreateState}
                 />
               </FormControl>
               <FormMessage />
@@ -240,7 +283,7 @@ export function NetworkMetaPanel({
           <FormItem>
             <FormLabel>{t('network:form.city')}</FormLabel>
             <FormControl>
-              <SearchSelect
+              <CreatableSelect
                 options={cityOptions}
                 value={field.value}
                 onChange={field.onChange}
@@ -250,9 +293,14 @@ export function NetworkMetaPanel({
                     : t('network:form.citySelectState')
                 }
                 searchPlaceholder={t('network:form.citySearch')}
+                createSearchPlaceholder={t('network:form.citySearchCreate')}
                 emptyLabel={t('network:form.cityEmpty')}
+                addLabel={(name) => t('network:form.cityAdd', { name })}
+                creatingLabel={t('network:form.cityCreating')}
                 isLoading={citiesQuery.isLoading}
                 disabled={disabled || !stateIdValue || citiesQuery.isLoading}
+                canCreate={canCreateCity}
+                onCreate={handleCreateCity}
               />
             </FormControl>
             <FormMessage />

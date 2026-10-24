@@ -16,6 +16,29 @@
     "eventType": "Filter by event type",
     "allEventTypes": "All event types"
   },
+  "bulk": {
+    "selectAll": "Select all events",
+    "selectAllLabel": "Select all",
+    "selectRow": "Select {{name}}",
+    "selected_one": "{{count}} selected",
+    "selected": "{{count}} selected",
+    "regionLabel": "Bulk actions",
+    "statusLabel": "Change status to",
+    "apply": "Apply",
+    "delete": "Delete",
+    "clear": "Clear selection",
+    "confirmTitle": "Change event status",
+    "confirmDescription": "Change the status of {{count}} events to {{status}}?",
+    "publishWarning": "Events set to Published become publicly visible immediately.",
+    "deleteTitle": "Delete events",
+    "deleteDescription": "Delete {{count}} events? This action cannot be undone.",
+    "confirm": "Apply",
+    "cancel": "Cancel",
+    "skipped_one": "{{count}} item skipped because its status does not allow this change",
+    "skipped": "{{count}} items skipped because their status does not allow this change",
+    "failed_one": "{{count}} item failed due to a permission or server error",
+    "failed": "{{count}} items failed due to a permission or server error"
+  },
   "errors": {
     "loadData": "Failed to load event data. Please try again.",
     "forbidden": "You don't have access to view event data.",
@@ -149,6 +172,7 @@
   },
   "workflow": {
     "requested": "Awaiting approval",
+    "draft": "This event is still a draft — you can publish it directly",
     "approve": "Approve",
     "reject": "Reject"
   },
@@ -213,6 +237,11 @@
     "approveFailed": "Failed to approve event",
     "rejectFailed": "Failed to reject event",
     "eventTypeDeleted": "Event type deleted successfully",
-    "eventTypeDeleteFailed": "Failed to delete event type"
+    "eventTypeDeleteFailed": "Failed to delete event type",
+    "bulkUpdated": "Status updated for {{count}} events",
+    "bulkDeleted": "{{count}} events deleted",
+    "bulkUpdateFailed": "Failed to update event status",
+    "bulkDeleteFailed": "Failed to delete events",
+    "bulkSelectAllFailed": "Failed to load all matching events"
   }
 }

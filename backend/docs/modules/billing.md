@@ -32,6 +32,8 @@ libs/src/modules/billing/
 apps/app/src/controllers/billings.controller.ts   ← controller di apps/, bukan libs (RULES bab 3)
 ```
 
+`BillingModule` meng-`import` `NotificationModule` (emisi `SUBSCRIPTION_ACTIVE`); `NotificationModule` **tidak** mengimpor `BillingModule` (arah dependensi satu arah, tanpa siklus/`forwardRef`).
+
 ### Migration
 
 Jalankan `pnpm prisma:migrate:deploy` (produksi) / `pnpm prisma:migrate:dev` (lokal). Migration lanjutan terkait billing/subscription:
@@ -168,12 +170,13 @@ Sort kolom relasi didukung via `BILLING_SORT_MAP` (dipakai `buildOrderBy`):
 | --- | --- |
 | `list(query)` | `buildWhere` (enum `status`/`subscriptionType` + date) + `buildSearch` + `combineWhere` + `buildOrderBy`. |
 | `findOne(id)` | `repository.findById`. |
-| `create(dto)` | Bangun `BillingCreateInput` (`connect` user/subscription, nested lines). |
-| `update(id, dto)` | Kumpulkan field `!== undefined`; body kosong → `findOne`; `lines` → replace. |
+| `create(dto)` | Bangun `BillingCreateInput` (`connect` user/subscription, nested lines). Setelah tersimpan `status = PAID` + `expiryDate` → `notifySubscriptionActive` (best-effort). |
+| `update(id, dto)` | Kumpulkan field `!== undefined`; body kosong → `findOne`; `lines` → replace. Hasil akhir `status = PAID` → `notifySubscriptionActive` (best-effort; `PAID→PAID` aman, dedupe unique key DB). |
 | `remove(id)` | `repository.remove`. |
 | `listMembers(query)` | `assertAllowedSort(MEMBER_SORT_FIELDS)` + `buildSearch(fullName/email)` + `combineWhere({ role: { code: 'member' } })`; map `status` komputasi; sort & paginasi in-memory. |
-| `subscribe(dto)` | Cek subscription & user (404), hitung `expiryDate = now + durationInDays`, delegasi `repository.subscribe`; teruskan `paymentProofUrl`/`paymentProofName` bila ada. |
+| `subscribe(dto)` | Cek subscription & user (404), hitung `expiryDate = now + durationInDays`, delegasi `repository.subscribe`; teruskan `paymentProofUrl`/`paymentProofName` bila ada. Hasil `PAID` → `NotificationService.notifySubscriptionActive` best-effort (satu-satunya jalur approve subscription request). |
 | `uploadPaymentProof(file)` | Validasi file ada + MIME (`image/jpeg`/`png`/`webp`/`pdf`, normalkan `octet-stream` via ekstensi) + ukuran; simpan ke `StorageService` `billing/payment-proof/<uuid>.<ext>`; kembalikan `{ url, filename, mimeType, size }` (tanpa DB). |
+| `findSubscriptionLifecycleRows(now)` | Dua window notifikasi (`expiring`, `expired`) via `BillingRepository.findExpiringSubscriptions`/`findExpiredSubscriptions` — dipakai worker (`NotificationService.enqueueSubscriptionLifecycle`). |
 | `cancel(id)` | `repository.cancel`. |
 
 > **Sort/paginasi member in-memory** (`ponytail:` ditandai di service): `status` & `expiryDate` berasal dari billing terbaru (bukan kolom user) → Prisma tak bisa `orderBy` langsung. Upgrade ke SQL (window/join) bila populasi member besar.
@@ -204,6 +207,8 @@ Semua path prefix **`/api/v1`**. Sukses `{ data, message }`; list `{ data, meta:
 - `GET /billings/members` — hanya user `role.code === 'member'` (admin/author dikecualikan). Query: `page, limit, search, sortBy, sortOrder`. `search` cocok `fullName`/`email` (contains, case-insensitive). `sortBy` ∈ `fullName|user.fullName|email|subscription.name|startDate|expiryDate|status|createdAt` (default `fullName` asc; `user.fullName` setara `fullName`).
 - `POST /billings/subscribe` — body `{ userId: UUID, subscriptionId: UUID, paymentProofUrl?: string (max 2048), paymentProofName?: string (max 255) }`. Transaksi atomik: billing `PAID` lama milik user → `CANCELED` (`canceledAt = now`), lalu billing baru `status = PAID`, `paidAt = now`, `startDate = now`, `expiryDate = now + subscription.durationInDays hari`, `subscriptionType`/`currency` dari `Subscription`, `total = subscription.price`; `paymentProofUrl`/`paymentProofName` disimpan bila ada. `code` (`INV-<yyyyMMdd>-<6 hex>`) di-retry sekali bila bertabrakan; bentrok kedua → 409 (bukan 500).
 - `POST /billings/:id/cancel` — set `status = CANCELED`, `canceledAt = now`; billing tak ada → 404.
+
+> **Notifikasi PAID**: billing yang menjadi `PAID` (lewat `POST /billings`, `PATCH /billings/:id`, `POST /billings/subscribe`, atau approve subscription request) memicu email `SUBSCRIPTION_ACTIVE` ke member (`userId` + `expiryDate` wajib ada). Emisi di `BillingService`, best-effort (tidak menggagalkan write), idempoten via unique `(userId, type, entityType, entityId)`.
 
 ### Upload bukti bayar
 

@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { SearchSelectOption } from '@/components/shared/search-select'
 import { cn } from '@/lib/utils'
 
-export interface CitySelectProps {
+export interface CreatableSelectProps {
   options: SearchSelectOption[]
   value: string
   onChange: (value: string) => void
@@ -33,12 +33,12 @@ export interface CitySelectProps {
 }
 
 /**
- * Single-select combobox untuk kota + tambah inline (presentational).
+ * Single-select combobox dengan tambah inline (presentational).
  * `shouldFilter={false}` — filter manual agar baris "Add" tidak tersaring cmdk.
  * Opsi hasil create di-merge lokal (dedupe by value) supaya label value terpilih
- * langsung tampil tanpa menunggu refetch `['geo','cities']`.
+ * langsung tampil tanpa menunggu refetch query sumber.
  */
-export function CitySelect({
+export function CreatableSelect({
   options,
   value,
   onChange,
@@ -53,7 +53,7 @@ export function CitySelect({
   addLabel,
   creatingLabel,
   className,
-}: CitySelectProps) {
+}: CreatableSelectProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')

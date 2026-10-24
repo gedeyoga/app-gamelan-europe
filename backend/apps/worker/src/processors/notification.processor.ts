@@ -5,11 +5,18 @@ import { NotificationStatus, UserStatus } from '@prisma/client';
 import {
   NOTIFICATION_JOB_RECOVER,
   NOTIFICATION_JOB_SEND,
+  NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE,
   NotificationJobData,
   NotificationQueue,
 } from '@app/libs/modules/notification/notification.queue';
 import { NotificationRepository } from '@app/libs/modules/notification/notification.repository';
-import { buildContentUrl, renderNotification } from '@app/libs/modules/notification/notification.template';
+import { NotificationService } from '@app/libs/modules/notification/notification.service';
+import { BillingService } from '@app/libs/modules/billing/billing.service';
+import {
+  buildAssetUrl,
+  buildContentUrl,
+  renderNotification,
+} from '@app/libs/modules/notification/notification.template';
 import { SmtpService } from '@app/libs/integrations/mail/smtp.service';
 
 @Injectable()
@@ -20,6 +27,8 @@ export class NotificationProcessor {
   constructor(
     private readonly repository: NotificationRepository,
     private readonly queue: NotificationQueue,
+    private readonly notificationService: NotificationService,
+    private readonly billingService: BillingService,
     private readonly smtp: SmtpService,
     private readonly config: ConfigService,
   ) {}
@@ -28,6 +37,13 @@ export class NotificationProcessor {
     if (job.name === NOTIFICATION_JOB_RECOVER) {
       const rows = await this.repository.findDue(100);
       await this.queue.enqueueDue(rows);
+      return;
+    }
+    if (job.name === NOTIFICATION_JOB_SUBSCRIPTION_LIFECYCLE) {
+      // Query billing di libs (BillingService); worker tidak menyentuh Prisma.
+      const now = new Date();
+      const rows = await this.billingService.findSubscriptionLifecycleRows(now);
+      await this.notificationService.enqueueSubscriptionLifecycle(rows, now);
       return;
     }
     if (job.name === NOTIFICATION_JOB_SEND) {
@@ -70,6 +86,9 @@ export class NotificationProcessor {
       excerpt: row.body,
       url,
       imageUrl: row.imageUrl,
+      recipientName: row.user.fullName,
+      // Wordmark FE: `<APP_WEB_URL>/logo.png`; tanpa base → fallback wordmark teks.
+      logoUrl: buildAssetUrl(baseUrl, 'logo.png'),
     });
     await this.smtp.send({ to: row.user.email, ...rendered });
     await this.repository.markSent(row.id, new Date());

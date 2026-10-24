@@ -11,22 +11,6 @@ export interface LoginRequest {
   password: string
 }
 
-export interface RegisterRequest {
-  email: string
-  fullName: string
-  password: string
-  phone?: string
-  countryId?: string
-}
-
-export interface Country {
-  id: number
-  iso2: string
-  name: string
-  phoneCode?: string | null
-  emoji?: string | null
-}
-
 export interface SessionRole {
   id: string
   name: string

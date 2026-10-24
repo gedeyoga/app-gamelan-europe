@@ -23,7 +23,7 @@ function toCode(name: string): string {
 // ---------------------------------------------------------------------------
 
 // Permission set bersama `member` & `author` (keduanya identik).
-const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'city:create', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
+const MEMBER_PERMISSION_CODES = ['story:read', 'story:create', 'story:update', 'story:submit', 'event:read', 'event:create', 'event:update', 'event:submit', 'event-type:read', 'city:create', 'state:create', 'category:read', 'archive:read', 'archive:create', 'archive:update', 'archive:submit'];
 
 // Role default (idempoten, additive). `admin` = semua permission;
 // `member` & `author` = mengelola event & story sendiri sampai REQUEST (bukan read-only), permission set sama.

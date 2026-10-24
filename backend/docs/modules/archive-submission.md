@@ -10,7 +10,7 @@ Menu: [archive.md](./archive.md) (resource tujuan) · [event.md](./event.md) (po
 
 Fitur **Archive Submission**: orang di luar EGS (tanpa akun) mengusulkan archive lewat form publik website EGS. Sama seperti `event-submission`/`story-submission`, backend **menulis langsung** ke tabel utama `archives` dengan `status=REQUEST` + `source=PUBLIC` (lihat [event.md §7](./event.md#7-create-public-submission)). **Tidak ada tabel `archive_submissions`**, tidak ada endpoint admin approve/reject khusus submission.
 
-Admin meninjau memakai **list archive biasa**: `GET /archives?filter[status]=REQUEST`, lalu `POST /archives/:id/approve` (`REQUEST → PUBLISHED`) atau `POST /archives/:id/reject` (`REQUEST → DRAFT`) yang **sudah ada** ([archive.md §5](./archive.md#5-aturan-status)). Submit publik tidak punya jalur tulis selain `POST /archive-submissions` (yang menerjemah ke `archives` di server).
+Admin meninjau memakai **list archive biasa**: `GET /archives?filter[status]=REQUEST`, lalu `POST /archives/:id/approve` (`DRAFT|REQUEST → PUBLISHED`) atau `POST /archives/:id/reject` (`REQUEST → DRAFT`) yang **sudah ada** ([archive.md §5](./archive.md#5-aturan-status)). Submit publik tidak punya jalur tulis selain `POST /archive-submissions` (yang menerjemah ke `archives` di server).
 
 Karakteristik:
 
@@ -351,7 +351,7 @@ async createPublicSubmission(dto: CreatePublicArchiveDto): Promise<{ id: string;
 | Method | Path | Permission | Catatan |
 | --- | --- | --- | --- |
 | GET | `/api/v1/archives?filter[status]=REQUEST` | `archive:read` | Dashboard review admin (list biasa). Count dari `meta.total`. |
-| POST | `/api/v1/archives/:id/approve` | `archive:approve` | `REQUEST → PUBLISHED` ([archive.md §5](./archive.md#5-aturan-status)). |
+| POST | `/api/v1/archives/:id/approve` | `archive:approve` | `DRAFT\|REQUEST → PUBLISHED` ([archive.md §5](./archive.md#5-aturan-status)). |
 | POST | `/api/v1/archives/:id/reject` | `archive:reject` | `REQUEST → DRAFT` ([archive.md §5](./archive.md#5-aturan-status)). |
 
 Controller yang dihapus: `GET /archive-submissions`, `GET /archive-submissions/:id`, `POST /archive-submissions/:id/approve`, `POST /archive-submissions/:id/reject`.
@@ -449,7 +449,7 @@ Update `rbac.md` §7 (angka asli saat ini **70** code → **67**): hapus baris `
 
 ### 11.2 Keputusan terbuka (perlu konfirmasi saat implementasi)
 
-1. **Cara publish `Archive` hasil approve.** `ARCHIVE_TRANSITIONS.approve` existing `REQUEST → PUBLISHED` → approve langsung menayangkan. Apakah ini yang diinginkan, atau admin perlu tahap edit dulu (mis. `REQUEST → APPROVED` → edit → `publish`)?
+1. **Cara publish `Archive` hasil approve.** `ARCHIVE_TRANSITIONS.approve` existing `DRAFT|REQUEST → PUBLISHED` → approve langsung menayangkan. Apakah ini yang diinginkan, atau admin perlu tahap edit dulu (mis. `REQUEST → APPROVED` → edit → `publish`)?
 2. **`author`/`organisation`/`date`/geo** — simpan apa adanya (kolom scalar) vs petakan ke `Network`/relasi? Desain ini memilih **apa adanya** demi kesederhanaan.
 3. **Orphan document cleanup** — baris `Document` `entityId=null` (upload lalu batal/`reject`) tidak terhapus otomatis → TODO cleanup worker (`libs/src/commands/`). Lihat [archive.md §9](./archive.md#9-link-eksternal--dokumen-pdf-upload-s3).
 

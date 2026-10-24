@@ -1,7 +1,13 @@
 import { request, requestList } from '@/lib/api-client'
 import { appendListParams, type ListParams } from '@/lib/list-params'
 
-import type { CreateNetworkInput, Network, UpdateNetworkInput } from '../types'
+import type {
+  BulkUpdateNetworkStatusInput,
+  BulkUpdateNetworkStatusResult,
+  CreateNetworkInput,
+  Network,
+  UpdateNetworkInput,
+} from '../types'
 
 export interface ListNetworksParams extends ListParams {
   /** Filter generik `filter[<key>]=<value>` (mis. `{ status: 'REQUEST' }`). */
@@ -22,6 +28,28 @@ export function listNetworks(params: ListNetworksParams): Promise<NetworkListRes
     search.set(`filter[${key}]`, value)
   }
   return requestList<Network>(`/networks?${search.toString()}`)
+}
+
+/** Batas keras ID yang dikumpulkan (select-all lintas halaman). */
+export const MAX_BULK_IDS = 2000
+/** Batas `limit` list backend. */
+const IDS_PAGE_LIMIT = 100
+
+/**
+ * Kumpulkan ID semua baris yang cocok dengan `search`/`filter` (lintas halaman),
+ * untuk select-all. Loop `limit: 100` sampai `total` tercapai atau kena cap 2000.
+ */
+export async function listAllNetworkIds({
+  search,
+  filter,
+}: Omit<ListNetworksParams, 'page' | 'limit'>): Promise<string[]> {
+  const ids: string[] = []
+  for (let page = 1; page <= Math.ceil(MAX_BULK_IDS / IDS_PAGE_LIMIT); page += 1) {
+    const result = await listNetworks({ page, limit: IDS_PAGE_LIMIT, search, filter })
+    ids.push(...result.items.map((item) => item.id))
+    if (ids.length >= result.total || result.items.length === 0) break
+  }
+  return ids.slice(0, MAX_BULK_IDS)
 }
 
 export function getNetwork(id: string): Promise<Network> {
@@ -61,4 +89,25 @@ export function approveNetwork(id: string, publishedAt?: string): Promise<Networ
 
 export function rejectNetwork(id: string): Promise<Network> {
   return request<Network>(`/networks/${id}/reject`, { method: 'POST' })
+}
+
+/** `DRAFT` → `REQUEST`. */
+export function submitNetwork(id: string): Promise<Network> {
+  return request<Network>(`/networks/${id}/submit`, { method: 'POST' })
+}
+
+/** `PUBLISHED` → `DRAFT`. */
+export function unpublishNetwork(id: string): Promise<Network> {
+  return request<Network>(`/networks/${id}/unpublish`, { method: 'POST' })
+}
+
+export function bulkUpdateNetworkStatus({
+  ids,
+  status,
+}: BulkUpdateNetworkStatusInput): Promise<BulkUpdateNetworkStatusResult> {
+  return request<BulkUpdateNetworkStatusResult>('/networks/bulk-status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, status }),
+  })
 }

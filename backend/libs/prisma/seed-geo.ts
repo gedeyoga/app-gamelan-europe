@@ -241,15 +241,16 @@ async function main(): Promise<void> {
   const CHUNK = 5000;
   if (stateRows.size > 0) {
     const stateList = [...stateRows.values()];
-    // ponytail: state kini BUKAN reference murni — city inline user mereferensikannya, dan
+    // ponytail: state bukan reference murni — city inline user mereferensikannya, dan
     // FK cities.state_id ON DELETE SET NULL akan mencabut state dari city user bila state
-    // dihapus. createMany(skipDuplicates) mempertahankan baris lama (FK aman) + menyisipkan
-    // id baru. State usang (id di luar dataset) tetap dibersihkan. Batas: skipDuplicates
-    // TIDAK me-refresh nilai kolom state yang sudah ada; upgrade ke raw SQL
-    // `INSERT ... ON CONFLICT (id) DO UPDATE` bila butuh refresh penuh.
+    // dihapus. `id >= 0` melindungi state inline-create user (id negatif) dari prune;
+    // hanya state dataset usang (id positif di luar dataset) yang dibersihkan.
+    // createMany(skipDuplicates) mempertahankan baris lama (FK aman) + menyisipkan id baru.
+    // Batas: skipDuplicates TIDAK me-refresh nilai kolom state yang sudah ada; upgrade ke
+    // raw SQL `INSERT ... ON CONFLICT (id) DO UPDATE` bila butuh refresh penuh.
     await prisma.$transaction(
       async (tx) => {
-        await tx.state.deleteMany({ where: { id: { notIn: [...stateRows.keys()] } } });
+        await tx.state.deleteMany({ where: { id: { notIn: [...stateRows.keys()], gte: 0 } } });
         for (let i = 0; i < stateList.length; i += CHUNK) {
           await tx.state.createMany({ data: stateList.slice(i, i + CHUNK), skipDuplicates: true });
         }

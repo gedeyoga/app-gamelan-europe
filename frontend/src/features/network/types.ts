@@ -41,6 +41,21 @@ export interface Network {
   updatedAt: string
 }
 
+/** Target bulk valid — endpoint menerima `DRAFT` (unpublish/reject), `REQUEST` (submit), `PUBLISHED` (approve). */
+export type BulkNetworkStatus = Extract<NetworkStatus, 'DRAFT' | 'REQUEST' | 'PUBLISHED'>
+
+export interface BulkUpdateNetworkStatusInput {
+  /** Maks 100 UUID. */
+  ids: string[]
+  status: BulkNetworkStatus
+}
+
+export interface BulkUpdateNetworkStatusResult {
+  updated: number
+  skipped: number
+  failed: number
+}
+
 export interface CreateNetworkInput {
   name: string
   organisationType?: NetworkOrganisationType | null

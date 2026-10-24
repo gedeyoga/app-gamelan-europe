@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SubscriptionType } from '@prisma/client';
 import { PrismaService } from '@app/libs/core/database/prisma.service';
-import { BillingEntity, MemberPayload, billingSelect, mapBilling, memberSelect } from './entities/billing.entity';
+import { BillingEntity, MemberPayload, SubscriptionLifecycleRow, billingSelect, mapBilling, mapSubscriptionLifecycle, memberSelect, subscriptionLifecycleSelect } from './entities/billing.entity';
 
 // `INV-<yyyyMMdd>-<6 hex acak>`; unik ditegakkan unique constraint + retry.
 function generateBillingCode(now: Date): string {
@@ -115,6 +115,24 @@ export class BillingRepository {
       select: { id: true },
     });
     return billing !== null;
+  }
+
+  // Notifikasi SUBSCRIPTION_EXPIRING: PAID dan expiryDate di (now, until].
+  async findExpiringSubscriptions(now: Date, until: Date): Promise<SubscriptionLifecycleRow[]> {
+    const rows = await this.prisma.billing.findMany({
+      where: { status: 'PAID', expiryDate: { gt: now, lte: until } },
+      select: subscriptionLifecycleSelect,
+    });
+    return rows.map(mapSubscriptionLifecycle);
+  }
+
+  // Notifikasi SUBSCRIPTION_EXPIRED: PAID, sudah lewat, tidak dibatalkan.
+  async findExpiredSubscriptions(now: Date): Promise<SubscriptionLifecycleRow[]> {
+    const rows = await this.prisma.billing.findMany({
+      where: { status: 'PAID', expiryDate: { lte: now }, canceledAt: null },
+      select: subscriptionLifecycleSelect,
+    });
+    return rows.map(mapSubscriptionLifecycle);
   }
 
   async findSubscription(id: string) {

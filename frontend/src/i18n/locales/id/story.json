@@ -16,6 +16,29 @@
     "category": "Filter berdasarkan kategori",
     "allCategories": "Semua kategori"
   },
+  "bulk": {
+    "selectAll": "Pilih semua story",
+    "selectAllLabel": "Pilih semua",
+    "selectRow": "Pilih {{name}}",
+    "selected_one": "{{count}} dipilih",
+    "selected": "{{count}} dipilih",
+    "regionLabel": "Aksi massal",
+    "statusLabel": "Ubah status menjadi",
+    "apply": "Terapkan",
+    "delete": "Hapus",
+    "clear": "Kosongkan",
+    "confirmTitle": "Ubah status story",
+    "confirmDescription": "Ubah status {{count}} story menjadi {{status}}?",
+    "publishWarning": "Story yang menjadi Terbit akan langsung tampil publik.",
+    "deleteTitle": "Hapus story",
+    "deleteDescription": "Hapus {{count}} story? Tindakan ini tidak dapat dibatalkan.",
+    "confirm": "Terapkan",
+    "cancel": "Batal",
+    "skipped_one": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "skipped": "{{count}} item dilewati karena statusnya tidak memungkinkan",
+    "failed_one": "{{count}} item gagal karena masalah izin atau server",
+    "failed": "{{count}} item gagal karena masalah izin atau server"
+  },
   "errors": {
     "loadData": "Gagal memuat data story. Silakan coba lagi.",
     "forbidden": "Tidak punya akses untuk melihat data story.",
@@ -97,6 +120,7 @@
   },
   "workflow": {
     "requested": "Menunggu persetujuan",
+    "draft": "Story ini masih draf — Anda dapat langsung menerbitkannya",
     "approve": "Setujui",
     "reject": "Tolak"
   },
@@ -215,6 +239,11 @@
     "approveFailed": "Gagal menyetujui story",
     "rejectFailed": "Gagal menolak story",
     "categoryDeleted": "Kategori berhasil dihapus",
-    "categoryDeleteFailed": "Gagal menghapus kategori"
+    "categoryDeleteFailed": "Gagal menghapus kategori",
+    "bulkUpdated": "Status {{count}} story berhasil diperbarui",
+    "bulkDeleted": "{{count}} story berhasil dihapus",
+    "bulkUpdateFailed": "Gagal memperbarui status story",
+    "bulkDeleteFailed": "Gagal menghapus story",
+    "bulkSelectAllFailed": "Gagal memuat semua story yang cocok"
   }
 }
